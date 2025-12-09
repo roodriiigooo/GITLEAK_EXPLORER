@@ -10,10 +10,15 @@ O **Git Leak Explorer** é uma ferramenta "tudo-em-um" projetada para pesquisado
 
 A ferramenta vai além do download simples, oferecendo reconstrução de histórico de commits, detecção de riscos de segurança (hardening), suporte a *packfiles* e uma interface visual moderna (Dark Mode) para análise de dados.
 
+## ⚠️ Aviso Legal
+Esta ferramenta foi desenvolvida para fins educacionais e de auditoria autorizada. O acesso a sistemas de terceiros sem permissão explícita é ilegal e antiético. O desenvolvedor não se responsabiliza pelo mau uso deste software.
+
+
 ---
 
 ## ✨ Funcionalidades Principais
 
+* **👁️ Blind Mode (Novo):** Recuperação inteligente mesmo quando o arquivo `.git/index` está ausente ou bloqueado (403/404), utilizando "Crawling" da árvores e commits.
 * **🔍 Reconstrução de Artefatos:** Baixa e reconstrói arquivos localmente a partir do `.git/index` remoto.
 * **📜 Histórico de Commits:** Reconstrói a árvore de commits (mensagens, autores, timestamps) sem precisar clonar o repositório inteiro via `git clone`.
 * **🛡️ Análise de Hardening:** Verifica a exposição de arquivos sensíveis (`config`, `HEAD`, `logs`, etc.) e gera um relatório de risco (Crítico/Atenção).
@@ -95,6 +100,11 @@ python git_leak.py http://exemplo.com/.git --default
 python git_leak.py http://exemplo.com/.git --report
 ```
 
+- Recuperar um objeto diretamente pelo SHA
+```
+python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16 
+```
+
 - Gerenciar Packfiles (Listar/Baixar/Extrair):
 ```
 # Apenas listar packfiles encontrados
@@ -114,6 +124,5 @@ python git_leak.py --scan alvos.txt
 python git_leak.py --serve --output-dir ./repo
 ```
 
-## ⚠️ Aviso Legal
-Esta ferramenta foi desenvolvida para fins educacionais e de auditoria autorizada. O acesso a sistemas de terceiros sem permissão explícita é ilegal e antiético. O desenvolvedor não se responsabiliza pelo mau uso deste software.
+
 
