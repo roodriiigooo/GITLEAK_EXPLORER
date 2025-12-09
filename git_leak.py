@@ -21,6 +21,7 @@ Principais funcionalidades implementadas:
 Utilize de forma responsável e somente em sistemas que você esteja autorizado a testar.
 """
 
+
 from __future__ import annotations
 import os
 import sys
