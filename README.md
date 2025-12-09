@@ -63,13 +63,13 @@ Esta ferramenta foi desenvolvida para fins educacionais e de auditoria autorizad
 Certifique-se de ter o **Python 3.8+** e o **Git** instalados no sistema (necessário para descompactação de objetos).
 
 ### Opção 1: Pip (Padrão)
-```
+```sql
 pip install -r requirements.txt
 ```
 
 
 ### Opção 2: Pipenv
-```
+```sql
 pipenv install requests
 pipenv shell
 python git_leak.py --help
@@ -77,14 +77,14 @@ python git_leak.py --help
 
 
 ### Opção 3: Poetry
-```
+```sql
 poetry init -n
 poetry add requests
 poetry run python git_leak.py --help
 ```
 
 ### Opção 4: 🐳 Docker
-```shell
+```sql
 docker build -t gitlieak_explorer .
 docker run -v $(pwd)/repo:/app/repo gitleak_explorer http://alvo.com/.git --default --output-dir /app/repo
 ```
@@ -92,11 +92,11 @@ docker run -v $(pwd)/repo:/app/repo gitleak_explorer http://alvo.com/.git --defa
 ### Opção 5: 📦 Compilação para .EXE (Windows)
 Para criar um executável portátil (standalone):
 1. Instale o PyInstaller:
-```
+```sql
 pip install pyinstaller
 ```
 2. Compile o script:
-```
+```sql
 pyinstaller --onefile --name "GitLeakExplorer" git_leak.py
 ```
 
@@ -111,7 +111,7 @@ git_leak.py — Conjunto completo de ferramentas em arquivo único para recupera
 Principais funcionalidades implementadas:
   --parse-index         : baixa .git/index e converte para JSON
   --blind               : Blind mode: Rastrear commits/árvores quando .git/index está ausente/403
-  reconstruct (default) : Baixa os blobs do dump.json e reconstrói o diretório .git/objects localmente.
+  --reconstruct         : Baixa os blobs do dump.json e reconstrói o diretório .git/objects localmente.
   --list                : gera listing.html (UI simplificada) dos arquivos encontrados no indice, com links
   --serve               : abre um servidor http para visualização dos relatórios
   --sha1                : baixa um objeto único pelo SHA
@@ -131,24 +131,37 @@ Utilize de forma responsável e somente em sistemas que você esteja autorizado 
 Modo Automático (Recomendado)
 Executa todo o pipeline: baixa índice, verifica segurança, procura packfiles, reconstrói histórico e gera o relatório final.
 
-```
+```sql
+python git_leak.py http://exemplo.com
+# ou
 python git_leak.py http://exemplo.com/.git --default
 ```
 
 ### Comandos Específicos
-- Apenas Gerar Relatório Unificado (se já houver dados):
+- Apenas Gerar Relatório Unificado (se já houver dados baixados anteriormente):
 
-```
+```sql
 python git_leak.py http://exemplo.com/.git --report
 ```
 
-- Recuperar um objeto diretamente pelo SHA
-```
-python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16 
+- Habilitar servidor http para visualizar relatorios ou servir outros arquivos:
+```sql
+python git_leak.py http://exemplo.com/.git --serve
+# ou em conjunto com --output-dir
+python git_leak.py http://exemplo.com/.git --serve --output-dir temp/arquivos/
 ```
 
-- Gerenciar Packfiles (Listar/Baixar/Extrair):
+
+- Recuperar um objeto diretamente pelo SHA
+```sql
+python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16
+# Pode ser usado em conjunto com --output-dir
+python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16 --output-dir temp/arquivos/
 ```
+
+
+- Gerenciar Packfiles (Listar/Baixar/Extrair):
+```sql
 # Apenas listar packfiles encontrados
 python git_leak.py http://exemplo.com/.git --packfile list
 
@@ -157,14 +170,15 @@ python git_leak.py http://exemplo.com/.git --packfile download-unpack
 ```
 
 - Escanear Lista de URLs (Mass Scan):
-```
+```sql
 python git_leak.py --scan alvos.txt
 ```
 
 - Servir Relatórios Localmente:
-```
+```sql 
 python git_leak.py --serve --output-dir ./repo
 ```
+
 
 
 
