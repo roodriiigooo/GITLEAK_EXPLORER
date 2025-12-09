@@ -1,15 +1,19 @@
-name: Build Windows Standalone EXE
+name: Build & Release Windows EXE
 
 on:
   push:
     paths:
       - 'git_leak.py'
+      - 'version_info.txt' # Gatilho também se mudar a versão
     branches:
       - main
 
+permissions:
+  contents: write # Necessário para criar Releases
+
 jobs:
-  build:
-    name: Compile for Windows
+  build-and-release:
+    name: Compile and Release
     runs-on: windows-latest
 
     steps:
@@ -27,20 +31,64 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller requests
 
+      # Verifica se a mensagem do commit tem a tag [release]
+      # Exemplo de commit: "Fix bug parsing html [release]"
+      - name: Check for Release Tag
+        id: check_release
+        shell: bash
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" == *"[release]"* ]]; then
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "Detectado tag [release]. Criando nova versão..."
+          else
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "Build apenas de CI (sem release)."
+          fi
+
       - name: Build Executable
         run: |
           $IconPath = ".assets/app.ico"
+          $VersionPath = "version_info.txt"
+          $BuildCommand = "pyinstaller --onefile --clean --name 'git_leak' git_leak.py"
 
+          # Adiciona ícone se existir
           if (Test-Path $IconPath) {
-            pyinstaller --onefile --clean --icon=$IconPath --name "git_leak" git_leak.py
-          } else {
-            echo "AVISO: Ícone não encontrado em $IconPath. Compilando com ícone padrão..."
-            pyinstaller --onefile --clean --name "git_leak" git_leak.py
+            $BuildCommand += " --icon=$IconPath"
           }
-      
+
+          # Adiciona metadados de versão se existir (Ajuda no SmartScreen)
+          if (Test-Path $VersionPath) {
+            $BuildCommand += " --version-file=$VersionPath"
+          }
+
+          Invoke-Expression $BuildCommand
+
+      # Upload do artefato (sempre acontece para você testar)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: GitLeakExplorer-Windows-Binary
           path: dist/git_leak.exe
-          retention-days: 365
+          retention-days: 5
+
+      # Criação da Release (Só acontece se tiver [release] no commit)
+      - name: Create Release
+        if: steps.check_release.outputs.is_release == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/git_leak.exe
+          # Gera uma tag automática baseada no número da execução (ex: v1.0.42)
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
+          body: |
+            ## 🚀 Nova Versão Disponível
+            
+            Build automático gerado a partir do commit:
+            > ${{ github.event.head_commit.message }}
+            
+            ### Checksums (SHA256)
+            Recomendamos verificar o hash após o download.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
