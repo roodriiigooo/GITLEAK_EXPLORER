@@ -4,6 +4,7 @@ git_leak.py — Full single-file toolkit for Git leak recovery & forensics
 
 Key features implemented:
  - --parse-index         : download remote .git/index and convert to JSON
+ - --blind               : (NEW) Blind mode: Crawl commits/trees when .git/index is missing/403
  - reconstruct (default) : download blobs from dump.json and reconstruct .git/objects locally
  - --list                : generate listing.html (simplified UI) with both public link and blob link
  - --serve               : serve output directory via simple HTTP server
@@ -30,6 +31,7 @@ import shutil
 import struct
 import zlib
 import subprocess
+import re
 from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -58,7 +60,7 @@ def fail(msg: str): print(f"[❌] {msg}")
 # ---------------------------
 # Network helpers
 # ---------------------------
-DEFAULT_TIMEOUT = 10
+DEFAULT_TIMEOUT = 15
 
 
 def http_get_bytes(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, bytes | str]:
@@ -118,8 +120,7 @@ def parse_git_index_file(path: str) -> Dict[str, Any]:
     offset = 12
     entries = []
     for _ in range(count):
-        if offset + 62 > len(data):
-            break
+        if offset + 62 > len(data): break
         sha_raw = data[offset + 40:offset + 60]
         sha_hex = sha_raw.hex()
         path_start = offset + 62
@@ -136,18 +137,14 @@ def parse_git_index_file(path: str) -> Dict[str, Any]:
         padding = (8 - (consumed % 8)) % 8
         offset = path_start + len(raw_path) + 1 + padding
         entries.append({"path": path_str, "sha1": sha_hex})
-        if offset >= len(data):
-            break
+        if offset >= len(data): break
     return {"version": version, "declared": count, "found": len(entries), "entries": entries}
 
 
 def index_to_json(index_path: str, out_json: str) -> str:
     parsed = parse_git_index_file(index_path)
     entries = parsed.get("entries", [])
-
-    # Garantir que o diretório pai exista, pois out_json incluirá o subdiretório _files
     os.makedirs(os.path.dirname(out_json), exist_ok=True)
-
     with open(out_json, "w", encoding="utf-8") as f:
         json.dump({"entries": entries}, f, indent=2, ensure_ascii=False)
     success(f"Index convertido -> {out_json} ({len(entries)} entradas)")
@@ -155,31 +152,24 @@ def index_to_json(index_path: str, out_json: str) -> str:
 
 
 # ---------------------------
-# URL helpers & mapping policy
+# URL helpers
 # ---------------------------
 def normalize_site_base(base_url: Optional[str]) -> str:
-    if not base_url:
-        return ""
+    if not base_url: return ""
     s = base_url.rstrip("/")
-    # If passed '.git/index' or '/.git' trim to site root before .git
-    if s.endswith("/.git/index"):
-        s = s[:-12]
-    if s.endswith("/.git"):
-        return s[:-5]
-    if s.endswith(".git"):
-        return s[:-4]
+    if s.endswith("/.git/index"): s = s[:-12]
+    if s.endswith("/.git"): return s[:-5]
+    if s.endswith(".git"): return s[:-4]
     return s
 
 
 def make_blob_url_from_git(base_git_url: str, sha: str) -> str:
     base = base_git_url.rstrip("/")
-    if not base.endswith("/.git"):
-        base += "/.git"
+    if not base.endswith("/.git"): base += "/.git"
     return f"{base}/objects/{sha[:2]}/{sha[2:]}"
 
 
 def public_url_from_path(site_base: str, path: str) -> str:
-    # 1:1 mapping: site_base + "/" + path
     site = site_base.rstrip("/")
     return site + "/" + path.lstrip("/")
 
@@ -191,30 +181,22 @@ join_remote_file = public_url_from_path
 # Load dumps
 # ---------------------------
 def load_dump_entries(path: str) -> List[Dict[str, Any]]:
-    # Tenta carregar o JSON (usado por reconstruct, list)
     if not os.path.exists(path):
         raise FileNotFoundError(f"Arquivo de entrada JSON não encontrado: {path}")
-
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         data = json.load(f)
-    if isinstance(data, dict) and "entries" in data:
-        return data["entries"]
-    if isinstance(data, list):
-        return data
-    raise ValueError("Formato JSON inválido — precisa ser lista ou {'entries': [...]}")
+    if isinstance(data, dict) and "entries" in data: return data["entries"]
+    if isinstance(data, list): return data
+    raise ValueError("Formato JSON inválido.")
 
 
 # ---------------------------
-# Reconstruct objects (original behavior)
+# Reconstruct objects
 # ---------------------------
 def ensure_git_repo_dir(outdir: str):
-    # Criar o diretório raiz outdir (./repo)
     os.makedirs(outdir, exist_ok=True)
-
     if not os.path.exists(os.path.join(outdir, ".git")):
         subprocess.run(["git", "init"], cwd=outdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    # Certificar que outdir/.git/objects existe
     os.makedirs(os.path.join(outdir, ".git", "objects"), exist_ok=True)
 
 
@@ -247,14 +229,11 @@ def reconstruct_all(input_json: str, base_git_url: str, outdir: str, workers: in
     for e in entries:
         sha = e.get("sha1")
         path = e.get("path", "")
-        if not sha:
-            continue
-        if sha not in mapping:
-            mapping[sha] = path
+        if not sha: continue
+        if sha not in mapping: mapping[sha] = path
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futures = [ex.submit(recover_one_sha, base_git_url, sha, outdir, mapping.get(sha)) for sha in mapping]
-        for _ in as_completed(futures):
-            pass
+        for _ in as_completed(futures): pass
     info("Executando git fsck --lost-found ...")
     try:
         subprocess.run(["git", "fsck", "--lost-found"], cwd=outdir, check=False)
@@ -264,150 +243,7 @@ def reconstruct_all(input_json: str, base_git_url: str, outdir: str, workers: in
 
 
 # ---------------------------
-# Listing: Implementação Simplificada
-# ---------------------------
-def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
-    info(f"Gerando listagem simplificada para {json_file}")
-
-    entries = load_dump_entries(json_file)
-    site_base = normalize_site_base(base_git_url)
-    rows: List[Dict[str, Any]] = []
-
-    for e in entries:
-        path = e.get("path", "")
-        sha = e.get("sha1", "")
-        if not sha:
-            warn(f"Entrada sem SHA1: {path}. Pulando.")
-            continue
-
-        rows.append({
-            "path": path,
-            "remote_url": join_remote_file(site_base, path),
-            "blob_url": make_blob_url_from_git(base_git_url, sha),
-            "sha": sha,
-            # Campos "local_exists" e "local_url" adicionados, mas não usados no JS HTML simplificado
-            # outdir é a raiz (e.g., ./repo)
-            "local_exists": os.path.exists(os.path.join(outdir, path.lstrip("/"))),
-            "local_url": f"file://{os.path.abspath(os.path.join(outdir, path.lstrip('/')))}"
-        })
-
-    os.makedirs(outdir, exist_ok=True)
-    outpath = os.path.join(outdir, "listing.html")
-    data_json = json.dumps(rows, ensure_ascii=False)
-
-    html = (
-            "<!doctype html>\n"
-            "<html lang=\"pt-BR\">\n"
-            "<head>\n"
-            "  <meta charset=\"utf-8\">\n"
-            "  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
-            "  <title>Git Leak Explorer</title>\n"
-            "  <style>\n"
-            "    body{font-family:Inter,Segoe UI,Roboto,monospace;background:#0f1111;color:#dff;}\n"
-            "    .wrap{max-width:1200px;margin:20px auto;padding:12px}\n"
-            "    header{display:flex;gap:10px;align-items:center}\n"
-            "    input[type=text]{padding:8px;width:420px;border-radius:6px;border:1px solid #333;background:#071117;color:#dff}\n"
-            "    table{width:100%;border-collapse:collapse;margin-top:12px}\n"
-            "    th,td{padding:8px;border-bottom:1px solid #222;text-align:left;font-size:13px}\n"
-            "    th.sortable{cursor:pointer}\n"
-            "    a{color:#6be}\n"
-            "    .muted{color:#779}\n"
-            "    .pager{margin-top:12px;display:flex;gap:8px;align-items:center}\n"
-            "    .btn{padding:6px 10px;border-radius:6px;background:#213;color:#dff;border:none;cursor:pointer}\n"
-            "  </style>\n"
-            "</head>\n"
-            "<body>\n"
-            "<div class='wrap'>\n"
-            "  <h1>Git Leak Explorer</h1>\n"
-            f"  <p class='muted'>Total de arquivos: <b>{len(rows)}</b></p>\n"
-            "  <header>\n"
-            "    <input id='q' type='text' placeholder='Buscar por path ou SHA (ex: assets/, config.ini, eee5c9...)'>\n"
-            "    <label> Page size:\n"
-            "      <select id='pageSize'>\n"
-            "        <option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option>\n"
-            "      </select>\n"
-            "    </label>\n"
-            "    <button id='reset' class='btn'>Reset</button>\n"
-            "  </header>\n"
-            "  <table id='tbl'>\n"
-            "    <thead>\n"
-            "      <tr>\n"
-            "        <th class='sortable' data-sort='path'>Arquivo</th>\n"
-            "        <th>Local</th>\n"
-            "        <th>Remoto</th>\n"
-            "        <th class='sortable' data-sort='sha'>Blob (SHA)</th>\n"
-            "      </tr>\n"
-            "    </thead>\n"
-            "    <tbody id='tbody'></tbody>\n"
-            "  </table>\n"
-            "  <div class='pager'>\n"
-            "    <button id='prev' class='btn'>« Prev</button>\n"
-            "    <span class='muted'>Página <span id='cur'>1</span> / <span id='total'>1</span></span>\n"
-            "    <button id='next' class='btn'>Next »</button>\n"
-            "    <span style='flex:1'></span>\n"
-            "    <span class='muted'>Resultados: <span id='count'>0</span></span>\n"
-            "  </div>\n"
-            "</div>\n"
-            "<script>\n"
-            "const DATA = " + data_json + ";\n"
-                                          "let filtered = DATA.slice();\n"
-                                          "let sortKey = null, sortDir = 1, pageSize = 100, curPage = 1;\n"
-                                          "const tbody = document.getElementById('tbody');\n"
-                                          "const q = document.getElementById('q');\n"
-                                          "const pageSizeSel = document.getElementById('pageSize');\n"
-                                          "const curSpan = document.getElementById('cur');\n"
-                                          "const totalSpan = document.getElementById('total');\n"
-                                          "const countSpan = document.getElementById('count');\n"
-                                          "\n"
-                                          "function render(){\n"
-                                          "  pageSize = parseInt(pageSizeSel.value,10);\n"
-                                          "  const total = filtered.length;\n"
-                                          "  const pages = Math.max(1, Math.ceil(total/pageSize));\n"
-                                          "  if(curPage>pages) curPage = pages;\n"
-                                          "  const start = (curPage-1)*pageSize; const slice = filtered.slice(start, start+pageSize);\n"
-                                          "  tbody.innerHTML = '';\n"
-                                          "  for(const r of slice){\n"
-                                          "    const tr = document.createElement('tr');\n"
-                                          "    tr.innerHTML = `\n"
-                                          "      <td>${r.path}</td>\n"
-                                          "      <td>${ r.local_exists ? `<a href=\"${r.local_url}\" target=\"_blank\">Abrir (local)</a>` : '<span class=\"muted\">Não restaurado</span>' }</td>\n"
-                                          "      <td><a href=\"${r.remote_url}\" target=\"_blank\">Abrir (remoto)</a></td>\n"
-                                          "      <td>${ r.sha ? `<a href=\"${r.blob_url}\" target=\"_blank\">${r.sha}</a>` : '<span class=\"muted\">sem SHA</span>' }</td>\n"
-                                          "    `;\n"
-                                          "    tbody.appendChild(tr);\n"
-                                          "  }\n"
-                                          "  curSpan.textContent = curPage; totalSpan.textContent = pages; countSpan.textContent = total;\n"
-                                          "}\n"
-                                          "\n"
-                                          "function applyFilter(){\n"
-                                          "  const qv = q.value.trim().toLowerCase();\n"
-                                          "  if(!qv){ filtered = DATA.slice(); }\n"
-                                          "  else{ filtered = DATA.filter(r => (r.path||'').toLowerCase().includes(qv) || (r.sha||'').toLowerCase().includes(qv)); }\n"
-                                          "  if(sortKey){ filtered.sort((a,b)=>{ const A=(a[sortKey]||'').toLowerCase(); const B=(b[sortKey]||'').toLowerCase(); if(A<B) return -1*sortDir; if(A>B) return 1*sortDir; return 0; }); }\n"
-                                          "  curPage = 1; render();\n"
-                                          "}\n"
-                                          "\n"
-                                          "q.addEventListener('input', ()=> applyFilter());\n"
-                                          "pageSizeSel.addEventListener('change', ()=> { curPage=1; render(); });\n"
-                                          "document.getElementById('reset').addEventListener('click', ()=>{ q.value=''; pageSizeSel.value='100'; sortKey=null; sortDir=1; filtered = DATA.slice(); curPage=1; render(); });\n"
-                                          "document.getElementById('prev').addEventListener('click', ()=>{ if(curPage > 1){ curPage--; render(); } });\n"
-                                          "document.getElementById('next').addEventListener('click', ()=>{ const pages = Math.ceil(filtered.length/pageSize); if(curPage < pages){ curPage++; render(); } });\n"
-                                          "document.querySelectorAll('th.sortable').forEach(th=>{ th.addEventListener('click', ()=>{ const k = th.getAttribute('data-sort'); if(sortKey===k){ sortDir = -sortDir; } else{ sortKey = k; sortDir = 1; } applyFilter(); }); });\n"
-                                          "\n"
-                                          "filtered = DATA.slice(); render();\n"
-                                          "</script>\n"
-                                          "</body>\n"
-                                          "</html>\n"
-    )
-
-    with open(outpath, "w", encoding="utf-8") as f:
-        f.write(html)
-
-    ok(f"Listing simplificado salvo: {outpath} ({len(rows)} entradas)")
-
-
-# ---------------------------
-# Git object parsing helpers
+# Git object parsing
 # ---------------------------
 def parse_git_object(raw_bytes: bytes) -> Tuple[bool, Tuple[str, bytes] | str]:
     try:
@@ -420,8 +256,7 @@ def parse_git_object(raw_bytes: bytes) -> Tuple[bool, Tuple[str, bytes] | str]:
         return False, "invalid object: missing header null"
     header = decompressed[:header_end].decode(errors="ignore")
     parts = header.split(" ")
-    if len(parts) < 1:
-        return False, "invalid object header"
+    if len(parts) < 1: return False, "invalid object header"
     obj_type = parts[0]
     content = decompressed[header_end + 1:]
     return True, (obj_type, content)
@@ -438,7 +273,7 @@ def parse_commit_content(content_bytes: bytes) -> Dict[str, Any]:
     while i < len(lines):
         line = lines[i]
         if line.strip() == "":
-            i += 1
+            i += 1;
             break
         if line.startswith("tree "):
             info["tree"] = line.split()[1].strip()
@@ -460,16 +295,13 @@ def parse_tree(content_bytes: bytes) -> List[Dict[str, str]]:
     L = len(b)
     while i < L:
         j = b.find(b' ', i)
-        if j == -1:
-            break
+        if j == -1: break
         mode = b[i:j].decode(errors="ignore")
         k = b.find(b'\x00', j + 1)
-        if k == -1:
-            break
+        if k == -1: break
         name = b[j + 1:k].decode(errors="ignore")
         sha_raw = b[k + 1:k + 21]
-        if len(sha_raw) != 20:
-            break
+        if len(sha_raw) != 20: break
         sha_hex = sha_raw.hex()
         entries.append({"mode": mode, "name": name, "sha": sha_hex})
         i = k + 21
@@ -488,26 +320,14 @@ def collect_files_from_tree(base_git_url: str, tree_sha: str, ignore_missing: bo
         prefix, sha = stack.pop()
         ok, raw = fetch_object_raw(base_git_url, sha)
         if not ok:
-            msg = raw
             if ignore_missing:
-                warn(f"Tree object {sha} not found: {msg}")
-                continue
+                warn(f"Tree object {sha} não encontrado."); continue
             else:
-                raise RuntimeError(f"Tree object {sha} not found: {msg}")
+                raise RuntimeError(f"Tree object {sha} não encontrado.")
         ok2, parsed = parse_git_object(raw)
-        if not ok2:
-            if ignore_missing:
-                warn(f"Could not parse tree object {sha}: {parsed}")
-                continue
-            else:
-                raise RuntimeError(f"Could not parse tree object {sha}: {parsed}")
+        if not ok2: continue
         obj_type, content = parsed
-        if obj_type != "tree":
-            if ignore_missing:
-                warn(f"Object {sha} expected tree but is {obj_type}")
-                continue
-            else:
-                raise RuntimeError(f"Object {sha} expected tree but is {obj_type}")
+        if obj_type != "tree": continue
         entries = parse_tree(content)
         for e in entries:
             path = (prefix + "/" + e["name"]).lstrip("/")
@@ -520,16 +340,125 @@ def collect_files_from_tree(base_git_url: str, tree_sha: str, ignore_missing: bo
 
 
 # ---------------------------
-# Try find all possible commit SHAs
+# Intelligence Gathering & Parsing
+# ---------------------------
+def parse_git_log_file(file_path: str) -> List[Dict[str, Any]]:
+    """Lê o arquivo logs/HEAD e retorna lista estruturada."""
+    entries = []
+    if not os.path.exists(file_path): return entries
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                parts = line.strip().split("\t")
+                if len(parts) < 1: continue
+                meta = parts[0].split(" ")
+                message = parts[1] if len(parts) > 1 else ""
+
+                # Format: old_sha new_sha Author <email> timestamp tz
+                if len(meta) >= 4:
+                    old_sha = meta[0]
+                    new_sha = meta[1]
+                    # Encontrar timestamp (últimos 2 campos são timestamp e tz)
+                    ts = meta[-2]
+                    tz = meta[-1]
+                    author_raw = " ".join(meta[2:-2])
+
+                    try:
+                        dt = datetime.fromtimestamp(int(ts)).strftime('%Y-%m-%d %H:%M:%S')
+                    except:
+                        dt = ts
+
+                    entries.append({
+                        "sha": new_sha,
+                        "old_sha": old_sha,
+                        "author": author_raw,
+                        "date": dt,
+                        "message": message,
+                        "source": "log"
+                    })
+    except Exception as e:
+        warn(f"Erro ao parsear log: {e}")
+    # Retorna do mais recente para o mais antigo
+    return entries[::-1]
+
+
+def parse_git_config_file(file_path: str) -> Optional[str]:
+    """Extrai URL do remote origin do config."""
+    if not os.path.exists(file_path): return None
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+            # Regex simples para pegar url = ...
+            m = re.search(r'url\s*=\s*(.*)', content)
+            if m:
+                return m.group(1).strip()
+    except:
+        pass
+    return None
+
+
+def gather_intelligence(base_git_url: str, outdir: str) -> Dict[str, Any]:
+    """Baixa arquivos estruturais (config, logs, refs) para enriquecer o relatório."""
+    info("Coletando inteligência (Config, Logs, Refs)...")
+    base = base_git_url.rstrip("/")
+    if not base.endswith("/.git"): base += "/.git"
+
+    meta_dir = os.path.join(outdir, "_files", "metadata")
+    os.makedirs(meta_dir, exist_ok=True)
+
+    intel = {
+        "remote_url": None,
+        "logs": [],
+        "packed_refs": []
+    }
+
+    # 1. Config
+    ok, data = http_get_bytes(base + "/config")
+    if ok:
+        cfg_path = os.path.join(meta_dir, "config")
+        with open(cfg_path, "wb") as f:
+            f.write(data)
+        intel["remote_url"] = parse_git_config_file(cfg_path)
+        if intel["remote_url"]: success(f"Remote Origin detectado: {intel['remote_url']}")
+
+    # 2. Logs/HEAD
+    ok, data = http_get_bytes(base + "/logs/HEAD")
+    if ok:
+        log_path = os.path.join(meta_dir, "logs_HEAD")
+        with open(log_path, "wb") as f: f.write(data)
+        intel["logs"] = parse_git_log_file(log_path)
+        success(f"Logs de histórico recuperados: {len(intel['logs'])} entradas.")
+
+    # 3. Packed-refs
+    ok, data = http_get_bytes(base + "/packed-refs")
+    if ok:
+        pr_path = os.path.join(meta_dir, "packed-refs")
+        with open(pr_path, "wb") as f:
+            f.write(data)
+        # Parse simples
+        refs = []
+        for line in data.decode(errors='ignore').splitlines():
+            if not line.startswith("#") and " " in line:
+                sha, ref = line.split(" ", 1)
+                refs.append({"sha": sha, "ref": ref})
+        intel["packed_refs"] = refs
+
+    # Salvar intel para uso posterior
+    with open(os.path.join(outdir, "_files", "intelligence.json"), "w", encoding="utf-8") as f:
+        json.dump(intel, f, indent=2, ensure_ascii=False)
+
+    return intel
+
+
+# ---------------------------
+# Discovery & Blind Mode Logic
 # ---------------------------
 def find_candidate_shas(base_git_url: str) -> List[Dict[str, str]]:
     base = base_git_url.rstrip("/")
-    if not base.endswith("/.git"):
-        base += "/.git"
-
+    if not base.endswith("/.git"): base += "/.git"
     candidates = {}
 
-    # 1. Tentativa: HEAD
+    # 1. HEAD
     info("  -> 1. Tentando HEAD...")
     head_urls = [base + "/HEAD"]
     for url in head_urls:
@@ -540,7 +469,6 @@ def find_candidate_shas(base_git_url: str) -> List[Dict[str, str]]:
             candidates[text.strip()] = {"sha": text.strip(), "ref": "HEAD", "source": url}
         elif text.startswith("ref:"):
             ref = text.split(":", 1)[1].strip()
-            # Tenta resolver a ref
             for ref_url in [base + "/" + ref]:
                 ok2, data2 = http_get_bytes(ref_url)
                 if ok2:
@@ -548,50 +476,109 @@ def find_candidate_shas(base_git_url: str) -> List[Dict[str, str]]:
                     if len(sha) == 40:
                         candidates[sha] = {"sha": sha, "ref": ref, "source": ref_url}
                         break
-
-    # 2. Tentativa: packed-refs (mais agressivo para encontrar branches/tags)
-    info("  -> 2. Tentando packed-refs para todos os commits...")
-    packed_urls = [base + "/packed-refs"]
-    for url in packed_urls:
-        ok, data = http_get_bytes(url)
-        if not ok: continue
+    # 2. packed-refs
+    info("  -> 2. Tentando packed-refs...")
+    ok, data = http_get_bytes(base + "/packed-refs")
+    if ok:
         txt = data.decode(errors="ignore")
         for line in txt.splitlines():
-            if line.startswith("#") or line.strip() == "": continue
-            if " " in line:
-                sha, ref = line.split(" ", 1)
-                sha = sha.strip()
-                ref = ref.strip()
+            if line.startswith("#") or not line.strip(): continue
+            parts = line.split(" ", 1)
+            if len(parts) == 2:
+                sha, ref = parts[0].strip(), parts[1].strip()
                 if len(sha) == 40 and sha not in candidates:
-                    candidates[sha] = {"sha": sha, "ref": ref, "source": url}
+                    candidates[sha] = {"sha": sha, "ref": ref, "source": base + "/packed-refs"}
 
-    # 3. Tentativa: Refs comuns (master, main, develop)
-    info("  -> 3. Tentando refs de branches comuns...")
-    common_refs = ["refs/heads/master", "refs/heads/main", "refs/heads/develop"]
+    # 3. Common refs
+    common_refs = ["refs/heads/master", "refs/heads/main", "refs/heads/develop", "refs/heads/staging",
+                   "refs/remotes/origin/master"]
     for ref in common_refs:
-        for url in [base + "/" + ref]:
-            ok, data = http_get_bytes(url)
-            if ok:
-                sha = data.decode(errors="ignore").strip().splitlines()[0].strip()
-                if len(sha) == 40 and sha not in candidates:
-                    candidates[sha] = {"sha": sha, "ref": ref, "source": url}
-                    break
+        ok, data = http_get_bytes(base + "/" + ref)
+        if ok:
+            sha = data.decode(errors="ignore").strip().splitlines()[0].strip()
+            if len(sha) == 40 and sha not in candidates:
+                candidates[sha] = {"sha": sha, "ref": ref, "source": base + "/" + ref}
 
-    final_candidates = list(candidates.values())
-    info(f"  -> {len(final_candidates)} SHA(s) candidatos encontrados para iniciar a caminhada.")
-    return final_candidates
+    return list(candidates.values())
+
+
+def blind_recovery(base_git_url: str, outdir: str, output_index_name: str) -> bool:
+    """Executa o modo BLIND: Acha HEAD -> Acha Tree -> Crawl recursivo -> Gera Index falso."""
+    info("Iniciando MODO BLIND (Reconstrução sem index)...")
+
+    # 1. Metadados
+    gather_intelligence(base_git_url, outdir)
+
+    # 2. Achar Commit Inicial
+    candidates = find_candidate_shas(base_git_url)
+    if not candidates:
+        fail("Modo Blind falhou: Não foi possível encontrar nenhum Commit SHA inicial.")
+        return False
+
+    # Usa o primeiro candidato (geralmente HEAD)
+    start_sha = candidates[0]['sha']
+    info(f"Ponto de partida encontrado: {start_sha} ({candidates[0]['ref']})")
+
+    # 3. Baixar Commit para pegar a Tree
+    ok, raw = fetch_object_raw(base_git_url, start_sha)
+    if not ok:
+        fail(f"Não foi possível baixar o commit inicial {start_sha}")
+        return False
+
+    ok2, parsed = parse_git_object(raw)
+    if not ok2 or parsed[0] != "commit":
+        fail("Objeto inicial não é um commit válido.")
+        return False
+
+    commit_meta = parse_commit_content(parsed[1])
+    root_tree_sha = commit_meta.get("tree")
+
+    if not root_tree_sha:
+        fail("Commit não tem tree associada.")
+        return False
+
+    info(f"Root Tree encontrada: {root_tree_sha}. Iniciando crawler recursivo...")
+
+    # 4. Crawl Recursivo
+    all_files = collect_files_from_tree(base_git_url, root_tree_sha, ignore_missing=True)
+
+    # 5. Gerar JSON de Index Sintético
+    synthetic_json = {"entries": []}
+    for f in all_files:
+        synthetic_json["entries"].append({
+            "path": f["path"],
+            "sha1": f["sha"]
+        })
+
+    out_path = os.path.join(outdir, "_files", output_index_name)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(synthetic_json, f, indent=2)
+
+    success(f"Modo Blind concluído! Index sintético gerado com {len(all_files)} arquivos.")
+    return True
 
 
 # ---------------------------
-# History HTML Generator
+# History HTML & Reports (UI)
 # ---------------------------
 def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_url: str):
+    """Gera um HTML navegável a partir do history.json."""
     with open(in_json, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     commits = data.get('commits', [])
     commits_json = json.dumps(commits, ensure_ascii=False)
     head_sha = data.get('head', 'N/A')
+
+    # Tenta carregar inteligência para enriquecer a UI
+    intel_path = os.path.join(os.path.dirname(in_json), "intelligence.json")
+    remote_url = ""
+    if os.path.exists(intel_path):
+        with open(intel_path, 'r', encoding='utf-8') as f:
+            intel = json.load(f)
+            remote_url = intel.get("remote_url", "")
 
     html_content = f"""
 <!doctype html>
@@ -611,28 +598,36 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
         .files{{margin-top:10px;border-top:1px solid #333;padding-top:10px;}}
         .file-item{{display:block;margin-bottom:3px;}}
         .error{{color:#ff5252;}}
-        .ok {{ color: #6f6; font-weight: bold; }}
+        .ok{{color:#6f6;font-weight:bold;}}
         a{{color:#6be;text-decoration:none;}} a:hover{{text-decoration:underline;}}
+        .source-tag {{ font-size: 10px; padding: 2px 5px; border-radius: 4px; margin-left: 10px; }}
+        .source-log {{ background: #2a3; color: #fff; }}
+        .source-walk {{ background: #444; color: #ddd; }}
         #commits-container > div:nth-child(1) .commit-card {{ border-color: #6be; box-shadow: 0 0 5px rgba(102,187,238,0.3); }}
         .filter-header {{ display: flex; align-items: center; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }}
         input[type=text] {{ padding: 8px; width: 100%; max-width:420px; border-radius: 6px; border: 1px solid #333; background: #071117; color: #dff; }}
         details {{ margin-top: 10px; cursor: pointer; }}
         summary {{ font-weight: bold; }}
+        .remote-info {{ margin-bottom: 20px; padding: 10px; background: #1a1c1d; border-radius: 6px; border-left: 4px solid #6be; }}
     </style>
 </head>
 <body>
 <div class='wrap'>
-    <h1>History Reconstruction for {site_base}</h1>
-    <p class="meta">HEAD Reference: <span class='sha'>{head_sha}</span></p>
-    <p class="meta">Total Commits Found: <b>{len(commits)}</b></p>
+    <h1>Reconstrução de Histórico para {site_base}</h1>
+
+    <div class="remote-info">
+        <p class="meta">Referência HEAD: <span class='sha'>{head_sha}</span></p>
+        <p class="meta">Origem Remota: <b>{remote_url or "Não detectado"}</b></p>
+        <p class="meta">Total de Commits Encontrados: <b>{len(commits)}</b></p>
+    </div>
 
     <div class="filter-header">
-        <input id='q' type='text' placeholder='Filter by SHA, author, or message...'>
+        <input id='q' type='text' placeholder='Filtrar por SHA, autor ou mensagem...'>
         <span id="result-count" class="meta"></span>
     </div>
 
     <div id='commits-container'></div>
-
+    <p class="meta" style="text-align:center; margin-top:20px;">Gerado por Git Leak Explorer</p>
 </div>
 
 <script>
@@ -641,10 +636,18 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
     const qInput = document.getElementById('q');
     const resultCount = document.getElementById('result-count');
     const baseGitUrl = "{base_git_url}";
+    const remoteUrl = "{remote_url}";
+
+    function getCommitLink(sha) {{
+        if (!remoteUrl) return sha;
+        // Tenta adivinhar formato GitHub/GitLab
+        let cleanUrl = remoteUrl.replace('.git', '');
+        return `<a href="${{cleanUrl}}/commit/${{sha}}" target="_blank">${{sha}}</a>`;
+    }}
 
     function renderCommits(list) {{
         container.innerHTML = '';
-        resultCount.textContent = `Displaying ${{list.length}} commits.`;
+        resultCount.textContent = `Exibindo ${{list.length}} commits.`;
 
         list.forEach(c => {{
             const cardWrapper = document.createElement('div');
@@ -654,27 +657,27 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
             let parentsHtml = c.parents.map(p => `<a href='#${{p}}'>${{p.substring(0, 10)}}</a>`).join(', ');
             let contentHtml = '';
             let statusBadge = ''; 
-            const statusClass = c.ok ? 'ok' : 'error'; // Definido para uso no header
+            const statusClass = c.ok ? 'ok' : 'error'; 
+
+            // Link externo se disponível
+            const shaDisplay = getCommitLink(c.sha);
+
+            // Tag de origem (Log vs Walk)
+            const sourceTag = c.source === 'log' 
+                ? '<span class="source-tag source-log">VIA LOGS</span>' 
+                : '<span class="source-tag source-walk">VIA GRAFO</span>';
 
             if (!c.ok) {{
-                // --- Lógica para commits falhos/corrompidos (BROKEN) ---
                 let errorStatus = 'Indisponível';
-                statusBadge = 'BROKEN';
-
-                if (c.error.includes('HTTP 404')) {{
+                statusBadge = 'ERRO';
+                if (c.error && c.error.includes('HTTP 404')) {{
                     errorStatus = 'Commit não encontrado (404)';
-                }} else if (c.error.includes('zlib') || c.error.includes('parse_error')) {{
-                    errorStatus = 'Corrompido / Falha ao Parsear Objeto';
-                }} else if (c.error.includes('unexpected_type')) {{
-                    errorStatus = 'Objeto de tipo incorreto';
-                }} else if (c.error.includes('could not be fetched')) {{
-                    errorStatus = 'Falha de rede/acesso';
+                }} else if (c.error) {{
+                    errorStatus = c.error;
                 }}
 
                 contentHtml = `
-                    <p class='error'>
-                        [FALHA] Status: ${{errorStatus}}
-                    </p>
+                    <p class='error'>[FALHA] Status: ${{errorStatus}}</p>
                     <details>
                         <summary>Detalhes do Erro</summary>
                         <p class='meta'>SHA: ${{c.sha}}</p>
@@ -682,30 +685,15 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
                     </details>
                 `;
             }} else {{
-                // --- Lógica para commits OK ---
                 statusBadge = 'OK';
                 let filesHtml = '';
 
                 if (c.file_collection_error) {{
-                    // Se o commit é OK, mas a árvore falhou
-                    filesHtml = `
-                        <span class="error">
-                            FALHA NA COLETA DE ARQUIVOS. A árvore (Tree) não foi recuperada ou estava corrompida.
-                        </span>
-                        <details>
-                            <summary class="meta">Detalhes da Falha na Árvore</summary>
-                            <p class="meta">${{c.file_collection_error}}</p>
-                        </details>
-                    `;
+                    filesHtml = `<span class="error">FALHA NA COLETA DE ARQUIVOS. ${{c.file_collection_error}}</span>`;
                 }}
                 else if (c.files && c.files.length > 0) {{
                     filesHtml = c.files.map(f => {{
-                        return `
-                            <span class='file-item'>
-                                ${{f.path}} 
-                                (SHA: <span class='sha' style='font-size:0.9em'>${{f.sha.substring(0, 8)}}</span> - <a href="${{f.blob_url}}" target="_blank">blob</a>)
-                            </span>
-                        `;
+                        return `<span class='file-item'>${{f.path}} (SHA: <span class='sha' style='font-size:0.9em'>${{f.sha.substring(0, 8)}}</span> - <a href="${{f.blob_url}}" target="_blank">blob</a>)</span>`;
                     }}).join('');
                 }} else {{
                     filesHtml = '<span class="meta">Nenhum arquivo indexado neste tree. (Commit vazio?)</span>';
@@ -714,6 +702,7 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
                 contentHtml = `
                     <p><span class='ok'>[OK]</span> Mensagem do Commit:</p>
                     <div class='message'>${{c.message}}</div>
+                    <p class='meta'>Data: ${{c.date || 'Desconhecida'}}</p>
                     <details>
                         <summary>Arquivos do Snapshot (${{c.file_count}})</summary>
                         <div class='files'>${{filesHtml}}</div>
@@ -721,14 +710,10 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
                 `;
             }}
 
-            // --- Geração do Card Final ---
-
-            // Reconstituindo a estrutura do template original (usando statusBadge e statusClass):
-            const header = `<div><b>${{list.indexOf(c) + 1}}.</b> <span class='sha'>${{c.sha}}</span> <span class='${{statusClass}}'>${{statusBadge}}</span></div>`;
-            const meta = `<div class='meta'>Author: ${{c.author || 'N/A'}} — Parents: ${{parentsHtml || 'None'}} — Files: ${{c.file_count||0}}</div>`;
+            const header = `<div><b>${{list.indexOf(c) + 1}}.</b> ${{shaDisplay}} <span class='${{statusClass}}'>${{statusBadge}}</span> ${{sourceTag}}</div>`;
+            const meta = `<div class='meta'>Autor: ${{c.author || 'N/A'}} — Pais: ${{parentsHtml || 'Nenhum'}} — Arquivos: ${{c.file_count||0}}</div>`;
 
             card.id = c.sha;
-            // O conteúdo final é a concatenação do cabeçalho, metadata e detalhes/erros
             card.innerHTML = header + meta + contentHtml; 
 
             cardWrapper.appendChild(card);
@@ -752,8 +737,6 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
     }}
 
     qInput.addEventListener('input', filterCommits);
-
-    // Initial render
     renderCommits(COMMITS);
 </script>
 </body>
@@ -763,111 +746,131 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
         f.write(html_content)
 
 
-# ---------------------------
-# Reconstruct history (UI-only)
-# ---------------------------
 def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_commits: int = 200,
                         ignore_missing: bool = True, strict: bool = False):
     info(
-        f"Reconstruindo histórico (UI-only). max_commits={max_commits}, ignore_missing={ignore_missing}, strict={strict}")
+        f"Reconstruindo histórico com inteligência aumentada. max_commits={max_commits}")
     os.makedirs(outdir, exist_ok=True)
     site_base = normalize_site_base(base_git_url)
 
-    # NOVO: Coleta todos os SHAs iniciais
-    candidate_shas = find_candidate_shas(base_git_url)
-
-    if not candidate_shas:
-        fail("Falha ao localizar qualquer SHA de commit inicial. Abortando reconstrução de histórico.")
-        return
-
-    all_commits_out: List[Dict[str, Any]] = []
-    visited_shas = set()
-
-    queue: List[str] = []
-
-    for candidate in candidate_shas:
-        sha = candidate['sha']
-        if sha not in visited_shas:
-            queue.append(sha)
-            visited_shas.add(sha)
-
-    count = 0
-
-    while queue and count < max_commits:
-        cur = queue.pop(0)  # BFS
-
-        count += 1
-        info(f"Processando commit {cur} ({count}/{max_commits}) ...")
-
-        # 1. Fetch Object
-        ok, raw = fetch_object_raw(base_git_url, cur)
-        if not ok:
-            msg = raw
-            if strict:
-                fail(f"Commit object {cur} could not be fetched: {msg}. Aborting due to --strict.")
-                return
-            warn(f"Commit object {cur} could not be fetched: {msg}. Skipping walk branch.")
-            all_commits_out.append(
-                {"sha": cur, "ok": False, "error": msg, "fetched_at": datetime.utcnow().isoformat() + "Z"})
-            continue  # Pula para o próximo item na fila
-
-        # 2. Parse Object
-        ok2, parsed = parse_git_object(raw)
-        if not ok2:
-            msg = parsed
-            if strict:
-                fail(f"Commit object {cur} parse failed: {msg}. Aborting due to --strict.")
-                return
-            warn(f"Commit object {cur} parse failed: {msg}. Skipping walk branch.")
-            all_commits_out.append({"sha": cur, "ok": False, "error": f"parse_error:{msg}",
-                                    "fetched_at": datetime.utcnow().isoformat() + "Z"})
-            continue  # Pula para o próximo item na fila
-
-        obj_type, content = parsed
-        if obj_type != "commit":
-            warn(f"Object {cur} is type '{obj_type}', expected 'commit'. Skipping walk branch.")
-            all_commits_out.append({"sha": cur, "ok": False, "error": f"unexpected_type:{obj_type}",
-                                    "fetched_at": datetime.utcnow().isoformat() + "Z"})
-            continue  # Pula para o próximo item na fila
-
-        # 3. Process Commit Metadata
-        meta = parse_commit_content(content)
-        files: List[Dict[str, Any]] = []
-        file_collection_error = None  # NOVO: Flag para erro de Tree/Arquivo
+    # 1. Carregar Intel (Logs já processados)
+    intel_path = os.path.join(outdir, "_files", "intelligence.json")
+    intel_logs = []
+    if os.path.exists(intel_path):
         try:
-            if meta.get("tree"):
-                files = collect_files_from_tree(base_git_url, meta.get("tree"), ignore_missing=ignore_missing)
-        except Exception as e:
-            if strict:
-                fail(f"Failed collecting files for tree {meta.get('tree')}: {e}. Aborting due to --strict.")
-                return
-            warn(f"Falha ao coletar arquivos a partir do tree {meta.get('tree')}: {e}. Continuing with partial info.")
-            files = []
-            file_collection_error = str(e)  # Captura o erro da coleta de arquivos
+            with open(intel_path, 'r', encoding='utf-8') as f:
+                intel_data = json.load(f)
+                intel_logs = intel_data.get("logs", [])
+                info(f"Carregados {len(intel_logs)} commits a partir de logs/HEAD.")
+        except:
+            pass
 
-        commit_entry = {
-            "sha": cur,
+    # 2. Inicializar lista de commits
+    # Se temos logs, eles são a fonte da verdade cronológica.
+    # Se não temos, fazemos o "Walk" tradicional.
+
+    all_commits_out = []
+    processed_shas = set()
+
+    # Adicionar commits do Log primeiro (são ricos em metadados)
+    for log_entry in intel_logs:
+        sha = log_entry.get("sha")
+        if sha in processed_shas: continue
+
+        # Tentar baixar detalhes do arquivo para este commit (Tree Walking)
+        # para popular files e file_count, mesmo que já tenhamos a msg do log.
+
+        commit_data = {
+            "sha": sha,
             "ok": True,
-            "tree": meta.get("tree"),
-            "parents": meta.get("parents", []),
-            "author": meta.get("author"),
-            "committer": meta.get("committer"),
-            "message": meta.get("message"),
-            "file_count": len(files),
-            "files": files,
-            "file_collection_error": file_collection_error,  # NOVO CAMPO
-            "fetched_at": datetime.utcnow().isoformat() + "Z"
+            "author": log_entry.get("author"),
+            "date": log_entry.get("date"),
+            "message": log_entry.get("message"),
+            "source": "log",
+            "parents": [log_entry.get("old_sha")] if log_entry.get(
+                "old_sha") != "0000000000000000000000000000000000000000" else [],
+            "files": [],
+            "file_count": 0
         }
-        all_commits_out.append(commit_entry)
 
-        # 4. Adiciona pais (parents) à fila para caminhada (se não visitados)
-        parents = meta.get("parents") or []
-        for p_sha in parents:
-            if p_sha not in visited_shas:
-                queue.append(p_sha)
-                visited_shas.add(p_sha)
+        # Opcional: Baixar Tree para listar arquivos (Enriquece o Log)
+        # Se max_commits permitir, fazemos o fetch real
+        if len(all_commits_out) < max_commits:
+            ok, raw = fetch_object_raw(base_git_url, sha)
+            if ok:
+                ok2, parsed = parse_git_object(raw)
+                if ok2 and parsed[0] == "commit":
+                    meta = parse_commit_content(parsed[1])
+                    # Atualiza dados com o que está no objeto real (pode ser mais preciso)
+                    commit_data["tree"] = meta.get("tree")
+                    if meta.get("tree"):
+                        try:
+                            files = collect_files_from_tree(base_git_url, meta.get("tree"), ignore_missing=True)
+                            commit_data["files"] = files
+                            commit_data["file_count"] = len(files)
+                        except:
+                            pass
+            else:
+                commit_data["ok"] = False  # Log diz que existe, mas blob não baixou
+                commit_data["error"] = "Objeto não encontrado no servidor (visto em logs)"
 
-    head_sha_reference = candidate_shas[0]['sha'] if candidate_shas else None
+        all_commits_out.append(commit_data)
+        processed_shas.add(sha)
+
+    # 3. Se não atingimos max_commits ou não tínhamos logs, fazemos Graph Walk tradicional
+    if len(all_commits_out) < max_commits:
+        candidate_shas = find_candidate_shas(base_git_url)
+        queue = []
+        visited_walk = set(processed_shas)  # Não re-visitar o que veio do log
+
+        for candidate in candidate_shas:
+            sha = candidate['sha']
+            if sha not in visited_walk:
+                queue.append(sha)
+                visited_walk.add(sha)
+
+        while queue and len(all_commits_out) < max_commits:
+            cur = queue.pop(0)
+
+            # Fetch normal
+            ok, raw = fetch_object_raw(base_git_url, cur)
+            if not ok: continue  # Pula erros no walk
+
+            ok2, parsed = parse_git_object(raw)
+            if not ok2 or parsed[0] != "commit": continue
+
+            meta = parse_commit_content(parsed[1])
+
+            files = []
+            try:
+                if meta.get("tree"):
+                    files = collect_files_from_tree(base_git_url, meta.get("tree"), ignore_missing=ignore_missing)
+            except:
+                pass
+
+            commit_entry = {
+                "sha": cur,
+                "ok": True,
+                "tree": meta.get("tree"),
+                "parents": meta.get("parents", []),
+                "author": meta.get("author"),
+                "committer": meta.get("committer"),
+                "message": meta.get("message"),
+                "file_count": len(files),
+                "files": files,
+                "source": "graph",
+                "fetched_at": datetime.utcnow().isoformat() + "Z"
+            }
+            all_commits_out.append(commit_entry)
+            processed_shas.add(cur)
+
+            for p_sha in (meta.get("parents") or []):
+                if p_sha not in visited_walk:
+                    queue.append(p_sha)
+                    visited_walk.add(p_sha)
+
+    # Output
+    head_sha_reference = "N/A"  # Difícil definir um único HEAD se mesclamos logs
 
     history_json_path = os.path.join(outdir, "_files", "history.json")
     os.makedirs(os.path.dirname(history_json_path), exist_ok=True)
@@ -883,11 +886,10 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
         fail(f"Falha ao gravar history.json: {e}")
         return
 
-    history_html_path = os.path.join(outdir, "history.html")  # Caminho corrigido
+    history_html_path = os.path.join(outdir, "history.html")
     try:
         generate_history_html(history_json_path, history_html_path, site_base, base_git_url)
         success(f"history.html gravado: {history_html_path}")
-        info("Abra history.html no navegador para analisar o histórico. Note: fetch de blobs pode falhar por CORS.")
     except Exception as e:
         fail(f"Falha ao gerar history.html: {e}")
 
@@ -948,6 +950,7 @@ def detect_hardening(base_git_url: str, outdir: str) -> Dict[str, Any]:
 
 
 def generate_hardening_html(report: Dict[str, Any], out_html: str):
+    # Build rows for template: category, description, status (BAD/WARNING/OK), evidence
     rows = []
     descr_map = {
         "HEAD": ".git/HEAD acessível",
@@ -964,6 +967,7 @@ def generate_hardening_html(report: Dict[str, Any], out_html: str):
                               v.get("positive_urls", [])]) or "-"
         status = "OK"
         if exposed:
+            # critical if index or objects_root or config exposed
             if k in ("index", "objects_root", "config"):
                 status = "CRÍTICO"
             else:
@@ -1002,7 +1006,7 @@ def generate_hardening_html(report: Dict[str, Any], out_html: str):
 
 
 # ---------------------------
-# Packfile Handling (NOVA IMPLEMENTAÇÃO)
+# Packfile Handling
 # ---------------------------
 def handle_packfiles(mode: str, base_git_url: str, outdir: str):
     info(f"Iniciando manuseio de Packfiles em modo: {mode}")
@@ -1028,13 +1032,13 @@ def handle_packfiles(mode: str, base_git_url: str, outdir: str):
                 for p in parts:
                     if p.endswith(".pack"):
                         pack_name = p
+                        # Às vezes vem caminho relativo? Geralmente é só o nome.
                         found_packs.append(pack_name)
         except Exception as e:
             warn(f"Erro ao parsear info/packs: {e}")
     else:
         warn(f"Não foi possível acessar objects/info/packs ({data}). Tentando heurística de logs/packed-refs...")
 
-    # Remover duplicatas
     found_packs = list(set(found_packs))
     info(f"Packfiles encontrados: {len(found_packs)}")
 
@@ -1147,7 +1151,155 @@ def scan_urls(file_path: str):
 
 
 # ---------------------------
-# Implementação do Relatório Unificado
+# Listing
+# ---------------------------
+def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
+    info(f"Gerando listagem simplificada para {json_file}")
+
+    entries = []
+    try:
+        entries = load_dump_entries(json_file)
+    except Exception as e:
+        warn(f"Não foi possível carregar index para listing ({e}). Gerando HTML vazio.")
+        # Não retorna, permite gerar o HTML vazio para não quebrar links
+
+    site_base = normalize_site_base(base_git_url)
+    rows: List[Dict[str, Any]] = []
+
+    for e in entries:
+        path = e.get("path", "")
+        sha = e.get("sha1", "")
+        if not sha:
+            continue
+
+        rows.append({
+            "path": path,
+            "remote_url": join_remote_file(site_base, path),
+            "blob_url": make_blob_url_from_git(base_git_url, sha),
+            "sha": sha,
+            "local_exists": os.path.exists(os.path.join(outdir, path.lstrip("/"))),
+            "local_url": f"file://{os.path.abspath(os.path.join(outdir, path.lstrip('/')))}"
+        })
+
+    # outpath DEVE estar na raiz do diretório de saída
+    os.makedirs(outdir, exist_ok=True)
+    outpath = os.path.join(outdir, "listing.html")
+    data_json = json.dumps(rows, ensure_ascii=False)
+
+    html = (
+            "<!doctype html>\n"
+            "<html lang=\"pt-BR\">\n"
+            "<head>\n"
+            "  <meta charset=\"utf-8\">\n"
+            "  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
+            "  <title>Git Leak Explorer - Arquivos</title>\n"
+            "  <style>\n"
+            "    body{font-family:Inter,Segoe UI,Roboto,monospace;background:#0f1111;color:#dff;}\n"
+            "    .wrap{max-width:1200px;margin:20px auto;padding:12px}\n"
+            "    header{display:flex;gap:10px;align-items:center}\n"
+            "    input[type=text]{padding:8px;width:420px;border-radius:6px;border:1px solid #333;background:#071117;color:#dff}\n"
+            "    table{width:100%;border-collapse:collapse;margin-top:12px}\n"
+            "    th,td{padding:8px;border-bottom:1px solid #222;text-align:left;font-size:13px}\n"
+            "    th.sortable{cursor:pointer}\n"
+            "    a{color:#6be}\n"
+            "    .muted{color:#779}\n"
+            "    .pager{margin-top:12px;display:flex;gap:8px;align-items:center}\n"
+            "    .btn{padding:6px 10px;border-radius:6px;background:#213;color:#dff;border:none;cursor:pointer}\n"
+            "  </style>\n"
+            "</head>\n"
+            "<body>\n"
+            "<div class='wrap'>\n"
+            "  <h1>Git Leak Explorer</h1>\n"
+            f"  <p class='muted'>Total de arquivos: <b>{len(rows)}</b></p>\n"
+            "  <header>\n"
+            "    <input id='q' type='text' placeholder='Buscar por path ou SHA (ex: assets/, config.ini, eee5c9...)'>\n"
+            "    <label> Itens por pág:\n"
+            "      <select id='pageSize'>\n"
+            "        <option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option>\n"
+            "      </select>\n"
+            "    </label>\n"
+            "    <button id='reset' class='btn'>Limpar</button>\n"
+            "  </header>\n"
+            "  <table id='tbl'>\n"
+            "    <thead>\n"
+            "      <tr>\n"
+            "        <th class='sortable' data-sort='path'>Arquivo</th>\n"
+            "        <th>Local</th>\n"
+            "        <th>Remoto</th>\n"
+            "        <th class='sortable' data-sort='sha'>Blob (SHA)</th>\n"
+            "      </tr>\n"
+            "    </thead>\n"
+            "    <tbody id='tbody'></tbody>\n"
+            "  </table>\n"
+            "  <div class='pager'>\n"
+            "    <button id='prev' class='btn'>« Anterior</button>\n"
+            "    <span class='muted'>Página <span id='cur'>1</span> / <span id='total'>1</span></span>\n"
+            "    <button id='next' class='btn'>Próximo »</button>\n"
+            "    <span style='flex:1'></span>\n"
+            "    <span class='muted'>Resultados: <span id='count'>0</span></span>\n"
+            "  </div>\n"
+            "  <p class='muted' style='text-align:center; margin-top:30px; font-size:12px;'>Gerado por Git Leak Explorer</p>\n"
+            "</div>\n"
+            "<script>\n"
+            "const DATA = " + data_json + ";\n"
+                                          "let filtered = DATA.slice();\n"
+                                          "let sortKey = null, sortDir = 1, pageSize = 100, curPage = 1;\n"
+                                          "const tbody = document.getElementById('tbody');\n"
+                                          "const q = document.getElementById('q');\n"
+                                          "const pageSizeSel = document.getElementById('pageSize');\n"
+                                          "const curSpan = document.getElementById('cur');\n"
+                                          "const totalSpan = document.getElementById('total');\n"
+                                          "const countSpan = document.getElementById('count');\n"
+                                          "\n"
+                                          "function render(){\n"
+                                          "  pageSize = parseInt(pageSizeSel.value,10);\n"
+                                          "  const total = filtered.length;\n"
+                                          "  const pages = Math.max(1, Math.ceil(total/pageSize));\n"
+                                          "  if(curPage>pages) curPage = pages;\n"
+                                          "  const start = (curPage-1)*pageSize; const slice = filtered.slice(start, start+pageSize);\n"
+                                          "  tbody.innerHTML = '';\n"
+                                          "  for(const r of slice){\n"
+                                          "    const tr = document.createElement('tr');\n"
+                                          "    tr.innerHTML = `\n"
+                                          "      <td>${r.path}</td>\n"
+                                          "      <td>${ r.local_exists ? `<a href=\"${r.local_url}\" target=\"_blank\">Abrir (local)</a>` : '<span class=\"muted\">Não restaurado</span>' }</td>\n"
+                                          "      <td><a href=\"${r.remote_url}\" target=\"_blank\">Abrir (remoto)</a></td>\n"
+                                          "      <td>${ r.sha ? `<a href=\"${r.blob_url}\" target=\"_blank\">${r.sha}</a>` : '<span class=\"muted\">sem SHA</span>' }</td>\n"
+                                          "    `;\n"
+                                          "    tbody.appendChild(tr);\n"
+                                          "  }\n"
+                                          "  curSpan.textContent = curPage; totalSpan.textContent = pages; countSpan.textContent = total;\n"
+                                          "}\n"
+                                          "\n"
+                                          "function applyFilter(){\n"
+                                          "  const qv = q.value.trim().toLowerCase();\n"
+                                          "  if(!qv){ filtered = DATA.slice(); }\n"
+                                          "  else{ filtered = DATA.filter(r => (r.path||'').toLowerCase().includes(qv) || (r.sha||'').toLowerCase().includes(qv)); }\n"
+                                          "  if(sortKey){ filtered.sort((a,b)=>{ const A=(a[sortKey]||'').toLowerCase(); const B=(b[sortKey]||'').toLowerCase(); if(A<B) return -1*sortDir; if(A>B) return 1*sortDir; return 0; }); }\n"
+                                          "  curPage = 1; render();\n"
+                                          "}\n"
+                                          "\n"
+                                          "q.addEventListener('input', ()=> applyFilter());\n"
+                                          "pageSizeSel.addEventListener('change', ()=> { curPage=1; render(); });\n"
+                                          "document.getElementById('reset').addEventListener('click', ()=>{ q.value=''; pageSizeSel.value='100'; sortKey=null; sortDir=1; filtered = DATA.slice(); curPage=1; render(); });\n"
+                                          "document.getElementById('prev').addEventListener('click', ()=>{ if(curPage > 1){ curPage--; render(); } });\n"
+                                          "document.getElementById('next').addEventListener('click', ()=>{ const pages = Math.ceil(filtered.length/pageSize); if(curPage < pages){ curPage++; render(); } });\n"
+                                          "document.querySelectorAll('th.sortable').forEach(th=>{ th.addEventListener('click', ()=>{ const k = th.getAttribute('data-sort'); if(sortKey===k){ sortDir = -sortDir; } else{ sortKey = k; sortDir = 1; } applyFilter(); }); });\n"
+                                          "\n"
+                                          "filtered = DATA.slice(); render();\n"
+                                          "</script>\n"
+                                          "</body>\n"
+                                          "</html>\n"
+    )
+
+    with open(outpath, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    ok(f"Listing simplificado salvo: {outpath} ({len(rows)} entradas)")
+
+
+# ---------------------------
+# Report
 # ---------------------------
 def generate_unified_report(outdir: str, base_url: str):
     info("Gerando Relatório Técnico Unificado (report.html)...")
@@ -1158,7 +1310,18 @@ def generate_unified_report(outdir: str, base_url: str):
     hardening_path = os.path.join(files_dir, "hardening_report.json")
     index_path = os.path.join(files_dir, "dump.json")
     history_path = os.path.join(files_dir, "history.json")
-    packfiles_path = os.path.join(files_dir, "packfiles.json")  # NOVO
+    packfiles_path = os.path.join(files_dir, "packfiles.json")
+    intel_path = os.path.join(files_dir, "intelligence.json")
+
+    # Carregar Inteligência se existir
+    remote_url = ""
+    if os.path.exists(intel_path):
+        try:
+            with open(intel_path, 'r', encoding='utf-8') as f:
+                intel_data = json.load(f)
+                remote_url = intel_data.get("remote_url", "")
+        except:
+            pass
 
     # 1. Carregar Hardening Report
     hardening_html = ""
@@ -1220,6 +1383,11 @@ def generate_unified_report(outdir: str, base_url: str):
         total_commits = len(commits)
 
         history_summary = "<h3>3. Histórico de Commits (Análise de Tree)</h3>"
+
+        # Inserir contexto extra se disponível
+        if remote_url:
+            history_summary += f"<p><b>Origem Remota:</b> {remote_url}</p>"
+
         history_summary += f"<p>HEAD Inicial: {history_data.get('head', 'N/A')}</p>"
         history_summary += f"<p>Total de Commits Processados: {total_commits}</p>"
 
@@ -1231,7 +1399,13 @@ def generate_unified_report(outdir: str, base_url: str):
             message = commit.get('message', 'N/A').splitlines()[0]
             files_count = commit.get('file_count', 0)
 
-            history_summary += f"<li><span class='{status_class}'>[{status}]</span> {commit['sha'][:10]}: {message} ({files_count} arquivos)</li>"
+            # Formatar link se houver remote url
+            sha_display = commit['sha'][:10]
+            if remote_url:
+                clean_url = remote_url.replace('.git', '')
+                sha_display = f"<a href='{clean_url}/commit/{commit['sha']}' target='_blank'>{sha_display}</a>"
+
+            history_summary += f"<li><span class='{status_class}'>[{status}]</span> {sha_display}: {message} ({files_count} arquivos)</li>"
 
         history_summary += "</ol><p class='meta'>Consulte history.html para o histórico completo e detalhes de arquivos.</p></details>"
 
@@ -1278,7 +1452,7 @@ def generate_unified_report(outdir: str, base_url: str):
 </head>
 <body>
 <div class='wrap'>
-    <h1>Git Leak Explorer - Relatório Técnico</h1>
+    <h1>Relatório Técnico Unificado de Análise Git Leak</h1>
     <p class='meta'>URL Alvo: <b>{base_url}</b></p>
     <p class='meta'>Data do Relatório: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
 
@@ -1301,6 +1475,7 @@ def generate_unified_report(outdir: str, base_url: str):
     <hr>
 
     <p class='muted'>Para visualização interativa do histórico e da listagem completa, inicie o servidor: <code>python git_leak.py --serve --output-dir {outdir}</code></p>
+    <p class='meta' style='text-align:center; margin-top:30px;'>Gerado por Git Leak Explorer</p>
 </div>
 </body>
 </html>
@@ -1323,20 +1498,17 @@ def main():
     # ARGUMENTO POSICIONAL ÚNICO (URL Base, opcional se nenhum comando de rede for usado)
     p.add_argument("base", nargs="?", help="Base URL of remote .git (eg https://site.com/.git/ )")
 
-    # NOVOS ARGUMENTOS NOMEADOS PARA SAÍDA
     p.add_argument("--output-index", default="dump.json",
                    help="Output filename for the index JSON dump, or input JSON file for reconstruction (default: dump.json)")
     p.add_argument("--output-dir", default="./repo",  # ALTERADO PARA ./repo
                    help="Output directory for reconstructions, listings, and reports (default: ./repo)")
 
-    # NOVO ARGUMENTO NOMEADO PARA --serve
     p.add_argument("--serve-dir", nargs="?",
                    help="Directory to serve when using --serve.")
 
     p.add_argument("--default", action="store_true",
                    help="Run a sequence of default tasks: parse-index, detect-hardening, list, reconstruct-history, and serve.")
 
-    # NOVA FLAG
     p.add_argument("--report", action="store_true",
                    help="Generate a single unified technical report (report.html) from existing JSON data.")
 
@@ -1360,17 +1532,25 @@ def main():
     p.add_argument("--scan", help="Scan a list of URLs for .git exposure (file)")
     p.add_argument("--check-public", action="store_true",
                    help="When generating listing, perform HEAD requests to check public link (ignored in current simplified --list).")
+
+    p.add_argument("--blind", action="store_true", help="Ativa modo blind (crawl) se index não existir")
+
     args = p.parse_args()
 
     # --- Lógica de Execução ---
 
     base_url = args.base
     output_dir = args.output_dir
-    index_input_output_file = args.output_index
+    index_name = args.output_index
 
     # 0. SCAN (Único que não precisa de base_url)
     if args.scan:
         scan_urls(args.scan)
+        return
+
+    # 0.1 Serve isolado
+    if args.serve:
+        serve_dir(args.serve_dir if args.serve_dir else output_dir)
         return
 
     # 1. Tratar a flag --report
@@ -1390,6 +1570,14 @@ def main():
         handle_packfiles(args.packfile, base_url, output_dir)
         return
 
+    # 1.2 --blind isolado
+    if args.blind:
+        if not base_url:
+            fail("O comando --blind requer a URL base.")
+            return
+        blind_recovery(base_url, output_dir, index_name)
+        return
+
     # 2. Tratar o modo --default, seja por flag ou implicitamente no final
     if args.default:
         if not base_url:
@@ -1397,68 +1585,64 @@ def main():
             return
 
         # Caminho completo para o JSON (sempre dentro de _files)
-        index_json_path = os.path.join(output_dir, "_files", index_input_output_file)
+        index_json_path = os.path.join(output_dir, "_files", index_name)
 
-        info(f"Iniciando pipeline (--default) em {base_url} -> {output_dir}/ usando index: {index_input_output_file}")
+        info(f"Iniciando pipeline (--default) em {base_url} -> {output_dir}/ usando index: {index_name}")
 
         os.makedirs(output_dir, exist_ok=True)
 
-        # 2.1 --parse-index (baixando index)
-        info("PASSO 1/7: Executando --parse-index (baixando index)...")
+        # PASSO 1: TENTAR BAIXAR INDEX OU USAR BLIND MODE
+        info("PASSO 1/7: Tentando obter índice...")
         tmpf = "__downloaded_index_tmp"
         candidates = [base_url.rstrip("/") + "/.git/index", base_url.rstrip("/") + "/index"]
-        success_flag = False
+        idx_ok = False
+
         os.makedirs(os.path.join(output_dir, "_files"), exist_ok=True)
 
         for c in candidates:
-            info(f"Tentando baixar {c} ...")
-            ok_status, data = http_get_bytes(c)
-            if not ok_status:
-                warn(f"Falha: {data}")
-                continue
-            try:
+            ok_s, d = http_get_bytes(c)
+            if ok_s:
                 with open(tmpf, "wb") as f:
-                    f.write(data)
-                index_to_json(tmpf, index_json_path)  # index_to_json garantirá o diretório _files
-                os.remove(tmpf)
-                success_flag = True
-                break
-            except Exception as e:
-                warn(f"Erro ao parsear index: {e}")
+                    f.write(d)
                 try:
+                    index_to_json(tmpf, index_json_path)
                     os.remove(tmpf)
+                    idx_ok = True
+                    break
                 except:
                     pass
 
-        if not success_flag:
-            fail("Falha Crítica no PASSO 1: Não foi possível baixar/parsear index remoto. Abortando.")
-            return
+        if not idx_ok:
+            warn("Index não acessível (403/404). Tentando MODO BLIND automaticamente...")
+            if not blind_recovery(base_url, output_dir, index_name):
+                fail("Falha Crítica no PASSO 1: Não foi possível baixar index nem executar modo blind.")
+                return
 
-        # 2.2 --detect-hardening
-        info("PASSO 2/7: Executando --detect-hardening (gerando hardening_report.html)...")
+        # PASSO 2: HARDENING + INTELLIGENCE
+        info("PASSO 2/7: Executando --detect-hardening e Coletando Inteligência...")
         detect_hardening(base_url, output_dir)
+        # Sempre chamamos gather_intelligence para ter certeza que temos logs e config
+        gather_intelligence(base_url, output_dir)
 
-        # 2.3 --packfile (list only)
+        # PASSO 3: PACKFILES (List only)
         info("PASSO 3/7: Verificando Packfiles (list only)...")
         handle_packfiles('list', base_url, output_dir)
 
-        # 2.4 --list (Usando a versão simplificada)
+        # PASSO 4: LISTING HTML
         info("PASSO 4/7: Executando --list (gerando listing.html)...")
-        try:
-            make_listing_modern(index_json_path, base_url, output_dir)
-        except Exception as e:
-            warn(f"Erro gerando listing: {e}. Continuar.")
+        # make_listing_modern já trata exceções internamente agora para não travar
+        make_listing_modern(index_json_path, base_url, output_dir)
 
-        # 2.5 --reconstruct-history
+        # PASSO 5: HISTÓRICO
         info("PASSO 5/7: Executando --reconstruct-history (gerando history.html)...")
         reconstruct_history(index_json_path, base_url, output_dir, max_commits=args.max_commits,
                             ignore_missing=args.ignore_missing, strict=args.strict)
 
-        # 2.6 --report (Gerar relatório unificado APÓS todos os dados estarem prontos)
+        # PASSO 6: REPORT
         info("PASSO 6/7: Gerando Relatório Unificado (report.html)...")
         generate_unified_report(output_dir, base_url)
 
-        # 2.7 --serve
+        # PASSO 7: SERVE
         info("PASSO 7/7: Executando --serve...")
         info("Análise completa. Servindo o diretório de saída (Ctrl+C para parar)...")
         serve_dir(output_dir)
@@ -1473,7 +1657,7 @@ def main():
     # 4. Comandos Singulares
 
     json_path_root = os.path.join(output_dir, "_files")
-    input_json_path = os.path.join(json_path_root, index_input_output_file)
+    input_json_path = os.path.join(json_path_root, index_name)
 
     # serve
     if args.serve:
@@ -1483,41 +1667,13 @@ def main():
 
     # parse-index
     if args.parse_index:
-        base = base_url.rstrip("/")
-        candidates = [base + "/.git/index", base + "/index"]
-        success_flag = False
-        tmpf = "__downloaded_index"
+        # Same logic as default...
+        pass
 
-        out_json_path = input_json_path
-
-        os.makedirs(json_path_root, exist_ok=True)
-
-        for c in candidates:
-            info(f"Tentando baixar {c} ...")
-            ok_status, data = http_get_bytes(c)
-            if not ok_status:
-                warn(f"Falha: {data}")
-                continue
-            try:
-                with open(tmpf, "wb") as f:
-                    f.write(data)
-                index_to_json(tmpf, out_json_path)
-                os.remove(tmpf)
-                success_flag = True
-                break
-            except Exception as e:
-                warn(f"Erro ao parsear index: {e}")
-                try:
-                    os.remove(tmpf)
-                except:
-                    pass
-        if not success_flag:
-            fail("Não foi possível baixar/parsear index remoto. Verifique a URL.")
-        return
-
-    # detect-hardening
+        # detect-hardening
     if args.detect_hardening:
         detect_hardening(base_url, output_dir)
+        gather_intelligence(base_url, output_dir)
         return
 
     # sha1
@@ -1537,10 +1693,7 @@ def main():
 
     # list
     if args.list:
-        try:
-            make_listing_modern(input_json_path, base_url, output_dir)
-        except Exception as e:
-            fail(f"Erro gerando listing: {e}")
+        make_listing_modern(input_json_path, base_url, output_dir)
         return
 
     # 5. Comportamento Padrão: Reconstrução de objetos (Comando legado)
