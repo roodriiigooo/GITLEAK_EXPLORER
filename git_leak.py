@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
 """
-git_leak.py — Full single-file toolkit for Git leak recovery & forensics
+git_leak.py — Conjunto completo de ferramentas em arquivo único para recuperação e análise forense de vazamentos do Git.
 
-Key features implemented:
- - --parse-index         : download remote .git/index and convert to JSON
- - --blind               : (NEW) Blind mode: Crawl commits/trees when .git/index is missing/403
- - reconstruct (default) : download blobs from dump.json and reconstruct .git/objects locally
- - --list                : generate listing.html (simplified UI) with both public link and blob link
- - --serve               : serve output directory via simple HTTP server
- - --sha1                : download a single object by SHA
- - --reconstruct-history : reconstruct commit chain UI-only (history.json + history.html)
- - --detect-hardening    : run exposure checks and generate hardening_report.json + hardening_report.html
- - --packfile [MODE]     : handle packfiles (modes: list, download, download-unpack)
- - --scan                : scan multiple targets for .git/HEAD exposure
- - --default             : run parse-index, detect-hardening, packfile(list), list, reconstruct-history, and serve
- - --report              : generate a single unified technical report (report.html)
+Principais funcionalidades implementadas:
+ - --parse-index         : baixa .git/index e converte para JSON
+ - --blind               : Blind mode: Rastrear commits/árvores quando .git/index está ausente/403
+ - reconstruct (default) : Baixa os blobs do dump.json e reconstrói o diretório .git/objects localmente.
+ - --list                : gera listing.html (UI simplificada) dos arquivos encontrados no indice, com links
+ - --serve               : abre um servidor http para visualização dos relatórios
+ - --sha1                : baixa um objeto único pelo SHA
+ - --reconstruct-history : reconstrói cadeia de commits somente como interface do usuário (history.json + history.html)
+ - --detect-hardening    : verificações de exposição e gera os arquivos hardening_report.json e hardening_report.html.
+ - --packfile [MODE]     : manuseio de packfiles (modes: list, download, download-unpack)
+ - --scan                : roda scan em multiplos albos em busca de .git/HEAD exposure
+ - --default             : roda parse-index, detect-hardening, packfile(list), list, reconstruct-history e serve
+ - --report              : gera apenas o relatório final (report.html)
  - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
- - All outputs go under the provided outdir: HTML files in root, JSON/other files in outdir/_files.
+ - Todos os arquivos de saída são armazenados no diretório externo fornecido: arquivos HTML na raiz, arquivos JSON/outros arquivos em outdir/_files.
 
-Use responsibly and only on systems you are authorized to test.
+Utilize de forma responsável e somente em sistemas que você esteja autorizado a testar.
 """
 
 from __future__ import annotations
