@@ -1,10 +1,26 @@
 # 🕵️ Git Leak Explorer
 
-> **Ferramenta simplificada de análise forense e recuperação de repositórios Git expostos publicamente via HTTP.**
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Active-success)]()
+
+<div align="center">
+
+   **Ferramenta avançada de análise forense e recuperação de repositórios Git expostos publicamente via HTTP.**
+<br><br>
+  <a href="https://github.com/roodriiigooo/GITLEAK_EXPLORER/releases/latest">
+    <img src="https://img.shields.io/github/v/release/roodriiigooo/GITLEAK_EXPLORER?style=for-the-badge&color=blue" alt="Latest Release">
+  </a>
+  
+  <a href="https://www.python.org/">
+    <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Version">
+  </a>
+
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+  </a>
+
+  <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status">
+
+</div>
 
 O **Git Leak Explorer** é uma ferramenta "tudo-em-um" projetada para pesquisadores de segurança e administradores de sistemas. Ela permite identificar, baixar, reconstruir e analisar artefatos de pastas `.git` expostas inadvertidamente em servidores web.
 
@@ -86,6 +102,9 @@ pyinstaller --onefile --name "GitLeakExplorer" git_leak.py
 
 ## 📖 Como Usar
 
+> [!TIP]
+> >  Se estiver utilizando a versão RELEASE (Windows), considere usar `git_leak.exe` ao invés de `python git_leak.py`.
+
 ```terminal
 git_leak.py — Conjunto completo de ferramentas em arquivo único para recuperação e análise forense de vazamentos do Git.
 
@@ -146,6 +165,7 @@ python git_leak.py --scan alvos.txt
 ```
 python git_leak.py --serve --output-dir ./repo
 ```
+
 
 
 
