@@ -86,6 +86,29 @@ pyinstaller --onefile --name "GitLeakExplorer" git_leak.py
 
 ## 📖 Como Usar
 
+```terminal
+git_leak.py — Conjunto completo de ferramentas em arquivo único para recuperação e análise forense de vazamentos do Git.
+
+Principais funcionalidades implementadas:
+  --parse-index         : baixa .git/index e converte para JSON
+  --blind               : Blind mode: Rastrear commits/árvores quando .git/index está ausente/403
+  reconstruct (default) : Baixa os blobs do dump.json e reconstrói o diretório .git/objects localmente.
+  --list                : gera listing.html (UI simplificada) dos arquivos encontrados no indice, com links
+  --serve               : abre um servidor http para visualização dos relatórios
+  --sha1                : baixa um objeto único pelo SHA
+  --reconstruct-history : reconstrói cadeia de commits somente como interface do usuário (history.json + history.html)
+  --detect-hardening    : verificações de exposição e gera os arquivos hardening_report.json e hardening_report.html.
+  --packfile [MODE]     : manuseio de packfiles (modes: list, download, download-unpack)
+  --scan                : roda scan em multiplos albos em busca de .git/HEAD exposure
+  --default             : roda parse-index, detect-hardening, packfile(list), list, reconstruct-history e serve
+  --report              : gera apenas o relatório final (report.html)
+  options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
+ - Todos os arquivos de saída são armazenados no diretório externo fornecido: arquivos HTML na raiz, arquivos JSON/outros arquivos em outdir/_files.
+
+Utilize de forma responsável e somente em sistemas que você esteja autorizado a testar.
+```
+
+
 Modo Automático (Recomendado)
 Executa todo o pipeline: baixa índice, verifica segurança, procura packfiles, reconstrói histórico e gera o relatório final.
 
@@ -123,6 +146,7 @@ python git_leak.py --scan alvos.txt
 ```
 python git_leak.py --serve --output-dir ./repo
 ```
+
 
 
 
