@@ -1452,7 +1452,7 @@ def generate_unified_report(outdir: str, base_url: str):
 </head>
 <body>
 <div class='wrap'>
-    <h1>Relatório Técnico Unificado de Análise Git Leak</h1>
+    <h1>Git Leak Explorer - Relatório Técnico</h1>
     <p class='meta'>URL Alvo: <b>{base_url}</b></p>
     <p class='meta'>Data do Relatório: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
 
