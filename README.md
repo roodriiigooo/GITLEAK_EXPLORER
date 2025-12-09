@@ -24,6 +24,19 @@ A ferramenta vai além do download simples, oferecendo reconstrução de histór
 
 ---
 
+<img width="1220" height="855" alt="image" src="https://github.com/user-attachments/assets/c5165d09-f341-450f-afcc-ab7086b4e553" />
+
+
+---
+
+<img width="1226" height="779" alt="image" src="https://github.com/user-attachments/assets/9103cf7d-b51a-4baa-878d-23f09987dc10" />
+
+---
+
+<img width="1227" height="510" alt="image" src="https://github.com/user-attachments/assets/462ebb53-1a08-40ce-8e5a-4042b4cb3b56" />
+
+
+
 ## 🚀 Instalação e Configuração
 
 Certifique-se de ter o **Python 3.8+** e o **Git** instalados no sistema (necessário para descompactação de objetos).
@@ -58,13 +71,13 @@ docker run -v $(pwd)/repo:/app/repo gitleak_explorer http://alvo.com/.git --defa
 ### Opção 5: 📦 Compilação para .EXE (Windows)
 Para criar um executável portátil (standalone):
 1. Instale o PyInstaller:
-   ```
-   pip install pyinstaller
-   ```
+```
+pip install pyinstaller
+```
 2. Compile o script:
-   ```
-   pyinstaller --onefile --name "GitLeakExplorer" git_leak.py
-   ```
+```
+pyinstaller --onefile --name "GitLeakExplorer" git_leak.py
+```
 
 ## 📖 Como Usar
 
@@ -103,3 +116,4 @@ python git_leak.py --serve --output-dir ./repo
 
 ## ⚠️ Aviso Legal
 Esta ferramenta foi desenvolvida para fins educacionais e de auditoria autorizada. O acesso a sistemas de terceiros sem permissão explícita é ilegal e antiético. O desenvolvedor não se responsabiliza pelo mau uso deste software.
+
