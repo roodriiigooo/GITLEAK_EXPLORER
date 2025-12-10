@@ -26,6 +26,12 @@ O **Git Leak Explorer** é uma ferramenta "tudo-em-um" projetada para pesquisado
 
 A ferramenta vai além do download simples, oferecendo reconstrução de histórico de commits, detecção de riscos de segurança (hardening), suporte a *packfiles* e uma interface visual moderna (Dark Mode) para análise de dados.
 
+
+---
+> Ajude a desenvolver este projeto
+>> Sinta-se a vontade para contribuir, enviar sugestões e suas pull requests :D
+
+
 ## ⚠️ Aviso Legal
 Esta ferramenta foi desenvolvida para fins educacionais e de auditoria autorizada. O acesso a sistemas de terceiros sem permissão explícita é ilegal e antiético. O desenvolvedor não se responsabiliza pelo mau uso deste software.
 
@@ -178,6 +184,7 @@ python git_leak.py --scan alvos.txt
 ```sql 
 python git_leak.py --serve --output-dir ./repo
 ```
+
 
 
 
