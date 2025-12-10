@@ -114,21 +114,35 @@ pyinstaller --onefile --name "GitLeakExplorer" git_leak.py
 ```terminal
 git_leak.py — Conjunto completo de ferramentas em arquivo único para recuperação e análise forense de vazamentos do Git.
 
+Funcionalidades Principais:
+ - Recuperação via Index ou Blind Mode (Crawling)
+ - Reconstrução inteligente de arquivos e estrutura de diretórios
+ - Análise de histórico de commits (Metadados + Arquivos)
+ - Detecção de Hardening e outros vazamentos (SVN, HG, Env, DS_Store)
+ - Geração de relatórios técnicos detalhados e interface visual
+
+Uso: python git_leak.py <URL> [OPÇÕES]
+Exemplo: python git_leak.py http://alvo.com --full-scan
+
 Principais funcionalidades implementadas:
-  --parse-index         : baixa .git/index e converte para JSON
-  --blind               : Blind mode: Rastrear commits/árvores quando .git/index está ausente/403
-  --reconstruct         : Baixa os blobs do dump.json e reconstrói o diretório .git/objects localmente.
-  --list                : gera listing.html (UI simplificada) dos arquivos encontrados no indice, com links
-  --serve               : abre um servidor http para visualização dos relatórios
-  --sha1                : baixa um objeto único pelo SHA
-  --reconstruct-history : reconstrói cadeia de commits somente como interface do usuário (history.json + history.html)
-  --detect-hardening    : verificações de exposição e gera os arquivos hardening_report.json e hardening_report.html.
-  --packfile [MODE]     : manuseio de packfiles (modes: list, download, download-unpack)
-  --scan                : roda scan em multiplos albos em busca de .git/HEAD exposure
-  --default             : roda parse-index, detect-hardening, packfile(list), list, reconstruct-history e serve
-  --report              : gera apenas o relatório final (report.html)
-  options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
+ - --parse-index         : baixa .git/index e converte para JSON
+ - --blind               : Blind mode: Rastrear commits/árvores quando .git/index está ausente/403
+ - --reconstruct         : Baixa os blobs do dump.json e reconstrói o diretório .git/objects localmente.
+ - --list                : gera listing.html (UI simplificada) dos arquivos encontrados no indice, com links
+ - --serve               : abre um servidor http para visualização dos relatórios
+ - --sha1                : baixa um objeto único pelo SHA
+ - --reconstruct-history : reconstrói cadeia de commits somente como interface do usuário (history.json + history.html)
+ - --detect-hardening    : verificações de exposição e gera os arquivos hardening_report.json e hardening_report.html.
+ - --packfile [MODE]     : manuseio de packfiles (modes: list, download, download-unpack)
+ - --scan                : roda scan em multiplos albos em busca de .git/HEAD exposure
+ - --default             : roda parse-index, detect-hardening, packfile(list), list, reconstruct-history e serve
+ - --full-history        : Analisa árvore de arquivos completa de TODOS os commits (lento)
+ - --full-scan           : Executa verificação completa de vazamentos (SVN, HG, Env, DS_Store)
+ - --report              : gera apenas o relatório final (report.html)
+ - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
+
  - Todos os arquivos de saída são armazenados no diretório externo fornecido: arquivos HTML na raiz, arquivos JSON/outros arquivos em outdir/_files.
+
 
 Utilize de forma responsável e somente em sistemas que você esteja autorizado a testar.
 ```
@@ -143,14 +157,29 @@ python git_leak.py http://exemplo.com
 python git_leak.py http://exemplo.com/.git --default
 ```
 
+Modo Adicional `--full-scan`
+Executa além do modo padrão, outros vazamentos (SVN, HG, Env, DS_Store)
+
+```sql
+python git_leak.py http://exemplo.com/.git --full-scan
+```
+
+Modo lento `--full-history`
+Executa o modo padrão ou modo adicional, mas tenta reconstruir o history de commits analisando todos os registros encontrados
+
+```sql
+python git_leak.py http://exemplo.com/.git --full-history
+```
+
+
 ### Comandos Específicos
-- Apenas Gerar Relatório Unificado (se já houver dados baixados anteriormente):
+- Apenas Gerar Relatório Unificado (se já houver dados baixados anteriormente) `--report`:
 
 ```sql
 python git_leak.py http://exemplo.com/.git --report
 ```
 
-- Habilitar servidor http para visualizar relatorios ou servir outros arquivos:
+- Habilitar servidor http para visualizar relatorios ou servir outros arquivos `--serve`:
 ```sql
 python git_leak.py http://exemplo.com/.git --serve
 # ou em conjunto com --output-dir
@@ -158,7 +187,7 @@ python git_leak.py http://exemplo.com/.git --serve --output-dir temp/arquivos/
 ```
 
 
-- Recuperar um objeto diretamente pelo SHA
+- Recuperar um objeto diretamente pelo SHA `--sha1`
 ```sql
 python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16
 # Pode ser usado em conjunto com --output-dir
@@ -166,7 +195,7 @@ python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158
 ```
 
 
-- Gerenciar Packfiles (Listar/Baixar/Extrair):
+- Gerenciar Packfiles (Listar/Baixar/Extrair) `--packfile`:
 ```sql
 # Apenas listar packfiles encontrados
 python git_leak.py http://exemplo.com/.git --packfile list
@@ -175,14 +204,14 @@ python git_leak.py http://exemplo.com/.git --packfile list
 python git_leak.py http://exemplo.com/.git --packfile download-unpack
 ```
 
-- Escanear Lista de URLs (Mass Scan):
+- Escanear Lista de URLs (Mass Scan) `--scan`:
 ```sql
 python git_leak.py --scan alvos.txt
 ```
 
 - Servir Relatórios Localmente:
 ```sql 
-python git_leak.py --serve --output-dir ./repo
+python git_leak.py --serve --output-dir repo/temp
 ```
 
 
