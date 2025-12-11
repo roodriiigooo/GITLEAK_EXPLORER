@@ -40,6 +40,7 @@ import sys
 import json
 import argparse
 import requests
+import urllib3
 import shutil
 import struct
 import zlib
@@ -50,7 +51,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional
+from datetime import datetime, timezone
 
+
+#  ssl - Disable warn
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ---------------------------
 # Logging helpers
@@ -76,6 +81,28 @@ def fail(msg: str): print(f"[❌] {msg}")
 DEFAULT_TIMEOUT = 15
 
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+}
+
+def normalize_url(url):
+    url = url.strip()
+    
+    url = re.sub(r'/\.git(/.*)?$', '', url, flags=re.IGNORECASE).rstrip('/')
+
+    if url.startswith(('http://', 'https://')):
+        return url
+
+    print(f"[*] Detectando protocolo para {url}...")
+    try:
+        resp = requests.get(f"https://{url}", headers=HEADERS, timeout=5, verify=False)
+        print("    -> HTTPS detectado.")
+        return f"https://{url}"
+    except requests.RequestException:
+        print("    -> Falha no HTTPS. Usando HTTP.")
+        return f"http://{url}"
+
+
 def http_get_bytes(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, bytes | str]:
     try:
         requests.packages.urllib3.disable_warnings()
@@ -90,15 +117,21 @@ def http_get_bytes(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, byte
 def http_get_to_file(url: str, outpath: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, str]:
     try:
         requests.packages.urllib3.disable_warnings()
-        r = requests.get(url, timeout=timeout, stream=True, verify=False)
+        print(f"[!] Tentando baixar {url}  ...")
+        r = requests.get(url, timeout=timeout, stream=True, verify=False, headers=HEADERS)
+        print(f"[!] {url} - Status: {r.status_code}")
         if r.status_code != 200:
+            print(f"[!] Falha ao baixar {url} - Status: {r.status_code}")
             return False, f"HTTP {r.status_code}"
+        
+        os.makedirs(os.path.dirname(outpath), exist_ok=True)
         with open(outpath, "wb") as f:
             for chunk in r.iter_content(8192):
                 if chunk:
                     f.write(chunk)
         return True, "ok"
     except Exception as e:
+        print(f"[!] Falha ao baixar {url} - expt: {e}")
         return False, str(e)
 
 
@@ -624,7 +657,7 @@ def detect_hardening(base_git_url: str, outdir: str) -> Dict[str, Any]:
                   "objects_root": [base + "/objects/", base + "/.git/objects/"],
                   "logs": [base + "/logs/HEAD", base + "/.git/logs/HEAD"],
                   "config": [base + "/config", base + "/.git/config"]}
-    report = {"base": base_git_url, "checked_at": datetime.utcnow().isoformat() + "Z", "results": {}}
+    report = {"base": base_git_url, "checked_at": datetime.now(timezone.utc).isoformat(), "results": {}}
     for name, urls in candidates.items():
         status = {"exposed": False, "positive_urls": []}
         for u in urls:
@@ -844,7 +877,7 @@ def generate_unified_report(outdir: str, base_url: str):
     if misc:
         misc_html += "<ul>"
         for m in misc:
-            # Usa o nome real do arquivo se disponível (ex: .env), senão usa o padrão antigo
+            # Usa o nome real do arquivo se disponível (ex: .env), senão usa o padrão _dump
             dump_file = m.get('dump_file', f"{m['type']}_dump")
             misc_html += f"<li><b>{m['type']}</b>: {m['desc']} (<a href='_files/misc/{dump_file}' target='_blank'>Dump</a> | <a href='{m['report_file']}' target='_blank'>Relatório</a>)</li>"
         misc_html += "</ul>"
@@ -1262,7 +1295,7 @@ def serve_dir(path: str):
 
 def main():
     p = argparse.ArgumentParser(prog="git_leak.py", description="Git Leak Explorer - Ferramenta de Análise Forense")
-    p.add_argument("base", nargs="?", help="URL alvo (ex: http://site.com/.git/)")
+    p.add_argument("base", nargs="?", help="URL base alvo (ex: http://site.com/.git/ ou site.com)")
     p.add_argument("--output-index", default="dump.json",
                    help="Nome do arquivo de saída para o índice JSON (padrão: dump.json)")
     p.add_argument("--output-dir", default="./repo",
@@ -1299,7 +1332,10 @@ def main():
 
     args = p.parse_args()
 
-    base_url = args.base;
+    base_url = normalize_url(args.base);
+    
+    print(f"[*] URL alvo normalizada: {base_url}")
+
     output_dir = args.output_dir;
     index_name = args.output_index
 
@@ -1308,7 +1344,7 @@ def main():
     if args.full_scan:
         args.default = True  # --full-scan : default pipeline
     elif base_url and not any(actions):
-        args.default = True  # auto default if no flags
+        args.default = True  # auto default
 
     if args.scan: scan_urls(args.scan); return
     if args.serve: serve_dir(args.serve_dir if args.serve_dir else output_dir); return

@@ -4,36 +4,46 @@
 
 <div align="center">
 
-   **Ferramenta avançada de análise forense e recuperação de repositórios Git expostos publicamente via HTTP.**
-<br><br>
-  <a href="https://github.com/roodriiigooo/GITLEAK_EXPLORER/releases/latest">
-    <img src="https://img.shields.io/github/v/release/roodriiigooo/GITLEAK_EXPLORER?style=for-the-badge&color=blue" alt="Latest Release">
+   **Ferramenta avançada de análise forense e recuperação de repositórios Git expostos publicamente na web via HTTP, perfeita para aquele recon de respeito**
+
+
+ [Sobre](#sobre) | [Aviso Legal](#aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) 
+
+
+<br>
+<a href="https://github.com/roodriiigooo/GITLEAK_EXPLORER/releases/latest">
+    <img src="https://img.shields.io/github/v/release/roodriiigooo/GITLEAK_EXPLORER?style=flat&color=blue" alt="Latest Release">
   </a>
   
   <a href="https://www.python.org/">
-    <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Version">
+    <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python Version">
   </a>
 
   <a href="LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
+    <img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="License">
   </a>
 
-  <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status">
+  <img src="https://img.shields.io/badge/Status-Active-success?style=flat" alt="Status">
 
 </div>
+<br>
 
+## Sobre
 O **Git Leak Explorer** é uma ferramenta "tudo-em-um" projetada para pesquisadores de segurança e administradores de sistemas. Ela permite identificar, baixar, reconstruir e analisar artefatos de pastas `.git` expostas inadvertidamente em servidores web.
 
-A ferramenta vai além do download simples, oferecendo reconstrução de histórico de commits, detecção de riscos de segurança (hardening), suporte a *packfiles* e uma interface visual moderna (Dark Mode) para análise de dados.
+A ferramenta vai além do download simples, oferecendo reconstrução de histórico de commits, detecção de riscos de segurança (hardening), suporte a *packfiles* e uma interface visual moderna (Dark Mode) para análise de dados. Opcionalmente suporta também vazamentos de artefatos SVN, HG, Env e DS_Store.
 
-
----
 > Ajude a desenvolver este projeto
 >> Sinta-se a vontade para contribuir, enviar sugestões e suas pull requests :D
 
 
+---
+
+
 ## ⚠️ Aviso Legal
-Esta ferramenta foi desenvolvida para fins educacionais e de auditoria autorizada. O acesso a sistemas de terceiros sem permissão explícita é ilegal e antiético. O desenvolvedor não se responsabiliza pelo mau uso deste software.
+Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e de auditoria autorizada. O acesso a sistemas de terceiros sem permissão explícita é ilegal,  antiético e passível de punições legais. 
+
+# O desenvolvedor não se responsabiliza pelo mau uso deste software.
 
 
 ---
@@ -48,8 +58,13 @@ Esta ferramenta foi desenvolvida para fins educacionais e de auditoria autorizad
 * **📊 Relatórios Unificados:** Gera um painel HTML interativo (`report.html`) contendo listagem de arquivos, histórico, hardening e status de packfiles.
 * **🎨 Interface Moderna:** Todos os relatórios HTML possuem tema escuro (Dark UI), busca em tempo real e paginação.
 * **🚀 Alta Performance:** Utiliza *multi-threading* para downloads paralelos de objetos.
+* **🔍 Suporte Adicional:** Efetua buscas por artefatos SVN, HG, Env e DS_Store.
+
+
 
 ---
+
+## Screenshots
 
 <img width="1220" height="855" alt="image" src="https://github.com/user-attachments/assets/c5165d09-f341-450f-afcc-ab7086b4e553" />
 
@@ -91,7 +106,7 @@ poetry run python git_leak.py --help
 
 ### Opção 4: 🐳 Docker
 ```sql
-docker build -t gitlieak_explorer .
+docker build -t gitleak_explorer .
 docker run -v $(pwd)/repo:/app/repo gitleak_explorer http://alvo.com/.git --default --output-dir /app/repo
 ```
 
@@ -103,7 +118,7 @@ pip install pyinstaller
 ```
 2. Compile o script:
 ```sql
-pyinstaller --onefile --name "GitLeakExplorer" git_leak.py
+pyinstaller --onefile --name "git_leak" git_leak.py
 ```
 
 ## 📖 Como Usar
