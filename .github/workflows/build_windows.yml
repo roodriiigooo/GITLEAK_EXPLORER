@@ -85,9 +85,7 @@ jobs:
             
             Build automático gerado a partir do commit:
             > ${{ github.event.head_commit.message }}
-            
-            ### Checksums (SHA256)
-            Recomendamos verificar o hash após o download.
+
           draft: false
           prerelease: false
         env:
