@@ -1,0 +1,36 @@
+# Wordlist personalizada para bruteforce de artegfatos no  git_leak.py
+# Linhas que começam com # são ignoradas pelo script
+
+# --- Arquivos de Ambiente ---
+.env
+.env.prod
+.env.local
+.env.backup
+
+# --- Configurações de CMS ---
+wp-config.php
+wp-config.php.bak
+configuration.php
+sites/default/settings.php
+
+# --- Infraestrutura e Docker ---
+docker-compose.yml
+Dockerfile
+.gitlab-ci.yml
+k8s.yaml
+
+# --- Backups Comuns ---
+backup.zip
+backup.sql
+dump.sql
+database.sql
+
+# --- Segredos e Chaves ---
+id_rsa
+id_rsa.pub
+auth.json
+secrets.yaml
+
+# --- OUTROS ---
+index.php
+robots.txt

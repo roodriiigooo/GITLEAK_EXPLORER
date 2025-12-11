@@ -1,0 +1,6 @@
+# Wordlist de alvos personalizada para git_leak.py
+# Linhas que começam com # são ignoradas pelo script
+
+alvo.com
+alvo-teste.com.br
+outro-alvo.co.jp

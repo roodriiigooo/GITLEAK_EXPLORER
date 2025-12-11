@@ -46,6 +46,7 @@ import struct
 import zlib
 import subprocess
 import re
+import hashlib
 from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -221,6 +222,16 @@ def make_blob_url_from_git(base_git_url: str, sha: str) -> str:
 def public_url_from_path(site_base: str, path: str) -> str:
     site = site_base.rstrip("/")
     return site + "/" + path.lstrip("/")
+
+
+def sanitize_folder_name(url: str) -> str:
+    """Gera um nome de pasta seguro a partir da URL"""
+    s = re.sub(r'^https?://', '', url)
+    s = re.sub(r'/\.git/?$', '', s, flags=re.IGNORECASE)
+    s = s.rstrip('/')
+    s = re.sub(r'[^a-zA-Z0-9]', '_', s)
+    s = re.sub(r'_+', '_', s)
+    return s[:60]
 
 
 join_remote_file = public_url_from_path
@@ -423,6 +434,12 @@ def collect_files_from_tree(base_git_url: str, tree_sha: str, ignore_missing: bo
                               "blob_url": make_blob_url_from_git(base_git_url, e["sha"])})
     return files
 
+def calculate_git_sha1(content: bytes) -> str:
+    """Calcula o SHA1 de um blob git: 'blob <tamanho>\x00<conteúdo>'"""
+    s = hashlib.sha1()
+    s.update(f"blob {len(content)}\0".encode('utf-8'))
+    s.update(content)
+    return s.hexdigest()
 
 # ---------------------------
 # Misc Leaks (Full Scan)
@@ -434,6 +451,142 @@ MISC_SIGNATURES = {
     "env": {"path": "/.env", "regex": br"^\s*[A-Z_0-9]+\s*=", "desc": "Variáveis de Ambiente (.env)"}
 }
 
+
+COMMON_FILES = [
+    # --- Environment & Secrets ---
+    ".env", ".env.local", ".env.dev", ".env.development", ".env.prod", ".env.production",
+    ".env.example", ".env.sample", ".env.save", ".env.bak", ".env.old",
+    "config.json", "secrets.json", "config.yaml", "secrets.yaml", "config.toml", "config.php",
+    "settings.py", "database.yml", "robots.txt", "README.md", "index.php", "index.html", "server.js",
+
+    
+    # --- Version Control & CI/CD (Risco Crítico) ---
+    ".git/config", ".gitignore", ".gitmodules",
+    ".gitlab-ci.yml", ".travis.yml", "circle.yml", "jenkinsfile", "Jenkinsfile",
+    ".github/workflows/main.yml", ".github/workflows/deploy.yml",
+    
+    # --- Javascript / Node.js ---
+    "package.json", "package-lock.json", "yarn.lock", ".npmrc",
+    "webpack.config.js", "rollup.config.js", "next.config.js", "nuxt.config.js",
+    "server.js", "app.js",
+    
+    # --- PHP / CMS / Frameworks ---
+    "wp-config.php", "wp-config.php.bak", "wp-config.php.old", # WordPress
+    "configuration.php", "configuration.php.bak", # Joomla
+    ".htaccess", "composer.json", "composer.lock", "auth.json",
+    "artisan", "phpunit.xml", # Laravel
+    
+    # --- Python / Django / Flask ---
+    "requirements.txt", "Pipfile", "Pipfile.lock", "setup.py", "pyproject.toml",
+    "manage.py", "app.py", "wsgi.py", "uwsgi.ini",
+    
+    # --- ASP.NET / C# (IIS) ---
+    "web.config", "Web.config", "appsettings.json", "appsettings.Development.json",
+    "packages.config", "Global.asax",
+    
+    # --- Docker / Kubernetes / Cloud / Terraform ---
+    "Dockerfile", "docker-compose.yml", "docker-compose.yaml", ".dockerignore",
+    "Makefile", "Vagrantfile",
+    "k8s.yaml", "kubeconfig", "deployment.yaml",
+    "main.tf", "variables.tf", "terraform.tfvars", ".terraform.lock.hcl",
+    "serverless.yml", "serverless.yaml",
+    
+    # --- Backups & Dumps (Arquivos pesados) ---
+    "backup.zip", "backup.tar.gz", "backup.sql",
+    "dump.sql", "database.sql", "db_backup.sql", "users.sql",
+    "www.zip", "site.zip", "public.zip", "html.tar.gz",
+    
+    # --- IDEs & Logs ---
+    ".vscode/settings.json", ".idea/workspace.xml",
+    "debug.log", "error_log", "access.log", "npm-debug.log",
+    "id_rsa", "id_rsa.pub", "known_hosts"
+]
+
+def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    # Define a lista padrão inicialmente
+    target_list = COMMON_FILES
+    source_type = "Lista Padrão"
+
+    if wordlist_path:
+        if os.path.exists(wordlist_path):
+            info(f"Carregando wordlist personalizada: {wordlist_path}")
+            try:
+                with open(wordlist_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    custom_items = []
+                    for line_num, line in enumerate(f, 1):
+                        clean_line = line.strip()
+                        if clean_line and not clean_line.startswith("#"):
+                            custom_items.append(clean_line)
+                
+                if custom_items:
+                    target_list = custom_items
+                    source_type = "Custom"
+                    success(f"Wordlist carregada com sucesso: {len(target_list)} entradas válidas.")
+                    print(f"    -> Primeiros 3 itens: {target_list[:3]}")
+                    print(f"    -> Últimos 3 itens:   {target_list[-3:]}")
+                else:
+                    warn("A wordlist fornecida está vazia ou só tem comentários. Revertendo para lista padrão.")
+            except Exception as e:
+                warn(f"Erro ao ler wordlist '{wordlist_path}': {e}. Revertendo para lista padrão.")
+        else:
+            warn(f"Arquivo de wordlist não encontrado: {wordlist_path}. Revertendo para lista padrão.")
+
+    source_display = f"{source_type} ({len(target_list)} itens)"
+    info(f"Iniciando Brute-Force (Full Scan)... Fonte: {source_display}")
+    
+    site_root = base_git_url.rstrip("/")
+    if site_root.endswith("/.git"):
+        site_root = site_root[:-5]
+    
+    found_files = []
+    bf_dir = os.path.join(outdir, "_files", "bruteforce")
+    os.makedirs(bf_dir, exist_ok=True)
+
+    for filename in target_list:
+        clean_filename = filename.lstrip("/")
+        target_url = f"{site_root}/{clean_filename}"
+        
+        ok_http, data = http_get_bytes(target_url)
+        
+        if ok_http and len(data) > 0:
+            if len(data) < 200 and b"<html" in data.lower() and b"404" in data:
+                continue
+
+            try:
+                local_path = os.path.join(bf_dir, clean_filename)
+                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+                with open(local_path, "wb") as f:
+                    f.write(data)
+                
+                git_sha = calculate_git_sha1(data)
+                obj_url = make_blob_url_from_git(base_git_url, git_sha)
+                git_exists, _, _ = http_head_status(obj_url)
+                
+                if git_exists:
+                    success(f"Brute-Force: {clean_filename} encontrado! (SHA: {git_sha[:8]} - Versionado)")
+                else:
+                    warn(f"Brute-Force: {clean_filename} encontrado no site, mas não está no Git.")
+
+                found_files.append({
+                    "filename": clean_filename,
+                    "url": target_url,
+                    "local_path": local_path,
+                    "git_sha": git_sha,
+                    "in_git": git_exists
+                })
+
+            except Exception as e:
+                warn(f"Erro ao processar arquivo '{clean_filename}': {e}")
+                continue
+
+    try:
+        with open(os.path.join(outdir, "_files", "bruteforce.json"), "w", encoding="utf-8") as f:
+            json.dump(found_files, f, indent=2)
+    except Exception as e:
+        warn(f"Erro ao salvar bruteforce.json: {e}")
+        
+    return found_files
 
 def generate_misc_html(out_html: str, title: str, content_data: str, is_text: bool):
     display_content = f"<pre>{content_data}</pre>" if is_text else f"<p>Arquivo binário detectado e salvo.<br>Consulte a pasta <code>_files/misc</code>.</p>"
@@ -803,6 +956,22 @@ def generate_unified_report(outdir: str, base_url: str):
     except:
         pass
 
+    try: bf_data = json.load(open(os.path.join(files, "bruteforce.json")))
+    except: bf_data = []
+
+    users_count = 0
+    try:
+        users_path = os.path.join(files, "users.json")
+        if os.path.exists(users_path):
+            with open(users_path, 'r', encoding='utf-8') as f:
+                users_data = json.load(f)
+                users_count = len(users_data)
+    except:
+        users_count = 0
+    
+    try: bf_data = json.load(open(os.path.join(files, "bruteforce.json")))
+    except: bf_data = []
+
     # 1. Hardening HTML
     hardening_html = "<h3>1. Verificação de Hardening (.git Exposure)</h3><p style=\"background-color:#fff3cd;color:#856404;padding:4px;border:1px solid #ffeeba;border-radius:3px;font-size:0.9em;margin:5px 0;\"><strong>⚠ Atenção:</strong> StatusCode positivos podem indicar falsos positivos.</p><table style='width: 100%;'><thead><tr><th>Componente</th><th>Status</th><th>Evidência</th></tr></thead><tbody>"
     for k, v in hardening.get("results", {}).items():
@@ -853,8 +1022,17 @@ def generate_unified_report(outdir: str, base_url: str):
     else:
         history_summary += "<p>Dados de histórico não disponíveis.</p>"
 
-    # 4. Packfiles Section
-    packfiles_html = f"<h3>4. Packfiles Encontrados</h3><p>Total Encontrado: {len(packs)}</p>"
+
+    # 4. Users/Authors Section
+    users_section_html = "<h3>4. Identidades e E-mails (OSINT)</h3>"
+    if users_count > 0:
+        users_section_html += f"<p>Foram identificados <b>{users_count}</b> autores únicos (nomes e e-mails) participando do histórico deste repositório.</p>"
+        users_section_html += f"<p><a href='users.html'>Consulte o Relatório de Identidades (users.html) para visualização completa.</a></p>"
+    else:
+        users_section_html += "<p class='muted'>Nenhuma informação de usuário (autor/email) foi encontrada nos metadados processados.</p>"
+
+    # 5. Packfiles Section
+    packfiles_html = f"<h3>5. Packfiles Encontrados</h3><p>Total Encontrado: {len(packs)}</p>"
     if packs:
         packfiles_html += "<table style='width: 100%;'><thead><tr><th>Nome</th><th>Status</th><th>URL</th></tr></thead><tbody>"
         for p in packs:
@@ -872,8 +1050,8 @@ def generate_unified_report(outdir: str, base_url: str):
     else:
         packfiles_html += "<p class='muted'>Nenhum packfile detectado.</p>"
 
-    # 5. Misc Section (Full Scan)
-    misc_html = "<h3>5. Outros Vazamentos (Full Scan)</h3>"
+    # 6. Misc Section (Full Scan)
+    misc_html = "<h3>6. Outros Vazamentos (Full Scan)</h3>"
     if misc:
         misc_html += "<ul>"
         for m in misc:
@@ -883,6 +1061,25 @@ def generate_unified_report(outdir: str, base_url: str):
         misc_html += "</ul>"
     else:
         misc_html += "<p class='muted'>Nenhum outro vazamento detectado ou varredura não executada.</p>"
+    
+
+    # 7. Brute Force Section (Full Scan)
+    bf_html = "<h3>7. Recuperação por Força Bruta (Common Files)</h3>"
+    if bf_data:
+        bf_html += "<table style='width: 100%;'><thead><tr><th>Arquivo</th><th>Status Git</th><th>SHA1 Calculado</th><th>Ação</th></tr></thead><tbody>"
+        for item in bf_data:
+            git_status = "<span class='ok'>Versionado</span>" if item['in_git'] else "<span class='warning'>Não Versionado</span>"
+            sha_link = item['git_sha']
+            if item['in_git']:
+                sha_link = f"<a href='{make_blob_url_from_git(base_url, item['git_sha'])}' target='_blank'>{item['git_sha'][:15]}...</a>"
+            else:
+                sha_link = f"{item['git_sha'][:15]}..."
+
+            bf_html += f"<tr><td><a href='{item['url']}' target='_blank'>{item['filename']}</a></td><td>{git_status}</td><td>{sha_link}</td><td><a href='_files/bruteforce/{item['filename']}' target='_blank'>Ver Download</a></td></tr>"
+        bf_html += "</tbody></table>"
+    else:
+        bf_html += "<p class='muted'>Nenhum arquivo comum encontrado via brute-force ou flag --full-scan não utilizada.</p>"
+
 
     # HTML Template Final
     html = f"""
@@ -917,9 +1114,13 @@ def generate_unified_report(outdir: str, base_url: str):
     <hr>
     {history_summary}
     <hr>
+    {users_section_html}
+    <hr>
     {packfiles_html}
     <hr>
     {misc_html}
+    <hr>
+    {bf_html}
     <hr>
     <p class='muted'>Para visualização interativa do histórico e da listagem completa, inicie o servidor: <code>python git_leak.py --serve --output-dir {outdir}</code></p>
     <p class='meta' style='text-align:center; margin-top:30px;'>Gerado por Git Leak Explorer</p>
@@ -1150,6 +1351,106 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
     with open(out_html, "w", encoding="utf-8") as f: f.write(html_content)
 
 
+def generate_users_report(outdir: str, authors_stats: Dict[str, int]):
+    info("Gerando relatório de usuários (OSINT)...")
+    
+    users_data = []
+    import re
+    
+    sorted_authors = sorted(authors_stats.items(), key=lambda item: item[1], reverse=True)
+
+    for raw_author, count in sorted_authors:
+        name = raw_author
+        email = ""
+        
+        match = re.search(r'(.*)\s+<(.*)>', raw_author)
+        if match:
+            name = match.group(1).strip()
+            email = match.group(2).strip()
+        
+        users_data.append({
+            "raw": raw_author,
+            "name": name,
+            "email": email,
+            "commits": count
+        })
+
+    files_dir = os.path.join(outdir, "_files")
+    os.makedirs(files_dir, exist_ok=True)
+    with open(os.path.join(files_dir, "users.json"), "w", encoding="utf-8") as f:
+        json.dump(users_data, f, indent=2, ensure_ascii=False)
+
+    rows_html = ""
+    for u in users_data:
+        email_display = f"<a href='mailto:{u['email']}'>{u['email']}</a>" if u['email'] else "<span class='muted'>N/A</span>"
+        rows_html += f"""
+        <tr>
+            <td>{u['name'] or 'Desconhecido'}</td>
+            <td>{email_display}</td>
+            <td>{u['commits']}</td>
+            <td class='muted'>{u['raw']}</td>
+        </tr>
+        """
+
+    html = f"""<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Git Leak Explorer - Identidades</title>
+  <style>
+    body{{font-family:Inter,Segoe UI,Roboto,monospace;background:#0f1111;color:#dff;padding:20px}}
+    .wrap{{max-width:1000px;margin:0 auto;}}
+    h1{{color:#6be;}}
+    table{{width:100%;border-collapse:collapse;margin-top:20px;background:#161819;border-radius:6px;overflow:hidden;}}
+    th,td{{padding:12px;text-align:left;border-bottom:1px solid #333;}}
+    th{{background:#222;color:#6be;font-weight:bold;text-transform:uppercase;font-size:12px;}}
+    tr:hover{{background:#1f2223;}}
+    a{{color:#6be;text-decoration:none;}}
+    a:hover{{text-decoration:underline;}}
+    .muted{{color:#779;font-size:12px;}}
+    .stat-card{{display:inline-block;background:#1a1c1d;padding:15px;border-radius:6px;border:1px solid #333;margin-right:15px;margin-bottom:20px;}}
+    .stat-num{{font-size:24px;font-weight:bold;color:#fff;}}
+    .stat-label{{font-size:12px;color:#779;text-transform:uppercase;}}
+  </style>
+</head>
+<body>
+<div class='wrap'>
+  <h1>Identidades Encontradas (OSINT)</h1>
+  <div>
+      <div class='stat-card'>
+          <div class='stat-num'>{len(users_data)}</div>
+          <div class='stat-label'>Autores Únicos</div>
+      </div>
+      <div class='stat-card'>
+          <div class='stat-num'>{sum(x['commits'] for x in users_data)}</div>
+          <div class='stat-label'>Commits Analisados</div>
+      </div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>E-mail</th>
+        <th>Commits</th>
+        <th>String Bruta (Git)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {rows_html}
+    </tbody>
+  </table>
+  <p class="muted" style='text-align:center; margin-top:30px;'>Gerado por Git Leak Explorer</p>
+</div>
+</body>
+</html>"""
+
+    out_html = os.path.join(outdir, "users.html")
+    with open(out_html, "w", encoding="utf-8") as f:
+        f.write(html)
+    
+    success(f"Relatório de usuários salvo: {out_html}")
+
+
 def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_commits: int = 200,
                         ignore_missing: bool = True, strict: bool = False, full_history: bool = False,
                         workers: int = 10):
@@ -1245,6 +1546,15 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
             for p in meta.get("parents", []):
                 if p not in visited: queue.append(p); visited.add(p)
 
+    author_stats = {}
+    for c in all_commits_out:
+        auth = c.get("author")
+        if auth:
+            auth = auth.strip()
+            author_stats[auth] = author_stats.get(auth, 0) + 1
+    
+    generate_users_report(outdir, author_stats)
+
     head_sha = "N/A"
     hist_json = os.path.join(outdir, "_files", "history.json")
     os.makedirs(os.path.dirname(hist_json), exist_ok=True)
@@ -1293,156 +1603,183 @@ def serve_dir(path: str):
         info("\nServidor parado.")
 
 
+def process_pipeline(base_url: str, output_dir: str, args):
+    info(f"=== Iniciando Pipeline em: {base_url} ===")
+    info(f"Output: {output_dir}")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    index_json = os.path.join(output_dir, "_files", args.output_index)
+
+    # 1. Index / Blind
+    # Tenta baixar o index
+    raw_index_path = os.path.join(output_dir, "_files", "raw_index")
+    ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index", raw_index_path)
+    
+    has_index = False
+    if ok_idx:
+        print(f"[+] .git/index baixado. Tentando analisar...")
+        try:
+            index_to_json(raw_index_path, index_json)
+            has_index = True
+            print("[+] Índice Git analisado com sucesso.")
+        except ValueError as e:
+            warn(f"Aviso: .git/index inválido ou corrompido ({e}).")
+        except Exception as e:
+            fail(f"Erro inesperado no parser: {e}")
+
+    # Se falhou o index ou foi solicitado blind, tenta blind mode
+    if not has_index:
+        info("Index não disponível ou inválido. Ativando modo Blind/Crawling...")
+        blind_recovery(base_url, output_dir, args.output_index)
+
+    # 2. Hardening & Misc
+    detect_hardening(base_url, output_dir)
+    gather_intelligence(base_url, output_dir)
+    
+    # Lógica Condicional de Full Scan (Brute Force + Misc)
+    if args.full_scan:
+        # Usa a wordlist passada no args, se houver
+        brute_force_scan(base_url, output_dir, wordlist_path=args.wordlist)
+        detect_misc_leaks(base_url, output_dir)
+    else:
+        if args.wordlist:
+            warn("A flag --wordlist foi ignorada pois a flag --full-scan não foi ativada.")
+        info("Modo padrão: Pulando Brute-Force e Misc Leaks (use --full-scan para ativar).")
+
+    # 3. Reports & Reconstruction
+    handle_packfiles('list', base_url, output_dir)
+    make_listing_modern(index_json, base_url, output_dir)
+    
+    # Reconstrução de histórico
+    reconstruct_history(index_json, base_url, output_dir, 
+                        max_commits=args.max_commits,
+                        full_history=args.full_history, 
+                        workers=args.workers)
+    
+    # Relatório final
+    generate_unified_report(output_dir, base_url)
+    success(f"Pipeline concluído para {base_url}")
+    print("-" * 60)
+
+
 def main():
     p = argparse.ArgumentParser(prog="git_leak.py", description="Git Leak Explorer - Ferramenta de Análise Forense")
     p.add_argument("base", nargs="?", help="URL base alvo (ex: http://site.com/.git/ ou site.com)")
-    p.add_argument("--output-index", default="dump.json",
-                   help="Nome do arquivo de saída para o índice JSON (padrão: dump.json)")
-    p.add_argument("--output-dir", default="./repo",
-                   help="Diretório de saída para os arquivos recuperados (padrão: ./repo)")
-    p.add_argument("--serve-dir", nargs="?", help="Diretório específico para servir via HTTP (opcional)")
-    p.add_argument("--default", action="store_true",
-                   help="Executa o pipeline padrão (scan, hardening, listagem, histórico e relatórios)")
-    p.add_argument("--report", action="store_true",
-                   help="Gera apenas o relatório unificado a partir dos dados já baixados")
-    p.add_argument("--parse-index", action="store_true", help="Apenas baixa e converte o .git/index remoto para JSON")
-    p.add_argument("--blind", action="store_true", help="Ativa modo Blind (Crawling) se o index não estiver acessível")
-    p.add_argument("--list", action="store_true", help="Gera a listagem visual de arquivos (listing.html)")
-    p.add_argument("--reconstruct-history", action="store_true",
-                   help="Reconstrói o histórico de commits (apenas metadados/visualização)")
-    p.add_argument("--max-commits", type=int, default=200,
-                   help="Limite de commits a analisar no histórico (padrão: 200)")
-    p.add_argument("--ignore-missing", action="store_true",
-                   help="Ignora erros de objetos ausentes durante a reconstrução")
-    p.add_argument("--strict", action="store_true", help="Aborta a operação ao encontrar erros críticos")
-    p.add_argument("--sha1", help="Baixa e restaura um objeto específico pelo Hash SHA1")
-    p.add_argument("--detect-hardening", action="store_true",
-                   help="Verifica configurações de segurança e exposição do .git")
-    p.add_argument("--packfile", choices=['list', 'download', 'download-unpack'],
-                   help="Gerencia arquivos .pack (list, download, download-unpack)")
-    p.add_argument("--serve", action="store_true", help="Inicia um servidor web local para visualizar os relatórios")
-    p.add_argument("--workers", type=int, default=10, help="Número de threads para downloads paralelos (padrão: 10)")
-    p.add_argument("--scan", help="Lista de URLs (arquivo) para varredura em massa")
-    p.add_argument("--check-public", action="store_true",
-                   help="Verifica se os arquivos listados estão acessíveis publicamente (HEAD request)")
-    p.add_argument("--full-history", action="store_true",
-                   help="Analisa árvore de arquivos completa de TODOS os commits (lento)")
-    p.add_argument("--full-scan", action="store_true",
-                   help="Executa verificação completa de vazamentos (SVN, HG, Env, DS_Store)")
+    p.add_argument("--output-index", default="dump.json", help="Nome do arquivo de saída para o índice JSON")
+    p.add_argument("--output-dir", default="./repo", help="Diretório de saída (Raiz)")
+    p.add_argument("--serve-dir", nargs="?", help="Diretório específico para servir via HTTP")
+    p.add_argument("--default", action="store_true", help="Executa o pipeline padrão")
+    p.add_argument("--report", action="store_true", help="Gera apenas o relatório unificado")
+    p.add_argument("--parse-index", action="store_true", help="Apenas baixa e converte o .git/index")
+    p.add_argument("--blind", action="store_true", help="Ativa modo Blind")
+    p.add_argument("--list", action="store_true", help="Gera listing.html")
+    p.add_argument("--reconstruct-history", action="store_true", help="Reconstrói histórico")
+    p.add_argument("--max-commits", type=int, default=200, help="Limite de commits")
+    p.add_argument("--ignore-missing", action="store_true", help="Ignora objetos ausentes")
+    p.add_argument("--strict", action="store_true", help="Aborta em erros críticos")
+    p.add_argument("--sha1", help="Baixa objeto pelo Hash SHA1")
+    p.add_argument("--detect-hardening", action="store_true", help="Verifica exposição .git")
+    p.add_argument("--packfile", choices=['list', 'download', 'download-unpack'], help="Gerencia .pack")
+    p.add_argument("--serve", action="store_true", help="Inicia servidor web ao final")
+    p.add_argument("--workers", type=int, default=10, help="Threads paralelas")
+    p.add_argument("--scan", help="Arquivo com lista de URLs para varredura completa")
+    p.add_argument("--check-public", action="store_true", help="Check HEAD request")
+    p.add_argument("--full-history", action="store_true", help="Scan completo de histórico (lento)")
+    p.add_argument("--full-scan", action="store_true", help="Executa verificação completa (Brute-Force, Misc)")
+    p.add_argument("--wordlist", help="Caminho para wordlist (Brute-Force) personalizada")
 
     args = p.parse_args()
 
-    base_url = normalize_url(args.base);
-    
-    print(f"[*] URL alvo normalizada: {base_url}")
-
-    output_dir = args.output_dir;
-    index_name = args.output_index
-
-    actions = [args.scan, args.serve, args.report, args.packfile, args.blind, args.sha1, args.default, args.parse_index,
-               args.list, args.reconstruct_history, args.detect_hardening, args.full_scan]
-    if args.full_scan:
-        args.default = True  # --full-scan : default pipeline
-    elif base_url and not any(actions):
-        args.default = True  # auto default
-
-    if args.scan: scan_urls(args.scan); return
-    if args.serve: serve_dir(args.serve_dir if args.serve_dir else output_dir); return
-    if args.report:
-        if not base_url: fail("Requer URL base."); return
-        generate_unified_report(output_dir, base_url);
+    if args.serve and not args.base and not args.scan:
+        serve_dir(args.serve_dir if args.serve_dir else args.output_dir)
         return
-    if args.packfile:
-        if not base_url: fail("Requer URL base."); return
-        handle_packfiles(args.packfile, base_url, output_dir);
-        return
-    if args.blind:
-        if not base_url: fail("Requer URL base."); return
-        blind_recovery(base_url, output_dir, index_name);
-        return
-    if args.sha1:
-        if not base_url: fail("Requer URL base."); return
-        os.makedirs(output_dir, exist_ok=True);
-        resolved_path = None
+
+    if args.scan:
+        if not os.path.exists(args.scan):
+            fail(f"Arquivo de lista não encontrado: {args.scan}")
+            return
+        
         try:
-            dump_path = os.path.join(output_dir, "_files", index_name)
-            if os.path.exists(dump_path):
-                for e in load_dump_entries(dump_path):
-                    if e.get('sha1') == args.sha1: resolved_path = e.get('path'); break
-        except:
-            pass
-        if not resolved_path:
+            with open(args.scan, "r", encoding="utf-8", errors="ignore") as f:
+                urls = []
+                for line in f:
+                    clean_line = line.replace('\ufeff', '').replace('\x00', '').strip()
+                    if clean_line and not clean_line.startswith("#"):
+                        urls.append(clean_line)
+
+            if not urls:
+                fail("Nenhum alvo válido encontrado na lista (verifique se não são apenas comentários).")
+                return
+
+        except Exception as e:
+            fail(f"Erro ao ler lista de alvos: {e}")
+            return
+
+        info(f"Iniciando varredura em massa: {len(urls)} alvos.")
+        info(f"Diretório Raiz de Saída: {args.output_dir}")
+
+        for i, raw_url in enumerate(urls, 1):
+            target_url = normalize_url(raw_url)
+            print(f"\n>>> Processando [{i}/{len(urls)}]: {target_url}")
+            
+            folder_name = sanitize_folder_name(target_url)
+            target_outdir = os.path.join(args.output_dir, folder_name)
+            
             try:
-                hist_path = os.path.join(output_dir, "_files", "history.json")
-                if os.path.exists(hist_path):
-                    with open(hist_path, 'r', encoding='utf-8') as f:
-                        for c in json.load(f).get('commits', []):
-                            for file in c.get('files', []):
-                                if file.get('sha') == args.sha1: resolved_path = file.get('path'); break
-                            if resolved_path: break
-            except:
-                pass
-        if not resolved_path:
-            info("Tentando resolver nome do arquivo via .git/index remoto...")
-            tmp_idx = os.path.join(output_dir, "__temp_index_lookup");
-            idx_url = base_url.rstrip("/")
-            if not idx_url.endswith(".git"): idx_url += "/.git"
-            idx_url += "/index"
-            ok_idx, _ = http_get_to_file(idx_url, tmp_idx)
-            if ok_idx:
-                try:
-                    for e in parse_git_index_file(tmp_idx).get("entries", []):
-                        if e.get("sha1") == args.sha1: resolved_path = e.get("path"); info(
-                            f"Encontrado no índice remoto: {resolved_path}"); break
-                except:
-                    pass
-                finally:
-                    if os.path.exists(tmp_idx): os.remove(tmp_idx)
-        recover_one_sha(base_url, args.sha1, output_dir, resolved_path);
-        return
-
-    if args.default:
-        if not base_url: fail("Requer URL."); return
-        info(f"Pipeline em {base_url}...");
-        os.makedirs(output_dir, exist_ok=True)
-        index_json = os.path.join(output_dir, "_files", args.output_index)
-
-        # 1. Index / Blind
-        ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index",
-                                     os.path.join(output_dir, "_files", "raw_index"))
-        if ok_idx:
-            print(f"[+] Tentando analisar o índice Git em {output_dir}...")
-
-            try:
-                index_to_json(os.path.join(output_dir, "_files", "raw_index"), index_json)
-                print("[+] Índice Git analisado com sucesso.")
-
-            except ValueError as e:
-                print(
-                    f"[-] Aviso: Não foi possível processar o .git/index. O repositório pode não estar exposto ou é inválido.")
-                print(f"    Detalhe do erro: {e}")
-
+                process_pipeline(target_url, target_outdir, args)
             except Exception as e:
-                print(f"[-] Erro inesperado ao processar Git: {e}")
-
-            print("[*] Continuando para a geração do relatório final...")
-        else:
-            blind_recovery(base_url, output_dir, args.output_index)
-
-        # 2. Hardening & Misc
-        detect_hardening(base_url, output_dir);
-        gather_intelligence(base_url, output_dir)
-        if args.full_scan: detect_misc_leaks(base_url, output_dir)
-
-        # 3. Reports
-        handle_packfiles('list', base_url, output_dir)
-        make_listing_modern(index_json, base_url, output_dir)
-        reconstruct_history(index_json, base_url, output_dir, max_commits=args.max_commits,
-                            full_history=args.full_history, workers=args.workers)
-        generate_unified_report(output_dir, base_url)
-        serve_dir(output_dir)
+                fail(f"Erro fatal ao processar {target_url}: {e}")
+                continue
+        
+        success("Varredura em lista concluída.")
+        
+        if args.serve:
+            print("\n" + "="*60)
+            info("Iniciando servidor para visualização dos resultados...")
+            serve_dir(args.output_dir)
+        
         return
 
+    if not args.base:
+        p.print_help()
+        print("\n[!] Erro: É necessário fornecer uma URL ou usar --scan <arquivo> (ou apenas --serve para visualizar resultados anteriores)")
+        return
+
+    base_url = normalize_url(args.base)
+    print(f"[*] URL alvo normalizada: {base_url}")
+    
+    if args.report:
+        generate_unified_report(args.output_dir, base_url)
+        if args.serve: serve_dir(args.output_dir)
+        return
+    
+    if args.packfile:
+        handle_packfiles(args.packfile, base_url, args.output_dir)
+        return
+    
+    if args.blind:
+        blind_recovery(base_url, args.output_dir, args.output_index)
+        if args.serve: serve_dir(args.output_dir)
+        return
+        
+    if args.sha1:
+        recover_one_sha(base_url, args.sha1, args.output_dir)
+        return
+        
+    if args.detect_hardening:
+        detect_hardening(base_url, args.output_dir)
+        return
+
+    if args.parse_index:
+        tmp = os.path.join(args.output_dir, "_files", "raw_index")
+        http_get_to_file(base_url + "/.git/index", tmp)
+        index_to_json(tmp, os.path.join(args.output_dir, "_files", args.output_index))
+        return
+
+    process_pipeline(base_url, args.output_dir, args)
+    
+    if args.serve:
+        serve_dir(args.output_dir)
 
 if __name__ == "__main__":
     main()

@@ -197,8 +197,8 @@ python git_leak.py http://exemplo.com/.git --report
 - Habilitar servidor http para visualizar relatorios ou servir outros arquivos `--serve`:
 ```sql
 python git_leak.py http://exemplo.com/.git --serve
-# ou em conjunto com --output-dir
-python git_leak.py http://exemplo.com/.git --serve --output-dir temp/arquivos/
+# ou em conjunto com --output-dir para servir um diretório especifico
+python git_leak.py --serve --output-dir temp/arquivos/
 ```
 
 
@@ -229,8 +229,61 @@ python git_leak.py --scan alvos.txt
 python git_leak.py --serve --output-dir repo/temp
 ```
 
+- Executar scan massivo utilizando bruteforce de objetos de interesse através de lista
+```sql
+python git_leak.py --scan alvos-exemplo.txt --output-dir pasta-alvos --full-scan --wordlist wordlist-exemplo.txt --serve
+```
 
+- Caso executado apenas com `--full-scan`, o bruteforce utilizará uma lista hardcoded:
+```sql
+    # --- Environment & Secrets ---
+    ".env", ".env.local", ".env.dev", ".env.development", ".env.prod", ".env.production",
+    ".env.example", ".env.sample", ".env.save", ".env.bak", ".env.old",
+    "config.json", "secrets.json", "config.yaml", "secrets.yaml", "config.toml", "config.php",
+    "settings.py", "database.yml", "robots.txt", "README.md", "index.php", "index.html", "server.js",
 
+    
+    # --- Version Control & CI/CD (Risco Crítico) ---
+    ".git/config", ".gitignore", ".gitmodules",
+    ".gitlab-ci.yml", ".travis.yml", "circle.yml", "jenkinsfile", "Jenkinsfile",
+    ".github/workflows/main.yml", ".github/workflows/deploy.yml",
+    
+    # --- Javascript / Node.js ---
+    "package.json", "package-lock.json", "yarn.lock", ".npmrc",
+    "webpack.config.js", "rollup.config.js", "next.config.js", "nuxt.config.js",
+    "server.js", "app.js",
+    
+    # --- PHP / CMS / Frameworks ---
+    "wp-config.php", "wp-config.php.bak", "wp-config.php.old", # WordPress
+    "configuration.php", "configuration.php.bak", # Joomla
+    ".htaccess", "composer.json", "composer.lock", "auth.json",
+    "artisan", "phpunit.xml", # Laravel
+    
+    # --- Python / Django / Flask ---
+    "requirements.txt", "Pipfile", "Pipfile.lock", "setup.py", "pyproject.toml",
+    "manage.py", "app.py", "wsgi.py", "uwsgi.ini",
+    
+    # --- ASP.NET / C# (IIS) ---
+    "web.config", "Web.config", "appsettings.json", "appsettings.Development.json",
+    "packages.config", "Global.asax",
+    
+    # --- Docker / Kubernetes / Cloud / Terraform ---
+    "Dockerfile", "docker-compose.yml", "docker-compose.yaml", ".dockerignore",
+    "Makefile", "Vagrantfile",
+    "k8s.yaml", "kubeconfig", "deployment.yaml",
+    "main.tf", "variables.tf", "terraform.tfvars", ".terraform.lock.hcl",
+    "serverless.yml", "serverless.yaml",
+    
+    # --- Backups & Dumps (Arquivos pesados) ---
+    "backup.zip", "backup.tar.gz", "backup.sql",
+    "dump.sql", "database.sql", "db_backup.sql", "users.sql",
+    "www.zip", "site.zip", "public.zip", "html.tar.gz",
+    
+    # --- IDEs & Logs ---
+    ".vscode/settings.json", ".idea/workspace.xml",
+    "debug.log", "error_log", "access.log", "npm-debug.log",
+    "id_rsa", "id_rsa.pub", "known_hosts"
+```
 
 
 
