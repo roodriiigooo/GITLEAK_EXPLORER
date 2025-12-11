@@ -7,7 +7,7 @@
    **Ferramenta avançada de análise forense e recuperação de repositórios Git expostos publicamente na web via HTTP, perfeita para aquele recon de respeito**
 
 
- [Sobre](#sobre) | [Aviso Legal](#aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) 
+ [Sobre](#sobre) | [Aviso Legal](#%EF%B8%8F-aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) 
 
 
 <br>
@@ -228,6 +228,7 @@ python git_leak.py --scan alvos.txt
 ```sql 
 python git_leak.py --serve --output-dir repo/temp
 ```
+
 
 
 
