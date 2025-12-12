@@ -31,7 +31,7 @@ VSVersionInfo(
         u'040904B0',
         [StringStruct(u'CompanyName', u'Open Source Security'),
         StringStruct(u'FileDescription', u'Git Leak Explorer - Forensics Tool'),
-        StringStruct(u'FileVersion', u'1.0.1'),
+        StringStruct(u'FileVersion', u'1.0.6'),
         StringStruct(u'InternalName', u'git_leak'),
         StringStruct(u'LegalCopyright', u'Copyright (c) 2025'),
         StringStruct(u'OriginalFilename', u'git_leak.exe'),
