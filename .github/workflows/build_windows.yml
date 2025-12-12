@@ -119,7 +119,7 @@ jobs:
         with:
           files: dist/git_leak.exe
           tag_name: ${{ steps.get_version.outputs.tag }}
-          name: Release ${{ steps.get_version.outputs.version }}
+          name: Release v${{ steps.get_version.outputs.version }}
           body: |
             ## 🚀 Nova Versão Disponível
             
