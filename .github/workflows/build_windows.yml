@@ -32,30 +32,25 @@ jobs:
         id: get_version
         shell: powershell
         run: |
-          # Inicializa com fallback
           $Version = "0.0.0"
           $TagName = "v0.0.0"
-
           $VersionFile = "version_info.txt"
           
           if (Test-Path $VersionFile) {
-            # Lê o conteúdo e tenta encontrar a linha ProductVersion
             $ProductVersionLine = Get-Content $VersionFile | Select-String -Pattern "ProductVersion', u'(.*?)'"
             
             if ($ProductVersionLine) {
-              # Extrai a versão usando o grupo de captura da regex
               $Version = $ProductVersionLine.Matches[0].Groups[1].Value.Trim()
               $TagName = "v" + $Version
             }
           }
           
-          # Garante que os valores NUNCA estão vazios
           if ([string]::IsNullOrEmpty($Version)) { $Version = "0.0.0" }
           if ([string]::IsNullOrEmpty($TagName)) { $TagName = "v0.0.0" }
 
-          # Escreve as variáveis de saída
-          echo "version=$Version" >> $GITHUB_OUTPUT
-          echo "tag=$TagName" >> $GITHUB_OUTPUT
+          $OutputFile = $env:GITHUB_OUTPUT
+          "version=$Version" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
+          "tag=$TagName" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
 
       - name: Set up Python
         uses: actions/setup-python@v5
