@@ -7,6 +7,22 @@ on:
       - 'version_info.txt' # Gatilho também se mudar a versão
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'The environment to deploy to (staging or production)'
+        required: true
+        default: 'production'
+      logLevel:
+        description: 'Log level'
+        required: false
+        default: 'warning'
+        type: 'choice'
+        options:
+        - 'info'
+        - 'warning'
+        - 'debug'
+        - 'release'
 
 permissions:
   contents: write # Necessário para criar Releases
