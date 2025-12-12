@@ -67,16 +67,24 @@ jobs:
         id: check_release
         shell: powershell
         run: |
-          # Corrigido: Usando %B para obter a mensagem completa (título e corpo)
-          $CommitMessage = git log -1 --pretty=format:%B
+          # Extrai o título (subject)
+          $CommitSubject = git log -1 --pretty=format:%s
+          
+          # Extrai o corpo (body) que contém o Markdown do changelog
+          $CommitBody = git log -1 --pretty=format:%b
+          
           $isRelease = "false"
           
-          if ($CommitMessage -like "*[release]*") {
+          # Verifica a tag [release] no título
+          if ($CommitSubject -like "*[release]*") {
             $isRelease = "true"
           }
 
+          # Combina a mensagem para a Release: Título, duas quebras de linha, e Corpo
+          $FullMessage = "$CommitSubject`r`n`r`n$CommitBody"
+
           $OutputFile = $env:GITHUB_OUTPUT
-          "commit_message=$CommitMessage" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
+          "commit_message=$FullMessage" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
           "is_release=$isRelease" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
         
       - name: Build Executable
@@ -115,7 +123,10 @@ jobs:
             Versão extraída de `version_info.txt`: **${{ steps.get_version.outputs.version }}**
             
             Build automático gerado a partir do commit:
-            > ${{ steps.check_release.outputs.commit_message }}
+            
+            ---
+            
+            ${{ steps.check_release.outputs.commit_message }}
 
           draft: false
           prerelease: false
