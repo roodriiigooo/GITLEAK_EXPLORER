@@ -32,21 +32,28 @@ jobs:
         id: get_version
         shell: powershell
         run: |
+          # Inicializa com fallback
           $Version = "0.0.0"
           $TagName = "v0.0.0"
 
           $VersionFile = "version_info.txt"
           
           if (Test-Path $VersionFile) {
-            $Content = Get-Content $VersionFile -Raw
-            $Match = [regex]::Match($Content, "ProductVersion', u'(.*?)'")
+            # Lê o conteúdo e tenta encontrar a linha ProductVersion
+            $ProductVersionLine = Get-Content $VersionFile | Select-String -Pattern "ProductVersion', u'(.*?)'"
             
-            if ($Match.Success) {
-              $Version = $Match.Groups[1].Value
+            if ($ProductVersionLine) {
+              # Extrai a versão usando o grupo de captura da regex
+              $Version = $ProductVersionLine.Matches[0].Groups[1].Value.Trim()
               $TagName = "v" + $Version
             }
           }
           
+          # Garante que os valores NUNCA estão vazios
+          if ([string]::IsNullOrEmpty($Version)) { $Version = "0.0.0" }
+          if ([string]::IsNullOrEmpty($TagName)) { $TagName = "v0.0.0" }
+
+          # Escreve as variáveis de saída
           echo "version=$Version" >> $GITHUB_OUTPUT
           echo "tag=$TagName" >> $GITHUB_OUTPUT
 
