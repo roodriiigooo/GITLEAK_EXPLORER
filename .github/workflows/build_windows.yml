@@ -67,16 +67,14 @@ jobs:
         id: check_release
         shell: powershell
         run: |
-          # Captura a mensagem do commit que foi feito o checkout.
-          # Isso funciona corretamente para o SHA fornecido ou para o SHA padrão.
-          $CommitMessage = git log -1 --pretty=format:%s
+          # Corrigido: Usando %B para obter a mensagem completa (título e corpo)
+          $CommitMessage = git log -1 --pretty=format:%B
           $isRelease = "false"
           
           if ($CommitMessage -like "*[release]*") {
             $isRelease = "true"
           }
 
-          # Garante a escrita correta das variáveis de saída para o GitHub Actions
           $OutputFile = $env:GITHUB_OUTPUT
           "commit_message=$CommitMessage" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
           "is_release=$isRelease" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
