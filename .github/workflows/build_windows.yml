@@ -73,7 +73,7 @@ jobs:
 
       # Criação da Release (Só acontece se tiver [release] no commit)
       - name: Create Release
-        if: steps.check_release.outputs.is_release == 'true'
+        if: steps.check_release.outputs.is_release == 'false'
         uses: softprops/action-gh-release@v1
         with:
           files: dist/git_leak.exe
