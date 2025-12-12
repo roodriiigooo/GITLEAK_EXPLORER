@@ -9,20 +9,10 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'The environment to deploy to (staging or production)'
+      commit_sha:
+        description: 'SHA do commit para executar o workflow'
         required: true
-        default: 'production'
-      logLevel:
-        description: 'Log level'
-        required: false
-        default: 'warning'
-        type: 'choice'
-        options:
-        - 'info'
-        - 'warning'
-        - 'debug'
-        - 'release'
+        default: ''
 
 permissions:
   contents: write # Necessário para criar Releases
