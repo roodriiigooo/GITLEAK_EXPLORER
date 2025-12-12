@@ -36,7 +36,7 @@ VSVersionInfo(
         StringStruct(u'LegalCopyright', u'Copyright (c) 2025'),
         StringStruct(u'OriginalFilename', u'git_leak.exe'),
         StringStruct(u'ProductName', u'Git Leak Explorer'),
-        StringStruct(u'ProductVersion', u'1.0.1')])
+        StringStruct(u'ProductVersion', u'1.0.6')])
       ]),
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]
