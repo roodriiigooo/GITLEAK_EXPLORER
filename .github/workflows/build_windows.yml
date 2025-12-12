@@ -67,25 +67,28 @@ jobs:
         id: check_release
         shell: powershell
         run: |
-          # Extrai o título (subject)
           $CommitSubject = git log -1 --pretty=format:%s
-          
-          # Extrai o corpo (body) que contém o Markdown do changelog
           $CommitBody = git log -1 --pretty=format:%b
-          
           $isRelease = "false"
           
-          # Verifica a tag [release] no título
           if ($CommitSubject -like "*[release]*") {
             $isRelease = "true"
           }
 
-          # Combina a mensagem para a Release: Título, duas quebras de linha, e Corpo
-          $FullMessage = "$CommitSubject`r`n`r`n$CommitBody"
-
           $OutputFile = $env:GITHUB_OUTPUT
-          "commit_message=$FullMessage" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
+          $Delimiter = "EOF" + (Get-Date -Format 'HHmmss')
+          $BodyContent = $CommitBody
+
+          # Saída 1: Simples (is_release)
           "is_release=$isRelease" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
+          
+          # Saída 2: Simples (commit_subject)
+          "commit_subject=$CommitSubject" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
+
+          # Saída 3: Multiline (commit_body)
+          "commit_body<<$Delimiter" | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
+          $BodyContent | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
+          $Delimiter | Out-File -FilePath $OutputFile -Encoding UTF8 -Append
         
       - name: Build Executable
         run: |
@@ -123,10 +126,11 @@ jobs:
             Versão extraída de `version_info.txt`: **${{ steps.get_version.outputs.version }}**
             
             Build automático gerado a partir do commit:
+            > ${{ steps.check_release.outputs.commit_subject }}
             
             ---
             
-            ${{ steps.check_release.outputs.commit_message }}
+            ${{ steps.check_release.outputs.commit_body }}
 
           draft: false
           prerelease: false
