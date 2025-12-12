@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: 'SHA do commit para executar o workflow'
-        required: true
+        description: 'SHA do commit para executar o workflow (Deixe em branco para usar o commit padrão do evento)'
+        required: false # Agora é opcional
         default: ''
 
 permissions:
@@ -25,6 +25,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Usa o commit_sha do input se fornecido, caso contrário usa o SHA do evento (push)
+          ref: ${{ github.event.inputs.commit_sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,13 +40,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller requests
 
-      # Verifica se a mensagem do commit tem a tag [release]
-      # Exemplo de commit: "Fix bug parsing html [release]"
+      - name: Get Commit Message for Release Check
+        id: get_commit_message
+        run: |
+          # Pega a mensagem do commit que está sendo usado no checkout
+          $CommitMessage = git log -1 --pretty=format:%s
+          Write-Host "Mensagem do commit: $CommitMessage"
+          
+          # Salva a mensagem como output para ser usada no próximo passo
+          echo "commit_message=$CommitMessage" >> $GITHUB_OUTPUT
+        shell: powershell
+
       - name: Check for Release Tag
         id: check_release
         shell: bash
         run: |
-          if [[ "${{ github.event.head_commit.message }}" == *"[release]"* ]]; then
+          COMMIT_MESSAGE="${{ steps.get_commit_message.outputs.commit_message }}"
+          
+          if [[ "$COMMIT_MESSAGE" == *"[release]"* ]]; then
             echo "is_release=true" >> $GITHUB_OUTPUT
             echo "Detectado tag [release]. Criando nova versão..."
           else
@@ -90,7 +104,7 @@ jobs:
             ## 🚀 Nova Versão Disponível
             
             Build automático gerado a partir do commit:
-            > ${{ github.event.head_commit.message }}
+            > ${{ steps.get_commit_message.outputs.commit_message }}
 
           draft: false
           prerelease: false
