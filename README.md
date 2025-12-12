@@ -60,7 +60,7 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 * **🎨 Interface Moderna:** Todos os relatórios HTML possuem tema escuro (Dark UI), busca em tempo real e paginação.
 * **🚀 Alta Performance:** Utiliza *multi-threading* para downloads paralelos de objetos.
 * **🔍 Suporte Adicional:** Efetua buscas por artefatos SVN, HG, Env e DS_Store.
-
+* **💪 Suporte a Brute Force:** Habilidade de utilizar wordlists contendo artefatos de interesse e seus respectivos paths de busca.
 
 
 ---
@@ -156,6 +156,8 @@ Principais funcionalidades implementadas:
  - --full-scan           : Executa verificação completa de vazamentos (SVN, HG, Env, DS_Store)
  - --report              : gera apenas o relatório final (report.html)
  - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
+ --bruteforce            : Ativa a tentativa de recuperação de arquivos comuns via força bruta
+ --wordlist              : Caminho para wordlist (Brute-Force) personalizada
 
  - Todos os arquivos de saída são armazenados no diretório externo fornecido: arquivos HTML na raiz, arquivos JSON/outros arquivos em outdir/_files.
 
@@ -181,7 +183,7 @@ python git_leak.py http://exemplo.com/.git --full-scan
 ```
 
 Modo lento `--full-history`
-Executa o modo padrão ou modo adicional, mas tenta reconstruir o history de commits analisando todos os registros encontrados
+Executa em modo padrão ou modo adicional, mas tenta reconstruir o history de commits analisando todos os registros encontrados
 
 ```sql
 python git_leak.py http://exemplo.com/.git --full-history
@@ -230,12 +232,12 @@ python git_leak.py --scan alvos.txt
 python git_leak.py --serve --output-dir repo/temp
 ```
 
-- Executar scan massivo utilizando bruteforce de objetos de interesse através de lista
+- Executar scan massivo de alvos utilizando bruteforce de objetos de interesse através de lista personalizada com resultado organizado em pastas distintas:
 ```sql
-python git_leak.py --scan alvos-exemplo.txt --output-dir pasta-alvos --full-scan --wordlist wordlist-exemplo.txt --serve
+python git_leak.py --scan alvos-exemplo.txt --output-dir pasta-alvos  --full-scan --bruteforce --wordlist wordlist-exemplo.txt --serve
 ```
 
-- Caso executado apenas com `--full-scan`, o bruteforce utilizará uma lista hardcoded:
+- Caso executado apenas com `--brute-force`, o bruteforce utilizará uma lista hardcoded:
 ```sql
     # --- Environment & Secrets ---
     ".env", ".env.local", ".env.dev", ".env.development", ".env.prod", ".env.production",
