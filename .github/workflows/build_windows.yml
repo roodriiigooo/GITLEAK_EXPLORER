@@ -32,7 +32,15 @@ jobs:
         id: get_version
         shell: powershell
         run: |
-          $Content = Get-Content version_info.txt
+          $VersionFile = "version_info.txt"
+          
+          if (-not (Test-Path $VersionFile)) {
+            echo "version=0.0.0" >> $GITHUB_OUTPUT
+            echo "tag=v0.0.0" >> $GITHUB_OUTPUT
+            exit 0
+          }
+
+          $Content = Get-Content $VersionFile
           $ProductVersionLine = $Content | Select-String -Pattern "ProductVersion', u'(.*)'"
           
           if ($ProductVersionLine) {
