@@ -5,7 +5,7 @@
 
 <div align="center">
 
-   **Ferramenta avançada de análise forense e recuperação de repositórios Git expostos publicamente na web via HTTP, perfeita para aquele recon de respeito**
+   **Ferramenta avançada de análise forense, recuperação de repositórios Git e outros artefatos expostos publicamente na web via HTTP, perfeita para aquele recon de respeito**
 
 
  [Sobre](#sobre) | [Aviso Legal](#%EF%B8%8F-aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) 
@@ -32,7 +32,9 @@
 ## Sobre
 O **Git Leak Explorer** é uma ferramenta "tudo-em-um" projetada para pesquisadores de segurança e administradores de sistemas. Ela permite identificar, baixar, reconstruir e analisar artefatos de pastas `.git` expostas inadvertidamente em servidores web.
 
-A ferramenta vai além do download simples, oferecendo reconstrução de histórico de commits, detecção de riscos de segurança (hardening), suporte a *packfiles* e uma interface visual moderna (Dark Mode) para análise de dados. Opcionalmente suporta também vazamentos de artefatos SVN, HG, Env e DS_Store.
+A ferramenta vai além do download simples, oferecendo reconstrução de histórico de commits, detecção de riscos de segurança (hardening), suporte a *packfiles* e uma interface visual moderna (com Dark Mode) para análise dos dados. Opcionalmente suporta também busca de vazamentos de artefatos SVN, HG, Env e DS_Store. Também possui a habilidade de scan massivo em lista de alvos e efetuar bruteforce com wordlist em busca de artefatos de interesse.
+
+Tudo isso em um só projeto. Leve, direto e brasileiro.
 
 > Ajude a desenvolver este projeto
 >> Sinta-se a vontade para contribuir, enviar sugestões e suas pull requests :D
@@ -287,6 +289,7 @@ python git_leak.py --scan alvos-exemplo.txt --output-dir pasta-alvos  --full-sca
     "debug.log", "error_log", "access.log", "npm-debug.log",
     "id_rsa", "id_rsa.pub", "known_hosts"
 ```
+
 
 
 
