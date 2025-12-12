@@ -4,18 +4,18 @@ on:
   push:
     paths:
       - 'git_leak.py'
-      - 'version_info.txt' # Gatilho também se mudar a versão
+      - 'version_info.txt'
     branches:
       - main
   workflow_dispatch:
     inputs:
       commit_sha:
         description: 'SHA do commit para executar o workflow (Deixe em branco para usar o commit padrão do evento)'
-        required: false # Agora é opcional
+        required: false
         default: ''
 
 permissions:
-  contents: write # Necessário para criar Releases
+  contents: write
 
 jobs:
   build-and-release:
@@ -26,7 +26,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Usa o commit_sha do input se fornecido, caso contrário usa o SHA do evento (push)
           ref: ${{ github.event.inputs.commit_sha || github.sha }}
 
       - name: Set up Python
@@ -43,11 +42,8 @@ jobs:
       - name: Get Commit Message for Release Check
         id: get_commit_message
         run: |
-          # Pega a mensagem do commit que está sendo usado no checkout
           $CommitMessage = git log -1 --pretty=format:%s
           Write-Host "Mensagem do commit: $CommitMessage"
-          
-          # Salva a mensagem como output para ser usada no próximo passo
           echo "commit_message=$CommitMessage" >> $GITHUB_OUTPUT
         shell: powershell
 
@@ -83,7 +79,6 @@ jobs:
 
           Invoke-Expression $BuildCommand
 
-      # Upload do artefato (sempre acontece para você testar)
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -91,13 +86,11 @@ jobs:
           path: dist/git_leak.exe
           retention-days: 5
 
-      # Criação da Release (Só acontece se tiver [release] no commit)
       - name: Create Release
         if: steps.check_release.outputs.is_release == 'true'
         uses: softprops/action-gh-release@v1
         with:
           files: dist/git_leak.exe
-          # Gera uma tag automática baseada no número da execução (ex: v1.0.42)
           tag_name: v1.0.${{ github.run_number }}
           name: Release v1.0.${{ github.run_number }}
           body: |
