@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: 'SHA do commit para executar o workflow (Deixe em branco para usar o commit padrão do evento)'
+        description: 'SHA do commit para executar o workflow'
         required: false
         default: ''
 
@@ -28,6 +28,23 @@ jobs:
         with:
           ref: ${{ github.event.inputs.commit_sha || github.sha }}
 
+      - name: Extract Product Version from File
+        id: get_version
+        shell: powershell
+        run: |
+          $Content = Get-Content version_info.txt
+          $ProductVersionLine = $Content | Select-String -Pattern "ProductVersion', u'(.*)'"
+          
+          if ($ProductVersionLine) {
+            $Version = $ProductVersionLine.Matches[0].Groups[1].Value
+            $TagName = "v" + $Version
+            echo "version=$Version" >> $GITHUB_OUTPUT
+            echo "tag=$TagName" >> $GITHUB_OUTPUT
+          } else {
+            echo "version=0.0.0" >> $GITHUB_OUTPUT
+            echo "tag=v0.0.0" >> $GITHUB_OUTPUT
+          }
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -39,40 +56,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller requests
 
-      - name: Get Commit Message for Release Check
-        id: get_commit_message
+      - name: Check for Release Tag and Get Message
+        id: check_release
+        shell: powershell
         run: |
           $CommitMessage = git log -1 --pretty=format:%s
-          Write-Host "Mensagem do commit: $CommitMessage"
           echo "commit_message=$CommitMessage" >> $GITHUB_OUTPUT
-        shell: powershell
-
-      - name: Check for Release Tag
-        id: check_release
-        shell: bash
-        run: |
-          COMMIT_MESSAGE="${{ steps.get_commit_message.outputs.commit_message }}"
           
-          if [[ "$COMMIT_MESSAGE" == *"[release]"* ]]; then
+          if ($CommitMessage -like "*[release]*") {
             echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "Detectado tag [release]. Criando nova versão..."
-          else
+          } else {
             echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "Build apenas de CI (sem release)."
-          fi
-
+          }
+        
       - name: Build Executable
         run: |
           $IconPath = ".assets/app.ico"
           $VersionPath = "version_info.txt"
           $BuildCommand = "pyinstaller --onefile --clean --name 'git_leak' git_leak.py"
 
-          # Adiciona ícone se existir
           if (Test-Path $IconPath) {
             $BuildCommand += " --icon=$IconPath"
           }
 
-          # Adiciona metadados de versão se existir (Ajuda no SmartScreen)
           if (Test-Path $VersionPath) {
             $BuildCommand += " --version-file=$VersionPath"
           }
@@ -87,17 +93,19 @@ jobs:
           retention-days: 5
 
       - name: Create Release
-        if: steps.check_release.outputs.is_release == 'true'
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.check_release.outputs.is_release == 'true' }}
         uses: softprops/action-gh-release@v1
         with:
           files: dist/git_leak.exe
-          tag_name: v1.0.${{ github.run_number }}
-          name: Release v1.0.${{ github.run_number }}
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: Release ${{ steps.get_version.outputs.version }}
           body: |
             ## 🚀 Nova Versão Disponível
             
+            Versão extraída de `version_info.txt`: **${{ steps.get_version.outputs.version }}**
+            
             Build automático gerado a partir do commit:
-            > ${{ steps.get_commit_message.outputs.commit_message }}
+            > ${{ steps.check_release.outputs.commit_message }}
 
           draft: false
           prerelease: false
