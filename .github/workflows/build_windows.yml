@@ -32,26 +32,23 @@ jobs:
         id: get_version
         shell: powershell
         run: |
+          $Version = "0.0.0"
+          $TagName = "v0.0.0"
+
           $VersionFile = "version_info.txt"
           
-          if (-not (Test-Path $VersionFile)) {
-            echo "version=0.0.0" >> $GITHUB_OUTPUT
-            echo "tag=v0.0.0" >> $GITHUB_OUTPUT
-            exit 0
+          if (Test-Path $VersionFile) {
+            $Content = Get-Content $VersionFile -Raw
+            $Match = [regex]::Match($Content, "ProductVersion', u'(.*?)'")
+            
+            if ($Match.Success) {
+              $Version = $Match.Groups[1].Value
+              $TagName = "v" + $Version
+            }
           }
-
-          $Content = Get-Content $VersionFile
-          $ProductVersionLine = $Content | Select-String -Pattern "ProductVersion', u'(.*)'"
           
-          if ($ProductVersionLine) {
-            $Version = $ProductVersionLine.Matches[0].Groups[1].Value
-            $TagName = "v" + $Version
-            echo "version=$Version" >> $GITHUB_OUTPUT
-            echo "tag=$TagName" >> $GITHUB_OUTPUT
-          } else {
-            echo "version=0.0.0" >> $GITHUB_OUTPUT
-            echo "tag=v0.0.0" >> $GITHUB_OUTPUT
-          }
+          echo "version=$Version" >> $GITHUB_OUTPUT
+          echo "tag=$TagName" >> $GITHUB_OUTPUT
 
       - name: Set up Python
         uses: actions/setup-python@v5
