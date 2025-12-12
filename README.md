@@ -2,6 +2,7 @@
 
 
 
+
 <div align="center">
 
    **Ferramenta avançada de análise forense e recuperação de repositórios Git expostos publicamente na web via HTTP, perfeita para aquele recon de respeito**
@@ -284,6 +285,7 @@ python git_leak.py --scan alvos-exemplo.txt --output-dir pasta-alvos --full-scan
     "debug.log", "error_log", "access.log", "npm-debug.log",
     "id_rsa", "id_rsa.pub", "known_hosts"
 ```
+
 
 
 
