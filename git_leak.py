@@ -503,7 +503,6 @@ COMMON_FILES = [
 ]
 
 def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    # Define a lista padrão inicialmente
     target_list = COMMON_FILES
     source_type = "Lista Padrão"
 
@@ -513,8 +512,8 @@ def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str
             try:
                 with open(wordlist_path, 'r', encoding='utf-8', errors='ignore') as f:
                     custom_items = []
-                    for line_num, line in enumerate(f, 1):
-                        clean_line = line.strip()
+                    for line in f:
+                        clean_line = line.replace('\ufeff', '').replace('\x00', '').strip()
                         if clean_line and not clean_line.startswith("#"):
                             custom_items.append(clean_line)
                 
@@ -522,30 +521,55 @@ def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str
                     target_list = custom_items
                     source_type = "Custom"
                     success(f"Wordlist carregada com sucesso: {len(target_list)} entradas válidas.")
-                    print(f"    -> Primeiros 3 itens: {target_list[:3]}")
-                    print(f"    -> Últimos 3 itens:   {target_list[-3:]}")
                 else:
-                    warn("A wordlist fornecida está vazia ou só tem comentários. Revertendo para lista padrão.")
+                    warn("A wordlist fornecida parece vazia. Revertendo para lista padrão.")
             except Exception as e:
-                warn(f"Erro ao ler wordlist '{wordlist_path}': {e}. Revertendo para lista padrão.")
+                warn(f"Erro ao ler wordlist: {e}. Revertendo para padrão.")
         else:
-            warn(f"Arquivo de wordlist não encontrado: {wordlist_path}. Revertendo para lista padrão.")
+            warn(f"Wordlist não encontrada: {wordlist_path}. Revertendo para padrão.")
 
-    source_display = f"{source_type} ({len(target_list)} itens)"
-    info(f"Iniciando Brute-Force (Full Scan)... Fonte: {source_display}")
+    info(f"Iniciando Brute-Force... Fonte: {source_type} ({len(target_list)} itens)")
     
     site_root = base_git_url.rstrip("/")
     if site_root.endswith("/.git"):
         site_root = site_root[:-5]
     
     found_files = []
+    
     bf_dir = os.path.join(outdir, "_files", "bruteforce")
+    trav_dir = os.path.join(bf_dir, "traversal")
+    
     os.makedirs(bf_dir, exist_ok=True)
+    os.makedirs(trav_dir, exist_ok=True)
 
-    for filename in target_list:
-        clean_filename = filename.lstrip("/")
-        target_url = f"{site_root}/{clean_filename}"
+    for raw_path in target_list:
+        url_path = raw_path.replace("\\", "/")
         
+        is_traversal = ".." in url_path
+        
+        target_url = ""
+        local_full_path = ""
+        
+        if is_traversal:
+            target_url = f"{site_root}/{url_path}"
+            
+            safe_name = url_path.replace("..", "UP").replace("/", "_").replace("\\", "_")
+            flat_filename = f"TRAV_{safe_name}"
+            local_full_path = os.path.join(trav_dir, flat_filename)
+            
+        else:
+            url_path_clean = url_path.lstrip("/")
+            target_url = f"{site_root}/{url_path_clean}"
+            
+            relative_system_path = os.path.normpath(url_path_clean)
+            local_full_path = os.path.join(bf_dir, relative_system_path)
+            
+            try:
+                os.makedirs(os.path.dirname(local_full_path), exist_ok=True)
+            except Exception as e:
+                warn(f"Erro ao criar diretório local para {url_path}: {e}")
+                continue
+
         ok_http, data = http_get_bytes(target_url)
         
         if ok_http and len(data) > 0:
@@ -553,38 +577,39 @@ def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str
                 continue
 
             try:
-                local_path = os.path.join(bf_dir, clean_filename)
-                os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
-                with open(local_path, "wb") as f:
+                with open(local_full_path, "wb") as f:
                     f.write(data)
                 
                 git_sha = calculate_git_sha1(data)
                 obj_url = make_blob_url_from_git(base_git_url, git_sha)
                 git_exists, _, _ = http_head_status(obj_url)
                 
+                log_prefix = "Traversal" if is_traversal else "Brute-Force"
+                status_msg = f"(SHA: {git_sha[:8]} - Versionado)" if git_exists else "(Apenas Local)"
+                
                 if git_exists:
-                    success(f"Brute-Force: {clean_filename} encontrado! (SHA: {git_sha[:8]} - Versionado)")
+                    success(f"{log_prefix}: {url_path} encontrado! {status_msg}")
                 else:
-                    warn(f"Brute-Force: {clean_filename} encontrado no site, mas não está no Git.")
+                    warn(f"{log_prefix}: {url_path} encontrado no site {status_msg}")
 
                 found_files.append({
-                    "filename": clean_filename,
+                    "filename": url_path,  
+                    "local_path": local_full_path,
                     "url": target_url,
-                    "local_path": local_path,
                     "git_sha": git_sha,
-                    "in_git": git_exists
+                    "in_git": git_exists,
+                    "type": "traversal" if is_traversal else "standard"
                 })
 
             except Exception as e:
-                warn(f"Erro ao processar arquivo '{clean_filename}': {e}")
+                warn(f"Erro ao processar arquivo '{url_path}': {e}")
                 continue
 
     try:
         with open(os.path.join(outdir, "_files", "bruteforce.json"), "w", encoding="utf-8") as f:
             json.dump(found_files, f, indent=2)
     except Exception as e:
-        warn(f"Erro ao salvar bruteforce.json: {e}")
+        warn(f"Erro ao salvar JSON: {e}")
         
     return found_files
 
@@ -1060,7 +1085,7 @@ def generate_unified_report(outdir: str, base_url: str):
             misc_html += f"<li><b>{m['type']}</b>: {m['desc']} (<a href='_files/misc/{dump_file}' target='_blank'>Dump</a> | <a href='{m['report_file']}' target='_blank'>Relatório</a>)</li>"
         misc_html += "</ul>"
     else:
-        misc_html += "<p class='muted'>Nenhum outro vazamento detectado ou varredura não executada.</p>"
+        misc_html += "<p class='muted'>Nenhum outro vazamento detectado ou varredura --full-scan não executada.</p>"
     
 
     # 7. Brute Force Section (Full Scan)
@@ -1078,7 +1103,7 @@ def generate_unified_report(outdir: str, base_url: str):
             bf_html += f"<tr><td><a href='{item['url']}' target='_blank'>{item['filename']}</a></td><td>{git_status}</td><td>{sha_link}</td><td><a href='_files/bruteforce/{item['filename']}' target='_blank'>Ver Download</a></td></tr>"
         bf_html += "</tbody></table>"
     else:
-        bf_html += "<p class='muted'>Nenhum arquivo comum encontrado via brute-force ou flag --full-scan não utilizada.</p>"
+        bf_html += "<p class='muted'>Nenhum arquivo comum encontrado via brute-force ou flag --bruteforce não utilizada.</p>"
 
 
     # HTML Template Final
@@ -1638,13 +1663,16 @@ def process_pipeline(base_url: str, output_dir: str, args):
     
     # Lógica Condicional de Full Scan (Brute Force + Misc)
     if args.full_scan:
-        # Usa a wordlist passada no args, se houver
-        brute_force_scan(base_url, output_dir, wordlist_path=args.wordlist)
         detect_misc_leaks(base_url, output_dir)
+
+    # Brute force
+    if args.bruteforce:
+        brute_force_scan(base_url, output_dir, wordlist_path=args.wordlist)
     else:
         if args.wordlist:
-            warn("A flag --wordlist foi ignorada pois a flag --full-scan não foi ativada.")
-        info("Modo padrão: Pulando Brute-Force e Misc Leaks (use --full-scan para ativar).")
+            warn("A flag --wordlist foi ignorada pois --bruteforce não foi ativado.")
+        if not args.full_scan: 
+            pass
 
     # 3. Reports & Reconstruction
     handle_packfiles('list', base_url, output_dir)
@@ -1686,6 +1714,7 @@ def main():
     p.add_argument("--check-public", action="store_true", help="Check HEAD request")
     p.add_argument("--full-history", action="store_true", help="Scan completo de histórico (lento)")
     p.add_argument("--full-scan", action="store_true", help="Executa verificação completa (Brute-Force, Misc)")
+    p.add_argument("--bruteforce", action="store_true", help="Ativa a tentativa de recuperação de arquivos comuns via força bruta")
     p.add_argument("--wordlist", help="Caminho para wordlist (Brute-Force) personalizada")
 
     args = p.parse_args()

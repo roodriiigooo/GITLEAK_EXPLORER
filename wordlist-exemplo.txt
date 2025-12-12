@@ -34,3 +34,5 @@ secrets.yaml
 # --- OUTROS ---
 index.php
 robots.txt
+/config/compile.php
+app/Policies/.gitkeep
