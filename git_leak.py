@@ -25,10 +25,14 @@ Principais funcionalidades implementadas:
  - --packfile [MODE]     : manuseio de packfiles (modes: list, download, download-unpack)
  - --scan                : roda scan em multiplos albos em busca de .git/HEAD exposure
  - --default             : roda parse-index, detect-hardening, packfile(list), list, reconstruct-history e serve
- - --full-history        : Analisa árvore de arquivos completa de TODOS os commits (lento)
- - --full-scan           : Executa verificação completa de vazamentos (SVN, HG, Env, DS_Store)
+ - --full-history        : analisa árvore de arquivos completa de TODOS os commits (lento)
+ - --full-scan           : executa verificação completa de vazamentos (SVN, HG, Env, DS_Store)
  - --report              : gera apenas o relatório final (report.html)
+ - --bruteforce          : ativa a tentativa de recuperação de arquivos comuns via força bruta
+ - --wordlist            : caminho para wordlist (Brute-Force) personalizada
+ - --proxy               : URL do Proxy (ex: http://127.0.0.1:8080 para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor) 
  - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
+ 
 
  - Todos os arquivos de saída são armazenados no diretório externo fornecido: arquivos HTML na raiz, arquivos JSON/outros arquivos em outdir/_files.
 
@@ -47,6 +51,7 @@ import zlib
 import subprocess
 import re
 import hashlib
+import random
 from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -80,15 +85,69 @@ def fail(msg: str): print(f"[❌] {msg}")
 # Network helpers
 # ---------------------------
 DEFAULT_TIMEOUT = 15
+USE_RANDOM_AGENT = True
 
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-}
-
-def normalize_url(url):
-    url = url.strip()
+USER_AGENTS = [
+    # --- WINDOWS (Chrome) ---
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     
+    # --- WINDOWS (Edge) ---
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0",
+    
+    # --- WINDOWS (Firefox) ---
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    "Mozilla/5.0 (Windows NT 11.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+    
+    # --- MAC OS (Chrome & Safari) ---
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Safari/605.1.15",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    
+    # --- MAC OS (Firefox) ---
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:124.0) Gecko/20100101 Firefox/124.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.4; rv:124.0) Gecko/20100101 Firefox/124.0",
+    
+    # --- LINUX (X11) ---
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0",
+    "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    
+    # --- LEGACY ---
+    "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/88.0.4324.96 Chrome/88.0.4324.96 Safari/537.36"
+]
+
+def get_random_headers() -> Dict[str, str]:
+    if USE_RANDOM_AGENT:
+        ua = random.choice(USER_AGENTS)
+    else:
+        ua = USER_AGENTS[0]
+    
+    headers = {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Cache-Control": "max-age=0"
+    }
+    
+    return headers
+
+def normalize_url(url, proxies: Optional[Dict] = None):
+    url = url.strip()
     url = re.sub(r'/\.git(/.*)?$', '', url, flags=re.IGNORECASE).rstrip('/')
 
     if url.startswith(('http://', 'https://')):
@@ -96,7 +155,7 @@ def normalize_url(url):
 
     print(f"[*] Detectando protocolo para {url}...")
     try:
-        resp = requests.get(f"https://{url}", headers=HEADERS, timeout=5, verify=False)
+        resp = requests.get(f"https://{url}", headers=get_random_headers(), timeout=5, verify=False, proxies=proxies)
         print("    -> HTTPS detectado.")
         return f"https://{url}"
     except requests.RequestException:
@@ -104,10 +163,10 @@ def normalize_url(url):
         return f"http://{url}"
 
 
-def http_get_bytes(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, bytes | str]:
+def http_get_bytes(url: str, timeout: int = DEFAULT_TIMEOUT, proxies: Optional[Dict] = None) -> Tuple[bool, bytes | str]:
     try:
         requests.packages.urllib3.disable_warnings()
-        r = requests.get(url, timeout=timeout, stream=True, verify=False)
+        r = requests.get(url, timeout=timeout, stream=True, verify=False, headers=get_random_headers(), proxies=proxies)
         if r.status_code != 200:
             return False, f"HTTP {r.status_code}"
         return True, r.content
@@ -115,11 +174,11 @@ def http_get_bytes(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, byte
         return False, str(e)
 
 
-def http_get_to_file(url: str, outpath: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, str]:
+def http_get_to_file(url: str, outpath: str, timeout: int = DEFAULT_TIMEOUT, proxies: Optional[Dict] = None) -> Tuple[bool, str]:
     try:
         requests.packages.urllib3.disable_warnings()
-        print(f"[!] Tentando baixar {url}  ...")
-        r = requests.get(url, timeout=timeout, stream=True, verify=False, headers=HEADERS)
+        print(f"[!] Tentando baixar {url} ...")
+        r = requests.get(url, timeout=timeout, stream=True, verify=False, headers=get_random_headers(), proxies=proxies)
         print(f"[!] {url} - Status: {r.status_code}")
         if r.status_code != 200:
             print(f"[!] Falha ao baixar {url} - Status: {r.status_code}")
@@ -136,10 +195,10 @@ def http_get_to_file(url: str, outpath: str, timeout: int = DEFAULT_TIMEOUT) -> 
         return False, str(e)
 
 
-def http_head_status(url: str, timeout: int = 6) -> Tuple[bool, Optional[int], str]:
+def http_head_status(url: str, timeout: int = 6, proxies: Optional[Dict] = None) -> Tuple[bool, Optional[int], str]:
     try:
         requests.packages.urllib3.disable_warnings()
-        r = requests.head(url, timeout=timeout, allow_redirects=True, verify=False)
+        r = requests.head(url, timeout=timeout, allow_redirects=True, verify=False, headers=get_random_headers(), proxies=proxies)
         code = getattr(r, "status_code", None)
         if code and 200 <= code < 300:
             return True, code, "OK"
@@ -260,14 +319,14 @@ def ensure_git_repo_dir(outdir: str):
     os.makedirs(os.path.join(outdir, ".git", "objects"), exist_ok=True)
 
 
-def recover_one_sha(base_git_url: str, sha: str, outdir: str, original_path: Optional[str] = None) -> bool:
+def recover_one_sha(base_git_url: str, sha: str, outdir: str, original_path: Optional[str] = None, proxies: Optional[Dict] = None) -> bool:
     tmpdir = os.path.join(outdir, "__tmp")
     os.makedirs(tmpdir, exist_ok=True)
     tmpfile = os.path.join(tmpdir, sha)
     blob_url = make_blob_url_from_git(base_git_url, sha)
     info(f"Recuperando SHA1: {sha}")
 
-    ok, data = http_get_to_file(blob_url, tmpfile)
+    ok, data = http_get_to_file(blob_url, tmpfile, proxies=proxies)
     if not ok:
         warn(f"Falha ao baixar: {data}")
         return False
@@ -404,17 +463,17 @@ def parse_tree(content_bytes: bytes) -> List[Dict[str, str]]:
     return entries
 
 
-def fetch_object_raw(base_git_url: str, sha: str) -> Tuple[bool, bytes | str]:
+def fetch_object_raw(base_git_url: str, sha: str, proxies=None) -> Tuple[bool, bytes | str]:
     url = make_blob_url_from_git(base_git_url, sha)
-    return http_get_bytes(url)
+    return http_get_bytes(url, proxies=proxies)
 
 
-def collect_files_from_tree(base_git_url: str, tree_sha: str, ignore_missing: bool = True) -> List[Dict[str, Any]]:
+def collect_files_from_tree(base_git_url: str, tree_sha: str, proxies: Optional[Dict] = None, ignore_missing: bool = True) -> List[Dict[str, Any]]:
     files: List[Dict[str, Any]] = []
     stack: List[Tuple[str, str]] = [("", tree_sha)]
     while stack:
         prefix, sha = stack.pop()
-        ok, raw = fetch_object_raw(base_git_url, sha)
+        ok, raw = fetch_object_raw(base_git_url, sha, proxies=proxies)
         if not ok:
             if ignore_missing:
                 warn(f"Tree object {sha} não encontrado."); continue
@@ -502,7 +561,7 @@ COMMON_FILES = [
     "id_rsa", "id_rsa.pub", "known_hosts"
 ]
 
-def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str] = None) -> List[Dict[str, Any]]:
+def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str] = None, proxies: Optional[Dict] = None) -> List[Dict[str, Any]]:
     target_list = COMMON_FILES
     source_type = "Lista Padrão"
 
@@ -570,7 +629,7 @@ def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str
                 warn(f"Erro ao criar diretório local para {url_path}: {e}")
                 continue
 
-        ok_http, data = http_get_bytes(target_url)
+        ok_http, data = http_get_bytes(target_url, proxies=proxies)
         
         if ok_http and len(data) > 0:
             if len(data) < 200 and b"<html" in data.lower() and b"404" in data:
@@ -582,7 +641,7 @@ def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str
                 
                 git_sha = calculate_git_sha1(data)
                 obj_url = make_blob_url_from_git(base_git_url, git_sha)
-                git_exists, _, _ = http_head_status(obj_url)
+                git_exists, _, _ = http_head_status(obj_url, proxies=proxies)
                 
                 log_prefix = "Traversal" if is_traversal else "Brute-Force"
                 status_msg = f"(SHA: {git_sha[:8]} - Versionado)" if git_exists else "(Apenas Local)"
@@ -619,7 +678,7 @@ def generate_misc_html(out_html: str, title: str, content_data: str, is_text: bo
     with open(out_html, "w", encoding="utf-8") as f: f.write(html)
 
 
-def detect_misc_leaks(base_url: str, outdir: str) -> List[Dict[str, Any]]:
+def detect_misc_leaks(base_url: str, outdir: str, proxies: Optional[Dict] = None) -> List[Dict[str, Any]]:
     info("Iniciando varredura completa (Full Scan) de outros vazamentos...")
     base = base_url.rstrip("/")
     if base.endswith("/.git"): base = base[:-5]
@@ -630,7 +689,7 @@ def detect_misc_leaks(base_url: str, outdir: str) -> List[Dict[str, Any]]:
 
     for key, sig in MISC_SIGNATURES.items():
         target_url = base + sig["path"]
-        ok, data = http_get_bytes(target_url)
+        ok, data = http_get_bytes(target_url, proxies=proxies)
 
         if ok:
             is_valid = False
@@ -705,7 +764,7 @@ def parse_git_config_file(file_path: str) -> Optional[str]:
     return None
 
 
-def gather_intelligence(base_git_url: str, outdir: str) -> Dict[str, Any]:
+def gather_intelligence(base_git_url: str, outdir: str, proxies: Optional[Dict] = None) -> Dict[str, Any]:
     info("Coletando inteligência (Config, Logs, Refs)...")
     base = base_git_url.rstrip("/")
     if not base.endswith("/.git"): base += "/.git"
@@ -714,7 +773,7 @@ def gather_intelligence(base_git_url: str, outdir: str) -> Dict[str, Any]:
     os.makedirs(meta_dir, exist_ok=True)
     intel = {"remote_url": None, "logs": [], "packed_refs": []}
 
-    ok, data = http_get_bytes(base + "/config")
+    ok, data = http_get_bytes(base + "/config", proxies=proxies)
     if ok:
         cfg_path = os.path.join(meta_dir, "config");
         with open(cfg_path, "wb") as f:
@@ -722,14 +781,14 @@ def gather_intelligence(base_git_url: str, outdir: str) -> Dict[str, Any]:
         intel["remote_url"] = parse_git_config_file(cfg_path)
         if intel["remote_url"]: success(f"Remote Origin detectado: {intel['remote_url']}")
 
-    ok, data = http_get_bytes(base + "/logs/HEAD")
+    ok, data = http_get_bytes(base + "/logs/HEAD" , proxies=proxies)
     if ok:
         log_path = os.path.join(meta_dir, "logs_HEAD");
         with open(log_path, "wb") as f: f.write(data)
         intel["logs"] = parse_git_log_file(log_path)
         success(f"Logs de histórico recuperados: {len(intel['logs'])} entradas.")
 
-    ok, data = http_get_bytes(base + "/packed-refs")
+    ok, data = http_get_bytes(base + "/packed-refs" , proxies=proxies)
     if ok:
         pr_path = os.path.join(meta_dir, "packed-refs");
         with open(pr_path, "wb") as f:
@@ -749,14 +808,14 @@ def gather_intelligence(base_git_url: str, outdir: str) -> Dict[str, Any]:
 # ---------------------------
 # Discovery & Blind Mode Logic
 # ---------------------------
-def find_candidate_shas(base_git_url: str) -> List[Dict[str, str]]:
+def find_candidate_shas(base_git_url: str, proxies: Optional[Dict] = None) -> List[Dict[str, str]]:
     base = base_git_url.rstrip("/")
     if not base.endswith("/.git"): base += "/.git"
     candidates = {}
 
     head_urls = [base + "/HEAD"]
     for url in head_urls:
-        ok, data = http_get_bytes(url)
+        ok, data = http_get_bytes(url, proxies=proxies)
         if not ok: continue
         text = data.decode(errors="ignore").strip()
         if all(c in "0123456789abcdef" for c in text.lower()) and len(text.strip()) == 40:
@@ -764,13 +823,13 @@ def find_candidate_shas(base_git_url: str) -> List[Dict[str, str]]:
         elif text.startswith("ref:"):
             ref = text.split(":", 1)[1].strip()
             for ref_url in [base + "/" + ref]:
-                ok2, data2 = http_get_bytes(ref_url)
+                ok2, data2 = http_get_bytes(ref_url, proxies=proxies)
                 if ok2:
                     sha = data2.decode(errors="ignore").strip().splitlines()[0].strip()
                     if len(sha) == 40:
                         candidates[sha] = {"sha": sha, "ref": ref, "source": ref_url}
                         break
-    ok, data = http_get_bytes(base + "/packed-refs")
+    ok, data = http_get_bytes(base + "/packed-refs", proxies=proxies)
     if ok:
         for line in data.decode(errors="ignore").splitlines():
             if line.startswith("#") or not line.strip(): continue
@@ -783,7 +842,7 @@ def find_candidate_shas(base_git_url: str) -> List[Dict[str, str]]:
     common_refs = ["refs/heads/master", "refs/heads/main", "refs/heads/develop", "refs/heads/staging",
                    "refs/remotes/origin/master"]
     for ref in common_refs:
-        ok, data = http_get_bytes(base + "/" + ref)
+        ok, data = http_get_bytes(base + "/" + ref, proxies=proxies)
         if ok:
             sha = data.decode(errors="ignore").strip().splitlines()[0].strip()
             if len(sha) == 40 and sha not in candidates: candidates[sha] = {"sha": sha, "ref": ref,
@@ -792,16 +851,16 @@ def find_candidate_shas(base_git_url: str) -> List[Dict[str, str]]:
     return list(candidates.values())
 
 
-def blind_recovery(base_git_url: str, outdir: str, output_index_name: str) -> bool:
+def blind_recovery(base_git_url: str, outdir: str, output_index_name: str, proxies: Optional[Dict] = None) -> bool:
     info("Iniciando MODO BLIND (Reconstrução sem index)...")
-    gather_intelligence(base_git_url, outdir)
-    candidates = find_candidate_shas(base_git_url)
+    gather_intelligence(base_git_url, outdir, proxies=proxies)
+    candidates = find_candidate_shas(base_git_url, proxies=proxies)
     if not candidates: fail("Modo Blind falhou: Nenhum SHA inicial."); return False
 
     start_sha = candidates[0]['sha']
     info(f"Ponto de partida encontrado: {start_sha} ({candidates[0]['ref']})")
 
-    ok, raw = fetch_object_raw(base_git_url, start_sha)
+    ok, raw = fetch_object_raw(base_git_url, start_sha, proxies)
     if not ok: fail("Falha ao baixar commit inicial"); return False
     ok2, parsed = parse_git_object(raw)
     if not ok2 or parsed[0] != "commit": fail("Objeto inicial inválido"); return False
@@ -811,7 +870,7 @@ def blind_recovery(base_git_url: str, outdir: str, output_index_name: str) -> bo
     if not root_tree_sha: fail("Sem tree associada"); return False
 
     info(f"Root Tree encontrada: {root_tree_sha}. Crawling...")
-    all_files = collect_files_from_tree(base_git_url, root_tree_sha, ignore_missing=True)
+    all_files = collect_files_from_tree(base_git_url, root_tree_sha, proxies=proxies, ignore_missing=True)
 
     synthetic_json = {"entries": [{"path": f["path"], "sha1": f["sha"]} for f in all_files]}
     out_path = os.path.join(outdir, "_files", output_index_name)
@@ -825,7 +884,7 @@ def blind_recovery(base_git_url: str, outdir: str, output_index_name: str) -> bo
 # ---------------------------
 # Detect hardening/exposure
 # ---------------------------
-def detect_hardening(base_git_url: str, outdir: str) -> Dict[str, Any]:
+def detect_hardening(base_git_url: str, outdir: str, proxies: Optional[Dict] = None) -> Dict[str, Any]:
     info("Detectando exposição de .git e configuração de hardening...")
     base = base_git_url.rstrip("/")
     candidates = {"HEAD": [base + "/HEAD", base + "/.git/HEAD"],
@@ -840,12 +899,12 @@ def detect_hardening(base_git_url: str, outdir: str) -> Dict[str, Any]:
         status = {"exposed": False, "positive_urls": []}
         for u in urls:
             try:
-                ok_status, code, _ = http_head_status(u)
+                ok_status, code, _ = http_head_status(u, proxies=proxies)
                 if ok_status:
                     status["exposed"] = True; status["positive_urls"].append(
                         {"url": u, "status_code": code, "method": "HEAD"})
                 else:
-                    ok_get, _ = http_get_bytes(u)
+                    ok_get, _ = http_get_bytes(u, proxies=proxies)
                     if ok_get: status["exposed"] = True; status["positive_urls"].append(
                         {"url": u, "status_code": 200, "method": "GET"})
             except:
@@ -885,12 +944,12 @@ def generate_hardening_html(report: Dict[str, Any], out_html: str):
         f.write(html)
 
 
-def handle_packfiles(mode: str, base_git_url: str, outdir: str):
+def handle_packfiles(mode: str, base_git_url: str, outdir: str, proxies: Optional[Dict] = None):
     info(f"Iniciando manuseio de Packfiles em modo: {mode}")
     base = base_git_url.rstrip("/")
     if not base.endswith("/.git"): base += "/.git"
     info_packs_url = base + "/objects/info/packs"
-    ok, data = http_get_bytes(info_packs_url)
+    ok, data = http_get_bytes(info_packs_url, proxies=proxies)
     found_packs = []
     if ok:
         try:
@@ -918,8 +977,8 @@ def handle_packfiles(mode: str, base_git_url: str, outdir: str):
         local_idx_path = local_pack_path.replace(".pack", ".idx")
         if mode in ["download", "download-unpack"]:
             info(f"Baixando {pname}...")
-            ok_p, _ = http_get_to_file(url_pack, local_pack_path)
-            ok_i, _ = http_get_to_file(url_idx, local_idx_path)
+            ok_p, _ = http_get_to_file(url_pack, local_pack_path, proxies=proxies)
+            ok_i, _ = http_get_to_file(url_idx, local_idx_path, proxies=proxies)
             if ok_p:
                 status = "Baixado"
                 if mode == "download-unpack":
@@ -1478,7 +1537,7 @@ def generate_users_report(outdir: str, authors_stats: Dict[str, int]):
 
 def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_commits: int = 200,
                         ignore_missing: bool = True, strict: bool = False, full_history: bool = False,
-                        workers: int = 10):
+                        workers: int = 10, proxies: Optional[Dict] = None):
     info(f"Reconstruindo histórico (Fast Mode: {not full_history}). max_commits={max_commits}")
     os.makedirs(outdir, exist_ok=True)
     site_base = normalize_site_base(base_git_url)
@@ -1510,7 +1569,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
             commit_data["file_collection_error"] = "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
             return commit_data
 
-        ok, raw = fetch_object_raw(base_git_url, sha)
+        ok, raw = fetch_object_raw(base_git_url, sha, proxies=proxies)
         if ok:
             ok2, parsed = parse_git_object(raw)
             if ok2 and parsed[0] == "commit":
@@ -1519,7 +1578,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                 if meta.get("date"): commit_data["date"] = meta.get("date")
                 if meta.get("tree"):
                     try:
-                        files = collect_files_from_tree(base_git_url, meta.get("tree"), ignore_missing=True)
+                        files = collect_files_from_tree(base_git_url, meta.get("tree"), proxies=proxies, ignore_missing=True)
                         commit_data["files"] = files;
                         commit_data["file_count"] = len(files)
                     except:
@@ -1532,6 +1591,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
     if intel_logs:
         info(f"Processando {min(len(intel_logs), max_commits)} logs em paralelo...")
         logs_to_process = intel_logs[:max_commits]
+        # Nota: Threads e Proxies podem ser instáveis em volumes altos, mas requests é thread-safe
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [executor.submit(process_log_entry, entry, i) for i, entry in enumerate(logs_to_process)]
             for future in as_completed(futures):
@@ -1547,12 +1607,12 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
     all_commits_out.sort(key=parse_date_sort, reverse=True)
 
     if len(all_commits_out) == 0:
-        candidate_shas = find_candidate_shas(base_git_url)
+        candidate_shas = find_candidate_shas(base_git_url, proxies=proxies)
         queue = [c['sha'] for c in candidate_shas];
         visited = set(queue)
         while queue and len(all_commits_out) < max_commits:
             cur = queue.pop(0)
-            ok, raw = fetch_object_raw(base_git_url, cur)
+            ok, raw = fetch_object_raw(base_git_url, cur, proxies=proxies)
             if not ok: continue
             ok2, parsed = parse_git_object(raw)
             if not ok2 or parsed[0] != 'commit': continue
@@ -1560,7 +1620,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
             files = []
             if len(all_commits_out) < 10 and meta.get("tree"):
                 try:
-                    files = collect_files_from_tree(base_git_url, meta.get("tree"), ignore_missing=True)
+                    files = collect_files_from_tree(base_git_url, meta.get("tree"), proxies=proxies, ignore_missing=True)
                 except:
                     pass
             all_commits_out.append({
@@ -1628,7 +1688,7 @@ def serve_dir(path: str):
         info("\nServidor parado.")
 
 
-def process_pipeline(base_url: str, output_dir: str, args):
+def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dict] = None):
     info(f"=== Iniciando Pipeline em: {base_url} ===")
     info(f"Output: {output_dir}")
     
@@ -1638,7 +1698,7 @@ def process_pipeline(base_url: str, output_dir: str, args):
     # 1. Index / Blind
     # Tenta baixar o index
     raw_index_path = os.path.join(output_dir, "_files", "raw_index")
-    ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index", raw_index_path)
+    ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index", raw_index_path, proxies=proxies)
     
     has_index = False
     if ok_idx:
@@ -1655,19 +1715,19 @@ def process_pipeline(base_url: str, output_dir: str, args):
     # Se falhou o index ou foi solicitado blind, tenta blind mode
     if not has_index:
         info("Index não disponível ou inválido. Ativando modo Blind/Crawling...")
-        blind_recovery(base_url, output_dir, args.output_index)
+        blind_recovery(base_url, output_dir, args.output_index, proxies=proxies)
 
     # 2. Hardening & Misc
-    detect_hardening(base_url, output_dir)
-    gather_intelligence(base_url, output_dir)
+    detect_hardening(base_url, output_dir, proxies=proxies)
+    gather_intelligence(base_url, output_dir, proxies=proxies)
     
     # Lógica Condicional de Full Scan (Brute Force + Misc)
     if args.full_scan:
-        detect_misc_leaks(base_url, output_dir)
+        detect_misc_leaks(base_url, output_dir, proxies=proxies)
 
     # Brute force
     if args.bruteforce:
-        brute_force_scan(base_url, output_dir, wordlist_path=args.wordlist)
+        brute_force_scan(base_url, output_dir, wordlist_path=args.wordlist, proxies=proxies)
     else:
         if args.wordlist:
             warn("A flag --wordlist foi ignorada pois --bruteforce não foi ativado.")
@@ -1675,14 +1735,14 @@ def process_pipeline(base_url: str, output_dir: str, args):
             pass
 
     # 3. Reports & Reconstruction
-    handle_packfiles('list', base_url, output_dir)
+    handle_packfiles('list', base_url, output_dir, proxies=proxies)
     make_listing_modern(index_json, base_url, output_dir)
     
     # Reconstrução de histórico
     reconstruct_history(index_json, base_url, output_dir, 
                         max_commits=args.max_commits,
                         full_history=args.full_history, 
-                        workers=args.workers)
+                        workers=args.workers, proxies=proxies)
     
     # Relatório final
     generate_unified_report(output_dir, base_url)
@@ -1716,8 +1776,27 @@ def main():
     p.add_argument("--full-scan", action="store_true", help="Executa verificação completa (Brute-Force, Misc)")
     p.add_argument("--bruteforce", action="store_true", help="Ativa a tentativa de recuperação de arquivos comuns via força bruta")
     p.add_argument("--wordlist", help="Caminho para wordlist (Brute-Force) personalizada")
+    p.add_argument("--proxy", help="URL do Proxy (ex: http://127.0.0.1:8080 para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor)")
+    p.add_argument("--no-random-agent", action="store_true", help="Desativa a rotação de User-Agents (Usa um fixo)")
 
     args = p.parse_args()
+
+    global USE_RANDOM_AGENT
+
+    proxies = None
+    if args.proxy:
+        proxies = {
+            "http": args.proxy,
+            "https": args.proxy
+        }
+        info(f"Usando Proxy: {args.proxy}")
+    
+    if args.no_random_agent:
+        USE_RANDOM_AGENT = False
+        info("Rotação de User-Agents: DESATIVADA (Modo Estático)")
+    else:
+        USE_RANDOM_AGENT = True
+        info("Rotação de User-Agents: ATIVADA")
 
     if args.serve and not args.base and not args.scan:
         serve_dir(args.serve_dir if args.serve_dir else args.output_dir)
@@ -1755,7 +1834,7 @@ def main():
             target_outdir = os.path.join(args.output_dir, folder_name)
             
             try:
-                process_pipeline(target_url, target_outdir, args)
+                process_pipeline(target_url, target_outdir, args, proxies=proxies)
             except Exception as e:
                 fail(f"Erro fatal ao processar {target_url}: {e}")
                 continue
@@ -1774,7 +1853,7 @@ def main():
         print("\n[!] Erro: É necessário fornecer uma URL ou usar --scan <arquivo> (ou apenas --serve para visualizar resultados anteriores)")
         return
 
-    base_url = normalize_url(args.base)
+    base_url = normalize_url(args.base, proxies=proxies)
     print(f"[*] URL alvo normalizada: {base_url}")
     
     if args.report:
@@ -1783,29 +1862,29 @@ def main():
         return
     
     if args.packfile:
-        handle_packfiles(args.packfile, base_url, args.output_dir)
+        handle_packfiles(args.packfile, base_url, args.output_dir, proxies=proxies)
         return
     
     if args.blind:
-        blind_recovery(base_url, args.output_dir, args.output_index)
+        blind_recovery(base_url, args.output_dir, args.output_index, proxies=proxies)
         if args.serve: serve_dir(args.output_dir)
         return
         
     if args.sha1:
-        recover_one_sha(base_url, args.sha1, args.output_dir)
+        recover_one_sha(base_url, args.sha1, args.output_dir, proxies=proxies)
         return
         
     if args.detect_hardening:
-        detect_hardening(base_url, args.output_dir)
+        detect_hardening(base_url, args.output_dir, proxies=proxies)
         return
 
     if args.parse_index:
         tmp = os.path.join(args.output_dir, "_files", "raw_index")
-        http_get_to_file(base_url + "/.git/index", tmp)
+        http_get_to_file(base_url + "/.git/index", tmp, proxies=proxies)
         index_to_json(tmp, os.path.join(args.output_dir, "_files", args.output_index))
         return
 
-    process_pipeline(base_url, args.output_dir, args)
+    process_pipeline(base_url, args.output_dir, args, proxies=proxies)
     
     if args.serve:
         serve_dir(args.output_dir)

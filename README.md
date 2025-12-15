@@ -5,7 +5,7 @@
 
 <div align="center">
 
-   **Ferramenta avançada de análise forense, recuperação de repositórios Git e outros artefatos expostos publicamente na web via HTTP, perfeita para aquele recon de respeito**
+   **Ferramenta avançada de análise forense, recuperação de repositórios Git e outros artefatos expostos publicamente na web via HTTP com saída visual, perfeita para aquele recon de respeito**
 
 
  [Sobre](#sobre) | [Aviso Legal](#%EF%B8%8F-aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) 
@@ -53,7 +53,7 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 
 ## ✨ Funcionalidades Principais
 
-* **👁️ Blind Mode (Novo):** Recuperação inteligente mesmo quando o arquivo `.git/index` está ausente ou bloqueado (403/404), utilizando "Crawling" da árvores e commits.
+* **👁️ Blind Mode:** Recuperação inteligente mesmo quando o arquivo `.git/index` está ausente ou bloqueado (403/404), utilizando "Crawling" da árvores e commits.
 * **🔍 Reconstrução de Artefatos:** Baixa e reconstrói arquivos localmente a partir do `.git/index` remoto.
 * **📜 Histórico de Commits:** Reconstrói a árvore de commits (mensagens, autores, timestamps) sem precisar clonar o repositório inteiro via `git clone`.
 * **🛡️ Análise de Hardening:** Verifica a exposição de arquivos sensíveis (`config`, `HEAD`, `logs`, etc.) e gera um relatório de risco (Crítico/Atenção).
@@ -63,7 +63,8 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 * **🚀 Alta Performance:** Utiliza *multi-threading* para downloads paralelos de objetos.
 * **🔍 Suporte Adicional:** Efetua buscas por artefatos SVN, HG, Env e DS_Store.
 * **💪 Suporte a Brute Force:** Habilidade de utilizar wordlists contendo artefatos de interesse e seus respectivos paths de busca.
-
+* **:earth_americas: Suporte a Proxy:** Conecte-se com o Proxy que desejar, incluindo a rede Tor.
+* **:busts_in_silhouette: Random User-Agents:** User-Agentes simulados por default.
 
 ---
 
@@ -154,12 +155,15 @@ Principais funcionalidades implementadas:
  - --packfile [MODE]     : manuseio de packfiles (modes: list, download, download-unpack)
  - --scan                : roda scan em multiplos albos em busca de .git/HEAD exposure
  - --default             : roda parse-index, detect-hardening, packfile(list), list, reconstruct-history e serve
- - --full-history        : Analisa árvore de arquivos completa de TODOS os commits (lento)
- - --full-scan           : Executa verificação completa de vazamentos (SVN, HG, Env, DS_Store)
+ - --full-history        : analisa árvore de arquivos completa de TODOS os commits (lento)
+ - --full-scan           : executa verificação completa de vazamentos (SVN, HG, Env, DS_Store)
  - --report              : gera apenas o relatório final (report.html)
+ - --bruteforce          : ativa a tentativa de recuperação de arquivos comuns via força bruta
+ - --wordlist            : caminho para wordlist (Brute-Force) personalizada
+ - --proxy               : URL do Proxy (ex: http://127.0.0.1:8080 para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor) 
+ - --no-random-agent     : desativa a rotação de User-Agents (Usa um fixo)
  - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
- --bruteforce            : Ativa a tentativa de recuperação de arquivos comuns via força bruta
- --wordlist              : Caminho para wordlist (Brute-Force) personalizada
+ 
 
  - Todos os arquivos de saída são armazenados no diretório externo fornecido: arquivos HTML na raiz, arquivos JSON/outros arquivos em outdir/_files.
 
@@ -290,8 +294,17 @@ python git_leak.py --scan alvos-exemplo.txt --output-dir pasta-alvos  --full-sca
     "id_rsa", "id_rsa.pub", "known_hosts"
 ```
 
+- Modo completo com Proxy:
+```sql
+python git_leak.py exemplo.com --output-dir teste_proxy --proxy 127.0.0.1:8080 --full-scan --bruteforce --serve
+# ou rede Tor (SOCKS5)
+python git_leak.py exemplo.com --output-dir teste_proxy --proxy socks5h://127.0.0.1:9150 --full-scan --bruteforce --serve
 
-
+```
+- Desativa User-Agents aleatórios:
+```sql
+python git_leak.py exemplo.com --output-dir sua_pasta --proxy 127.0.0.1:8080 --no-random-agent --serve
+```
 
 
 
