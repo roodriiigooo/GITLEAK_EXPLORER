@@ -1,2 +1,4 @@
 requests>=2.25.0
 requests[socks]>=2.25.0
+colorama>=0.4.6
+ds_store>=1.3.1

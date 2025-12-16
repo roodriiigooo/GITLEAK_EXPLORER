@@ -52,6 +52,11 @@ import subprocess
 import re
 import hashlib
 import random
+try:
+    from ds_store import DSStore
+    HAS_DS_STORE_LIB = True
+except ImportError:
+    HAS_DS_STORE_LIB = False
 from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -138,7 +143,7 @@ def get_random_headers() -> Dict[str, str]:
         "User-Agent": ua,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": "gzip, deflate",
         "Connection": "keep-alive",
         "Upgrade-Insecure-Requests": "1",
         "Cache-Control": "max-age=0"
@@ -219,45 +224,153 @@ def read_u16(b: bytes, off: int) -> int:
     return struct.unpack(">H", b[off:off + 2])[0]
 
 
-def parse_git_index_file(path: str) -> Dict[str, Any]:
-    with open(path, "rb") as f:
-        data = f.read()
-    if len(data) < 12 or data[:4] != b"DIRC":
-        raise ValueError("Arquivo não parece ser um .git/index válido (cabecalho DIRC).")
-    version = read_u32(data, 4)
-    count = read_u32(data, 8)
-    offset = 12
+def parse_git_index(index_path):
     entries = []
-    for _ in range(count):
-        if offset + 62 > len(data): break
-        sha_raw = data[offset + 40:offset + 60]
-        sha_hex = sha_raw.hex()
-        path_start = offset + 62
-        try:
-            nul = data.index(b"\x00", path_start)
-        except ValueError:
-            break
-        raw_path = data[path_start:nul]
-        try:
-            path_str = raw_path.decode("utf-8", errors="ignore")
-        except:
-            path_str = raw_path.decode("latin1", errors="ignore")
-        consumed = 62 + len(raw_path) + 1
-        padding = (8 - (consumed % 8)) % 8
-        offset = path_start + len(raw_path) + 1 + padding
-        entries.append({"path": path_str, "sha1": sha_hex})
-        if offset >= len(data): break
-    return {"version": version, "declared": count, "found": len(entries), "entries": entries}
+    try:
+        with open(index_path, "rb") as f:
+            header = f.read(12)
+            if len(header) < 12: return []
+            
+            signature, version, num_entries = struct.unpack("!4sLL", header)
+            
+            if signature != b"DIRC":
+                print(f"[!] Erro: Assinatura inválida: {signature}")
+                print(f"[!] Verifique o arquivo raw baixado (raw_index)")
+                return []
+            
+            print(f"[*] Versão do Index: {version} | Entradas: {num_entries}")
+
+            previous_path = b""
+            
+            for i in range(num_entries):
+                # O cabeçalho da entrada tem 62 bytes fixos na v2/v3
+                # 4s(ctime) 4ns 4s(mtime) 4ns 4dev 4ino 4mode 4uid 4gid 4size 20sha 2flags
+                # Total: 10 Inteiros (40 bytes) + 20 bytes SHA + 2 bytes Flags = 62 bytes
+                entry_data = f.read(62)
+                
+                if len(entry_data) < 62:
+                    # Fim do arquivo ou arquivo truncado
+                    break
+                
+                # ! = Big Endian
+                # 10L = 10 Longs (4 bytes cada)
+                # 20s = String de 20 chars (SHA1)
+                # H = Unsigned Short (2 bytes, Flags)
+                fields = struct.unpack("!10L20sH", entry_data)
+                
+                # Extraindo campos vitais
+                # fields[0-3] são timestamps (ignorando)
+                # fields[4] = dev, fields[5] = ino
+                mode = fields[6]  # Mode
+                # fields[7] = uid, fields[8] = gid
+                file_size = fields[9] # Size
+                sha1_raw = fields[10] # SHA1 Bytes
+                flags = fields[11]    # Flags
+                sha1_hex = sha1_raw.hex()
+                name_length = flags & 0xFFF
+                path_name = b""
+
+                if version == 4:
+                    # Lógica da Versão 4 (Compressão de Prefixo)
+                    strip_len = 0
+                    shift = 0
+                    while True:
+                        byte_read = f.read(1)
+                        if not byte_read: break
+                        b = byte_read[0]
+                        strip_len |= (b & 0x7F) << shift
+                        if (b & 0x80) == 0:
+                            break
+                        shift += 7
+                    
+                    suffix = b""
+                    while True:
+                        char = f.read(1)
+                        if char == b"\x00": break
+                        suffix += char
+                    
+                    path_name = previous_path[:len(previous_path) - strip_len] + suffix
+                    previous_path = path_name
+                    
+                else:
+                    # Lógica Versão 2 e 3 (Linear com Padding)
+                    
+                    if name_length < 0xFFF:
+                        path_name = f.read(name_length)
+                        f.read(1) 
+                        
+                        # Tamanho atual: 62 (header) + name_length + 1 (null)
+                        entry_len = 62 + name_length + 1
+                        padding = (8 - (entry_len % 8)) % 8
+                        f.read(padding)
+                        
+                    else:
+                        # Nome muito longo (>= 0xFFF), ler até encontrar null byte
+                        # (Raro em index padrão, mas possível)
+                        path_name = b""
+                        while True:
+                            char = f.read(1)
+                            if char == b"\x00": break
+                            path_name += char
+                        
+                        entry_len = 62 + len(path_name) + 1
+                        padding = (8 - (entry_len % 8)) % 8
+                        f.read(padding)
+
+                try:
+                    decoded_path = path_name.decode('utf-8', 'replace')
+                    if decoded_path:
+                        entries.append({"path": decoded_path, "sha1": sha1_hex, "size": file_size})
+                except:
+                    pass
+
+    except Exception as e:
+        print(f"[!] Erro no parser: {e}")
+        import traceback
+        traceback.print_exc()
+        
+    return entries
 
 
-def index_to_json(index_path: str, out_json: str) -> str:
-    parsed = parse_git_index_file(index_path)
-    entries = parsed.get("entries", [])
-    os.makedirs(os.path.dirname(out_json), exist_ok=True)
-    with open(out_json, "w", encoding="utf-8") as f:
-        json.dump({"entries": entries}, f, indent=2, ensure_ascii=False)
-    success(f"Index convertido -> {out_json} ({len(entries)} entradas)")
-    return out_json
+
+
+def index_to_json(index_path, json_out_path):
+    data = parse_git_index(index_path)
+    output = {"entries": data}
+    with open(json_out_path, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2)
+    print(f"[+] Index convertido: {len(data)} arquivos encontrados.")
+
+# ---------------------------
+# .DS_Store parser (DIRC)
+# ---------------------------
+
+def parse_ds_store(filepath):
+    found_files = set()
+    
+    if not HAS_DS_STORE_LIB:
+        try:
+            with open(filepath, "rb") as f:
+                data = f.read()
+                import re
+                text_content = data.decode("utf-16-be", errors="ignore")
+                candidates = re.findall(r'[\w\-\.]+\.[a-z0-9]{2,4}', text_content)
+                for c in candidates:
+                    found_files.add(c)
+        except Exception as e:
+            pass
+        return list(found_files)
+
+    try:
+        if os.path.exists(filepath):
+            with DSStore.open(filepath, 'r') as d:
+                for record in d:
+                    if record.filename:
+                        found_files.add(record.filename)
+    except Exception as e:
+        print(f"[!] Erro ao ler .DS_Store: {e}")
+    
+    return list(found_files)
 
 
 # ---------------------------
@@ -503,6 +616,108 @@ def calculate_git_sha1(content: bytes) -> str:
 # ---------------------------
 # Misc Leaks (Full Scan)
 # ---------------------------
+
+
+def check_ds_store_exposure(base_url, output_dir, proxies=None):
+    if not base_url.endswith("/"):
+        base_url += "/"
+        
+    ds_url = base_url + ".DS_Store"
+    local_path = os.path.join(output_dir, "_files", "DS_Store_dump")
+    print(f"[*] Verificando exposição de .DS_Store em: {ds_url}")
+    success, _ = http_get_to_file(ds_url, local_path, proxies=proxies)
+    
+    if success:
+        print("[+] .DS_Store encontrado! Extraindo arquivos...")
+        files = parse_ds_store(local_path)
+        
+        if files:
+            print(f"[+] {len(files)} entradas descobertas no .DS_Store:")
+            full_urls = []
+            for f in files:
+                full_url = base_url + f
+                full_urls.append(full_url)
+                
+                print(f"    -> Encontrado: {f}")
+                print(f"       [URL]: {full_url}")
+
+            ds_json = os.path.join(output_dir, "_files", "ds_store_leaks.json")
+            with open(ds_json, "w") as f:
+                json.dump(full_urls, f, indent=2)
+        else:
+            print("[-] .DS_Store estava vazio ou não continha nomes de arquivos legíveis.")
+    #else:
+    #    print("[-] .DS_Store não encontrado.")
+
+
+# --- ASSINATURAS DE SEGREDOS (REGEX) ---
+SECRET_PATTERNS = {
+    # ---------------------------------------------------------
+    # 1. INFRAESTRUTURA CLOUD & SERVIDORES
+    # ---------------------------------------------------------
+    "AWS Access Key": r"(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}",
+    "AWS Secret Key": r"(?i)aws_secret_access_key\s*=\s*([a-zA-Z0-9/+]{40})",
+    "Google API Key": r"AIza[0-9A-Za-z\\-_]{35}",
+    "Google OAuth": r"[0-9]+-[0-9a-zA-Z_]{32}\.apps\.googleusercontent\.com",
+    "GCP Service Account": r"\"type\":\s*\"service_account\"", # Detecta JSON de credencial do Google
+    "Azure Storage Key": r"DefaultEndpointsProtocol=[^;\s]+;AccountName=[^;\s]+;AccountKey=[^;\s]+",
+    "Heroku API Key": r"(?i)HEROKU_API_KEY\s*=\s*[0-9a-fA-F-]{36}",
+    "DigitalOcean Token": r"dop_v1_[a-f0-9]{64}",
+    
+    # ---------------------------------------------------------
+    # 2. SAAS & DEVOPS
+    # ---------------------------------------------------------
+    "GitHub Token": r"(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36}",
+    "GitLab Token": r"glpat-[0-9a-zA-Z\-\_]{20}",
+    "NPM Access Token": r"npm_[a-zA-Z0-9]{36}",
+    "PyPI Upload Token": r"pypi-[a-zA-Z0-9\-\_]+",
+    "Docker Hub Token": r"dckr_pat_[a-zA-Z0-9\-\_]{27}",
+    "Sentry DSN": r"https://[a-f0-9]+@o[0-9]+\.ingest\.sentry\.io/[0-9]+",
+    "Datadog API Key": r"(?i)DD_API_KEY\s*=\s*[a-f0-9]{32}",
+
+    # ---------------------------------------------------------
+    # 3. COMUNICAÇÃO & SOCIAL
+    # ---------------------------------------------------------
+    "Slack Token": r"xox[baprs]-([0-9a-zA-Z]{10,48})?",
+    "Slack Webhook": r"https://hooks\.slack\.com/services/T[a-zA-Z0-9_]+/B[a-zA-Z0-9_]+/[a-zA-Z0-9_]+",
+    "Discord Webhook": r"https://discord\.com/api/webhooks/[0-9]{18,19}/[a-zA-Z0-9\-_]+",
+    "Telegram Bot Token": r"[0-9]{9,10}:[a-zA-Z0-9_-]{35}",
+    "Twilio Account SID": r"AC[a-zA-Z0-9]{32}",
+    "Twilio API Key": r"SK[0-9a-fA-F]{32}",
+    "Facebook Access Token": r"EAACEdEose0cBA[0-9A-Za-z]+",
+
+    # ---------------------------------------------------------
+    # 4. PAGAMENTOS & FINANCEIRO
+    # ---------------------------------------------------------
+    "Stripe API Key": r"(sk_live|rk_live)_[0-9a-zA-Z]{24,}",
+    "PayPal Access Token": r"access_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}",
+    "Square Access Token": r"sq0atp-[0-9A-Za-z\-_]{22}",
+    "Braintree Access Token": r"access_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}",
+
+    # ---------------------------------------------------------
+    # 5. BANCOS DE DADOS & ARQUITETURA
+    # ---------------------------------------------------------
+    "Laravel APP_KEY": r"APP_KEY=base64:[a-zA-Z0-9/\+=]{30,}",
+    "Connection String (URI)": r"(postgres|mysql|mongodb|redis|amqp)://[^:\s]+:[^@\s]+@[a-zA-Z0-9\.-]+",
+    "Redis Connection": r"(?i)REDIS_URL\s*=\s*redis://:[^@]+@",
+
+    # ---------------------------------------------------------
+    # 6. CRIPTOGRAFIA & AUTENTICAÇÃO
+    # ---------------------------------------------------------
+    "Private Key (RSA/DSA/EC)": r"-----BEGIN (RSA|DSA|EC|OPENSSH|PGP)? ?PRIVATE KEY-----",
+    "JWT Token": r"eyJh[a-zA-Z0-9\-_]+\.eyJh[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+", # JSON Web Token
+
+    # ---------------------------------------------------------
+    # 7. GENÉRICOS (Para .env e config files)
+    # ---------------------------------------------------------
+    # Procura por: (DB|MAIL|REDIS...)_(PASSWORD|SECRET|KEY) = valor
+    # Ignora valores comuns seguros: null, true, false, file, sync, local, debug, 0, 1, localhost
+    "DotEnv Sensitive Assignment": r"(?im)^[A-Z0-9_]*(?:PASSWORD|SECRET|KEY|TOKEN)[A-Z0-9_]*\s*=\s*(?!(?:null|true|false|0|1|file|sync|local|debug|empty|root|admin|localhost))([^\s#]+)",
+
+    # Genérico para código (High Entropy): pega strings longas atribuídas a variáveis suspeitas
+    "Generic High Entropy Secret": r"(?i)(api_key|access_token|client_secret)[\s=:\"'>]{1,5}([0-9a-zA-Z\-_=]{20,})"
+}
+
 MISC_SIGNATURES = {
     "svn": {"path": "/.svn/wc.db", "magic": b"SQLite format 3", "desc": "Repositório SVN (wc.db)"},
     "hg": {"path": "/.hg/store/00manifest.i", "magic": b"\x00\x00\x00\x01", "desc": "Repositório Mercurial"},
@@ -560,6 +775,224 @@ COMMON_FILES = [
     "debug.log", "error_log", "access.log", "npm-debug.log",
     "id_rsa", "id_rsa.pub", "known_hosts"
 ]
+
+def scan_for_secrets(outdir: str):
+    info("Iniciando Scanner de Segredos (Regex Analysis)...")
+    
+    scan_root = outdir
+    findings = []
+    ignored_exts = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".gz", ".tar", ".exe", ".pack", ".idx"}
+    
+    scanned_count = 0
+    
+    for root, dirs, files in os.walk(scan_root):
+        if "metadata" in root: continue 
+        
+        for filename in files:
+            ext = os.path.splitext(filename)[1].lower()
+            if ext in ignored_exts:
+                continue
+                
+            filepath = os.path.join(root, filename)
+            scanned_count += 1
+            
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    if len(content) > 5 * 1024 * 1024:
+                        continue
+
+                    for name, pattern in SECRET_PATTERNS.items():
+                        matches = re.finditer(pattern, content)
+                        for match in matches:
+                            secret_val = match.group(0)
+                            masked_val = secret_val[:4] + "*" * (len(secret_val)-8) + secret_val[-4:] if len(secret_val) > 10 else "***"
+                            
+                            findings.append({
+                                "type": name,
+                                "file": os.path.relpath(filepath, outdir),
+                                "match": secret_val,
+                                "context": content[max(0, match.start()-20):min(len(content), match.end()+20)].strip()
+                            })
+                            print(f"[!] SEGREDO ENCONTRADO: {name}")
+                            print(f"    -> Arquivo: {filename}")
+                            print(f"    -> Match: {masked_val}")
+
+            except Exception:
+                pass
+
+    info(f"Scan finalizado. {scanned_count} arquivos analisados.")
+    
+    if findings:
+        success(f"TOTAL DE SEGREDOS ENCONTRADOS: {len(findings)}")
+        report_path = os.path.join(outdir, "_files", "secrets.json")
+        try:
+            with open(report_path, "w", encoding="utf-8") as f:
+                json.dump(findings, f, indent=2)
+        except Exception as e:
+            warn(f"Erro ao salvar secrets.json: {e}")
+            
+        html_path = os.path.join(outdir, "secrets.html")
+        generate_secrets_html(findings, html_path)
+    else:
+        info("Nenhum segredo óbvio encontrado nos arquivos baixados.")
+
+def generate_secrets_html(findings, outpath):
+    rows = ""
+    for f in findings:
+        safe_context = f['context'].replace("<", "&lt;").replace(">", "&gt;")
+        safe_match = f['match'].replace("<", "&lt;").replace(">", "&gt;")
+        
+        rows += f"""
+        <tr>
+            <td style="width: 15%"><span class="tag">{f['type']}</span></td>
+            <td style="width: 25%" class="filename">{f['file']}</td>
+            <td style="width: 60%">
+                <div class="code-box">
+                    {safe_context}
+                </div>
+                <div class="match-box">
+                    Match: <span>{safe_match}</span>
+                </div>
+            </td>
+        </tr>
+        """
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <title>Relatório de Segredos - Git Leak Explorer</title>
+        <style>
+            body {{
+                background: #0f1111;
+                color: #dcdcdc;
+                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                padding: 20px;
+                margin: 0;
+            }}
+            h1 {{
+                color: #ff5555;
+                border-bottom: 2px solid #ff5555;
+                padding-bottom: 10px;
+                text-align: center;
+            }}
+            .container {{
+                max-width: 1200px;
+                margin: 0 auto;
+            }}
+            .btn-back {{
+                display: inline-block;
+                padding: 8px 16px;
+                background-color: #333;
+                color: #fff;
+                text-decoration: none;
+                border: 1px solid #555;
+                border-radius: 4px;
+                margin-bottom: 20px;
+            }}
+            .btn-back:hover {{
+                background-color: #444;
+                border-color: #777;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                background-color: #252526;
+                box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            }}
+            th, td {{
+                padding: 12px;
+                border: 1px solid #3e3e42;
+                vertical-align: top;
+                text-align: left;
+            }}
+            th {{
+                background-color: #333337;
+                color: #fff;
+                font-weight: bold;
+            }}
+            tr:nth-child(even) {{
+                background-color: #2d2d30;
+            }}
+            tr:hover {{
+                background-color: #3e3e40;
+            }}
+            .tag {{
+                background-color: #d32f2f;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 0.85em;
+                display: inline-block;
+            }}
+            .filename {{
+                color: #4ec9b0; /* Cor estilo VS Code para arquivos */
+            }}
+            .code-box {{
+                background-color: #1e1e1e;
+                border: 1px solid #444;
+                padding: 10px;
+                white-space: pre-wrap;
+                word-break: break-all;
+                color: #ce9178; /* Cor de string */
+                font-size: 0.9em;
+                border-radius: 3px;
+            }}
+            .match-box {{
+                margin-top: 5px;
+                font-size: 0.85em;
+                color: #888;
+            }}
+            .match-box span {{
+                color: #ff5555;
+                font-weight: bold;
+                background-color: rgba(255, 85, 85, 0.1);
+                padding: 0 4px;
+            }}
+            footer {{
+                margin-top: 40px;
+                text-align: center;
+                color: #666;
+                font-size: 0.8em;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <a href="report.html" class="btn-back">&larr; Voltar para Relatório</a>
+            
+            <h1>⚠️ Segredos Detectados ({len(findings)})</h1>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Arquivo</th>
+                        <th>Contexto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows}
+                </tbody>
+            </table>
+            
+            <footer>
+                Gerado por Git Leak Explorer
+            </footer>
+        </div>
+    </body>
+    </html>
+    """
+    
+    try:
+        with open(outpath, "w", encoding="utf-8") as f:
+            f.write(html)
+        success(f"Relatório HTML de Segredos gerado: {outpath}")
+    except Exception as e:
+        warn(f"Erro ao gerar HTML de segredos: {e}")
+
 
 def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str] = None, proxies: Optional[Dict] = None) -> List[Dict[str, Any]]:
     target_list = COMMON_FILES
@@ -639,6 +1072,12 @@ def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str
                 with open(local_full_path, "wb") as f:
                     f.write(data)
                 
+                if url_path.endswith(".DS_Store") or "/.DS_Store" in target_url:
+                    info(f"[+] .DS_Store detectado no Brute-Force! Iniciando análise profunda...")
+                    parent_folder_url = target_url.rsplit(".DS_Store", 1)[0]
+                    check_ds_store_exposure(parent_folder_url, outdir, proxies=proxies)
+                    print(f"[*] Retornando ao fluxo de brute-force...")
+
                 git_sha = calculate_git_sha1(data)
                 obj_url = make_blob_url_from_git(base_git_url, git_sha)
                 git_exists, _, _ = http_head_status(obj_url, proxies=proxies)
@@ -657,7 +1096,7 @@ def brute_force_scan(base_git_url: str, outdir: str, wordlist_path: Optional[str
                     "url": target_url,
                     "git_sha": git_sha,
                     "in_git": git_exists,
-                    "type": "traversal" if is_traversal else "standard"
+                    "type": "traversal" if is_traversal else "LISTA PADRÃO"
                 })
 
             except Exception as e:
@@ -679,7 +1118,8 @@ def generate_misc_html(out_html: str, title: str, content_data: str, is_text: bo
 
 
 def detect_misc_leaks(base_url: str, outdir: str, proxies: Optional[Dict] = None) -> List[Dict[str, Any]]:
-    info("Iniciando varredura completa (Full Scan) de outros vazamentos...")
+    info("Iniciando varredura na raíz (Full Scan) por outros vazamentos...")
+    
     base = base_url.rstrip("/")
     if base.endswith("/.git"): base = base[:-5]
 
@@ -701,24 +1141,61 @@ def detect_misc_leaks(base_url: str, outdir: str, proxies: Optional[Dict] = None
 
             if is_valid:
                 success(f"Vazamento Confirmado: {sig['desc']}")
+                
                 filename = key + "_dump"
-                if key == "env":
-                    filename = ".env"
-                elif key == "svn":
-                    filename = "wc.db"
+                if key == "env": filename = ".env"
+                elif key == "svn": filename = "wc.db"
+                elif key == "ds_store": filename = "DS_Store_dump"
 
-                with open(os.path.join(misc_dir, filename), "wb") as f:
+                dump_path = os.path.join(misc_dir, filename)
+
+                with open(dump_path, "wb") as f:
                     f.write(data)
 
                 html_name = f"{key}_report.html"
-                is_text = key == "env"
-                content_display = data.decode("utf-8", "ignore") if is_text else ""
+                content_display = ""
+                is_text = False
+
+                if key == "env":
+                    is_text = True
+                    content_display = data.decode("utf-8", "ignore")
+
+                elif key == "ds_store":
+                    try:
+                        extracted_files = parse_ds_store(dump_path)
+                        
+                        full_urls = [f"{base}/{f}" for f in extracted_files]
+                        
+                        ds_json_path = os.path.join(outdir, "_files", "ds_store_leaks.json")
+                        with open(ds_json_path, "w", encoding="utf-8") as f:
+                            json.dump(full_urls, f, indent=2)
+                        
+                        if extracted_files:
+                            is_text = True
+                            content_display = "=== URLs EXTRAÍDAS DO .DS_Store ===\n\n"
+                            content_display += "\n".join(full_urls) 
+                            content_display += f"\n\n[!] Total: {len(full_urls)} caminhos descobertos."
+                        else:
+                            is_text = True
+                            content_display = "=== ARQUIVO .DS_Store VÁLIDO ===\n\nO arquivo não contém registros de nomes visíveis."
+                            
+                    except Exception as e:
+                        warn(f"Erro ao analisar .DS_Store: {e}")
+                        content_display = f"Erro ao decodificar: {e}"
+
                 generate_misc_html(os.path.join(outdir, html_name), sig['desc'], content_display, is_text)
 
-                findings.append({"type": key, "desc": sig["desc"], "url": target_url, "report_file": html_name, "dump_file": filename})
+                findings.append({
+                    "type": key, 
+                    "desc": sig["desc"], 
+                    "url": target_url, 
+                    "report_file": html_name, 
+                    "dump_file": filename
+                })
 
     with open(os.path.join(outdir, "_files", "misc_leaks.json"), "w", encoding="utf-8") as f:
         json.dump(findings, f, indent=2)
+        
     return findings
 
 
@@ -1005,6 +1482,374 @@ def handle_packfiles(mode: str, base_git_url: str, outdir: str, proxies: Optiona
 # ---------------------------
 # Reports: Unified & Components
 # ---------------------------
+
+def generate_bruteforce_report(findings, outpath):
+    rows = ""
+    for f in findings:
+        f_source = f.get("list_source", "Lista Padrão")
+        f_path = f.get("filename", "unknown")
+        f_url = f.get("url", "#")
+        f_status = "VERSIONADO" if f.get("in_git") else "LOCAL"
+        f_sha = f.get("git_sha", "")[:8] if f.get("git_sha") else "-"
+        
+        source_cls = "badge-std"
+        if "Custom" in f_source: source_cls = "badge-custom"
+        elif "Traversal" in f_source: source_cls = "badge-trav"
+        
+        status_cls = "status-git" if f.get("in_git") else "status-local"
+
+        rows += f"""
+        <tr>
+            <td><span class="badge {source_cls}">{f_source}</span></td>
+            <td class="file-cell" title="{f_path}">{f_path}</td>
+            <td class="url-cell"><a href="{f_url}" target="_blank">{f_url}</a></td>
+            <td><span class="{status_cls}">{f_status}</span></td>
+            <td class="mono">{f_sha}</td>
+        </tr>
+        """
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-br">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Relatório Avançado - Brute Force</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            :root {{
+                --bg-body: #0f111a;
+                --bg-card: #1a1d2d;
+                --bg-hover: #23273a;
+                --text-primary: #e2e8f0;
+                --text-secondary: #94a3b8;
+                --accent-color: #6366f1;
+                --border-color: #2d3748;
+                --success: #10b981;
+                --warning: #f59e0b;
+                --danger: #ef4444;
+                --info: #3b82f6;
+                --custom-purple: #8b5cf6;
+            }}
+
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            
+            body {{
+                background-color: var(--bg-body);
+                color: var(--text-primary);
+                font-family: 'Inter', sans-serif;
+                min-height: 100vh;
+                padding: 2rem;
+            }}
+
+            .container {{ max-width: 1400px; margin: 0 auto; }}
+
+            /* Header */
+            .header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 2rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid var(--border-color);
+            }}
+
+            .title h1 {{ font-size: 1.5rem; font-weight: 600; color: var(--text-primary); }}
+            .title p {{ color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }}
+            .stats {{ font-size: 0.9rem; color: var(--text-secondary); background: var(--bg-card); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); }}
+            .highlight {{ color: var(--accent-color); font-weight: 600; }}
+
+            /* Controls */
+            .controls {{
+                display: flex;
+                justify-content: space-between;
+                gap: 1rem;
+                margin-bottom: 1.5rem;
+                flex-wrap: wrap;
+            }}
+
+            .btn-back {{
+                display: inline-flex;
+                align-items: center;
+                padding: 0.5rem 1rem;
+                background-color: var(--bg-card);
+                color: var(--text-primary);
+                text-decoration: none;
+                border-radius: 6px;
+                border: 1px solid var(--border-color);
+                transition: all 0.2s;
+                font-size: 0.9rem;
+            }}
+            .btn-back:hover {{ border-color: var(--accent-color); color: var(--accent-color); }}
+
+            .search-box {{
+                flex: 1;
+                max-width: 400px;
+                position: relative;
+            }}
+            .search-box input {{
+                width: 100%;
+                padding: 0.6rem 1rem 0.6rem 2.5rem;
+                background-color: var(--bg-card);
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                color: var(--text-primary);
+                font-size: 0.9rem;
+            }}
+            .search-box input:focus {{ outline: none; border-color: var(--accent-color); }}
+            .search-icon {{
+                position: absolute;
+                left: 0.8rem;
+                top: 50%;
+                transform: translateY(-50%);
+                color: var(--text-secondary);
+                pointer-events: none;
+            }}
+
+            /* Table */
+            .table-container {{
+                background-color: var(--bg-card);
+                border-radius: 8px;
+                border: 1px solid var(--border-color);
+                overflow: hidden;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }}
+
+            table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }}
+            
+            th {{
+                background-color: rgba(255,255,255,0.03);
+                padding: 1rem;
+                text-align: left;
+                font-weight: 500;
+                color: var(--text-secondary);
+                border-bottom: 1px solid var(--border-color);
+                user-select: none;
+            }}
+            
+            td {{
+                padding: 0.8rem 1rem;
+                border-bottom: 1px solid var(--border-color);
+                color: var(--text-primary);
+                vertical-align: middle;
+            }}
+            
+            tbody tr:hover {{ background-color: var(--bg-hover); }}
+            tbody tr:last-child td {{ border-bottom: none; }}
+
+            /* Columns Widths */
+            th:nth-child(1) {{ width: 12%; }} /* Origem */
+            th:nth-child(2) {{ width: 25%; }} /* Arquivo */
+            th:nth-child(3) {{ width: 35%; }} /* URL */
+            th:nth-child(4) {{ width: 13%; }} /* Status */
+            th:nth-child(5) {{ width: 15%; }} /* SHA */
+
+            /* Typography & Badges */
+            .mono {{ font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--text-secondary); }}
+            .file-cell {{ font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+            
+            .url-cell a {{ 
+                color: var(--info); 
+                text-decoration: none; 
+                font-family: 'JetBrains Mono', monospace; 
+                font-size: 0.8rem;
+                display: block;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }}
+            .url-cell a:hover {{ text-decoration: underline; }}
+
+            .badge {{
+                padding: 0.25rem 0.6rem;
+                border-radius: 9999px;
+                font-size: 0.75rem;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                display: inline-block;
+            }}
+            .badge-std {{ background: rgba(59, 130, 246, 0.15); color: var(--info); border: 1px solid rgba(59, 130, 246, 0.3); }}
+            .badge-custom {{ background: rgba(139, 92, 246, 0.15); color: var(--custom-purple); border: 1px solid rgba(139, 92, 246, 0.3); }}
+            .badge-trav {{ background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }}
+
+            .status-git {{ color: var(--success); font-weight: 600; display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; }}
+            .status-git::before {{ content: ''; width: 6px; height: 6px; background: var(--success); border-radius: 50%; }}
+            
+            .status-local {{ color: var(--warning); font-weight: 600; display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; }}
+            .status-local::before {{ content: ''; width: 6px; height: 6px; background: var(--warning); border-radius: 50%; }}
+
+            /* Pagination */
+            .pagination-container {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 1rem;
+                padding-top: 1rem;
+                border-top: 1px solid var(--border-color);
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+            }}
+            
+            .pagination-controls {{ display: flex; gap: 0.5rem; }}
+            
+            .page-btn {{
+                background: var(--bg-card);
+                border: 1px solid var(--border-color);
+                color: var(--text-primary);
+                width: 32px;
+                height: 32px;
+                border-radius: 6px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.2s;
+            }}
+            .page-btn:hover:not(:disabled) {{ border-color: var(--accent-color); color: var(--accent-color); }}
+            .page-btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+            .page-btn.active {{ background: var(--accent-color); border-color: var(--accent-color); color: white; }}
+
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header class="header">
+                <div class="title">
+                    <h1>Arquivos Recuperados</h1>
+                    <p>Relatório de Descobertas via Brute-Force & Traversal</p>
+                </div>
+                <div class="stats">
+                    Total Encontrado: <span class="highlight">{len(findings)}</span>
+                </div>
+            </header>
+
+            <div class="controls">
+                <a href="report.html" class="btn-back">← Voltar ao Painel</a>
+                
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="searchInput" placeholder="Filtrar por nome, path ou status...">
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Origem</th>
+                            <th>Arquivo (Relativo)</th>
+                            <th>URL Completa</th>
+                            <th>Status</th>
+                            <th>Git SHA-1</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        {rows}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-container">
+                <div id="entriesInfo">Mostrando 0 de 0</div>
+                <div class="pagination-controls" id="paginationControls">
+                    </div>
+            </div>
+        </div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {{
+                const searchInput = document.getElementById('searchInput');
+                const tableBody = document.getElementById('tableBody');
+                const entriesInfo = document.getElementById('entriesInfo');
+                const paginationControls = document.getElementById('paginationControls');
+                
+                let allRows = Array.from(tableBody.querySelectorAll('tr'));
+                let filteredRows = allRows;
+                let currentPage = 1;
+                const rowsPerPage = 15;
+
+                function filterRows(query) {{
+                    const lowerQuery = query.toLowerCase();
+                    filteredRows = allRows.filter(row => {{
+                        const text = row.innerText.toLowerCase();
+                        return text.includes(lowerQuery);
+                    }});
+                    currentPage = 1;
+                    renderTable();
+                }}
+
+                function renderTable() {{
+                    const totalPages = Math.ceil(filteredRows.length / rowsPerPage) || 1;
+                    
+                    if (currentPage > totalPages) currentPage = totalPages;
+                    if (currentPage < 1) currentPage = 1;
+
+                    const start = (currentPage - 1) * rowsPerPage;
+                    const end = start + rowsPerPage;
+                    const pageRows = filteredRows.slice(start, end);
+
+                    tableBody.innerHTML = '';
+                    pageRows.forEach(row => tableBody.appendChild(row));
+
+                    const startInfo = filteredRows.length === 0 ? 0 : start + 1;
+                    const endInfo = Math.min(end, filteredRows.length);
+                    entriesInfo.innerText = `Mostrando ${{startInfo}} a ${{endInfo}} de ${{filteredRows.length}} registros`;
+
+                    renderPagination(totalPages);
+                }}
+
+                function renderPagination(totalPages) {{
+                    paginationControls.innerHTML = '';
+                    
+                    const btnPrev = document.createElement('button');
+                    btnPrev.className = 'page-btn';
+                    btnPrev.innerHTML = '‹';
+                    btnPrev.disabled = currentPage === 1;
+                    btnPrev.onclick = () => {{ currentPage--; renderTable(); }};
+                    paginationControls.appendChild(btnPrev);
+
+                    let startPage = Math.max(1, currentPage - 2);
+                    let endPage = Math.min(totalPages, startPage + 4);
+                    
+                    if (endPage - startPage < 4) {{
+                        startPage = Math.max(1, endPage - 4);
+                    }}
+
+                    for (let i = startPage; i <= endPage; i++) {{
+                        const btn = document.createElement('button');
+                        btn.className = `page-btn ${{i === currentPage ? 'active' : ''}}`;
+                        btn.innerText = i;
+                        btn.onclick = () => {{ currentPage = i; renderTable(); }};
+                        paginationControls.appendChild(btn);
+                    }}
+
+                    const btnNext = document.createElement('button');
+                    btnNext.className = 'page-btn';
+                    btnNext.innerHTML = '›';
+                    btnNext.disabled = currentPage === totalPages;
+                    btnNext.onclick = () => {{ currentPage++; renderTable(); }};
+                    paginationControls.appendChild(btnNext);
+                }}
+
+                searchInput.addEventListener('input', (e) => filterRows(e.target.value));
+
+                renderTable();
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    
+    try:
+        with open(outpath, "w", encoding="utf-8") as f:
+            f.write(html)
+        success(f"Relatório Dashboard de Brute-Force gerado: {outpath}")
+    except Exception as e:
+        warn(f"Erro ao gerar HTML de brute-force: {e}")
+
+
+
 def generate_unified_report(outdir: str, base_url: str):
     info("Gerando Relatório Unificado (report.html)...")
     files = os.path.join(outdir, "_files")
@@ -1040,8 +1885,11 @@ def generate_unified_report(outdir: str, base_url: str):
     except:
         pass
 
-    try: bf_data = json.load(open(os.path.join(files, "bruteforce.json")))
-    except: bf_data = []
+    bruteforce_data = []
+    try:
+        with open(os.path.join(outdir, "_files", "bruteforce.json"), "r", encoding="utf-8") as f:
+            bruteforce_data = json.load(f)
+    except: pass
 
     users_count = 0
     try:
@@ -1135,7 +1983,7 @@ def generate_unified_report(outdir: str, base_url: str):
         packfiles_html += "<p class='muted'>Nenhum packfile detectado.</p>"
 
     # 6. Misc Section (Full Scan)
-    misc_html = "<h3>6. Outros Vazamentos (Full Scan)</h3>"
+    misc_html = "<h3>6. Outros Vazamentos na raíz (Full Scan)</h3>"
     if misc:
         misc_html += "<ul>"
         for m in misc:
@@ -1146,23 +1994,109 @@ def generate_unified_report(outdir: str, base_url: str):
     else:
         misc_html += "<p class='muted'>Nenhum outro vazamento detectado ou varredura --full-scan não executada.</p>"
     
-
-    # 7. Brute Force Section (Full Scan)
-    bf_html = "<h3>7. Recuperação por Força Bruta (Common Files)</h3>"
-    if bf_data:
-        bf_html += "<table style='width: 100%;'><thead><tr><th>Arquivo</th><th>Status Git</th><th>SHA1 Calculado</th><th>Ação</th></tr></thead><tbody>"
-        for item in bf_data:
-            git_status = "<span class='ok'>Versionado</span>" if item['in_git'] else "<span class='warning'>Não Versionado</span>"
-            sha_link = item['git_sha']
-            if item['in_git']:
-                sha_link = f"<a href='{make_blob_url_from_git(base_url, item['git_sha'])}' target='_blank'>{item['git_sha'][:15]}...</a>"
-            else:
-                sha_link = f"{item['git_sha'][:15]}..."
-
-            bf_html += f"<tr><td><a href='{item['url']}' target='_blank'>{item['filename']}</a></td><td>{git_status}</td><td>{sha_link}</td><td><a href='_files/bruteforce/{item['filename']}' target='_blank'>Ver Download</a></td></tr>"
-        bf_html += "</tbody></table>"
+    # 7. Brute Force ---
+    bf_section = ""
+    if bruteforce_data:
+        # 1. Gera o relatório completo separado (já atualizado acima)
+        bf_report_path = os.path.join(outdir, "bruteforce_report.html")
+        generate_bruteforce_report(bruteforce_data, bf_report_path)
+        
+        # 2. Gera o Preview para o relatório principal
+        preview_limit = 5
+        preview_rows = ""
+        for item in bruteforce_data[:preview_limit]:
+            fname = item.get("filename", "unknown")
+            fsource = item.get("list_source", "LISTA PADRÃO") 
+            furl = item.get("url", "#")
+            
+            badge_cls = "bg-secondary"
+            if "Custom" in fsource: badge_cls = "bg-purple" 
+            elif "Traversal" in fsource: badge_cls = "bg-warning text-dark"
+            else: badge_cls = "bg-primary"
+            
+            # --- ATUALIZAÇÃO DA LINHA DO PREVIEW ---
+            preview_rows += f"""
+            <tr>
+                <td><span class='badge {badge_cls}'>{fsource}</span></td>
+                <td>{fname}</td>
+                <td><a href='{furl}' target='_blank' style='font-size: 0.85em; word-break: break-all;'>{furl}</a></td>
+            </tr>
+            """
+        
+        # Botão para ver tudo
+        btn_full = f"""
+        <div class="text-center mt-3">
+        <p class='muted'>Legenda: LISTA PADRÃO : Tipo de lista padrão (hardcoded) | TRAVERSAL : Encontrado usando a técnica path traversal na lista CUSTOM | CUSTOM : Encontrado com base em lista personalizada </p>
+            <a href="bruteforce_report.html" class="btn btn-primary w-100">
+                <!-- Ver Lista Completa ({len(bruteforce_data)} arquivos); -->
+                Consulte o Relatório bruteforce_report.html para visualização completa.
+            </a>
+        </div>
+        """
+        
+        bf_section = f"""
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h3>7. Arquivos Encontrados (Brute-Force)</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Total: {len(bruteforce_data)} - Exibindo os primeiros {preview_limit} resultados.</p>
+                <div class="table-responsive">
+                    <table style='width: 100%;'>
+                        <thead><tr><th>Origem</th><th>Arquivo</th><th>URL Completa</th></tr></thead>
+                        <tbody>{preview_rows}</tbody>
+                    </table>
+                </div>
+                {btn_full}
+            </div>
+        </div>
+        """
     else:
-        bf_html += "<p class='muted'>Nenhum arquivo comum encontrado via brute-force ou flag --bruteforce não utilizada.</p>"
+        bf_section = """
+        <div class="card mb-4 border-secondary">
+            <div class="card-header bg-secondary text-white">
+                <h3>Arquivos Encontrados (Brute-Force)</h3>
+                </div>
+            <div class="card-body text-center text-muted">
+                Nenhum arquivo encontrado via força bruta, ou não executado --bruteforce.
+            </div>
+        </div>
+        """
+
+    secrets_data = []
+    try:
+        with open(os.path.join(outdir, "_files", "secrets.json"), "r", encoding="utf-8") as f:
+            secrets_data = json.load(f)
+    except: pass
+
+    secrets_section = ""
+    if secrets_data:
+        rows = ""
+        for s in secrets_data:
+            rows += f"""
+            <tr>
+                <td><span class="badge bg-danger">{s['type']}</span></td>
+                <td>{s['file']}</td>
+                <td><code>{s['match']}</code></td>
+            </tr>
+            """
+        secrets_section = f"""
+        <div class="card mb-4 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h3 class="mb-0">⚠️ SEGREDOS CRÍTICOS ENCONTRADOS - REGEX ({len(secrets_data)})</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table style='width: 100%;'>
+                        <thead><tr><th>Tipo</th><th>Arquivo</th><th>Match</th></tr></thead>
+                        <tbody>{rows}</tbody>
+                    </table>
+                </div>
+                <a href="secrets.html" class="btn btn-outline-danger btn-sm mt-2">Ver Relatório Detalhado de Segredos</a>
+            </div>
+        </div>
+        """
+
 
 
     # HTML Template Final
@@ -1204,7 +2138,9 @@ def generate_unified_report(outdir: str, base_url: str):
     <hr>
     {misc_html}
     <hr>
-    {bf_html}
+    {bf_section}    
+    <hr>
+    {secrets_section}
     <hr>
     <p class='muted'>Para visualização interativa do histórico e da listagem completa, inicie o servidor: <code>python git_leak.py --serve --output-dir {outdir}</code></p>
     <p class='meta' style='text-align:center; margin-top:30px;'>Gerado por Git Leak Explorer</p>
@@ -1261,10 +2197,25 @@ def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
     .pager{{margin-top:12px;display:flex;gap:8px;align-items:center}}
     .btn{{padding:6px 10px;border-radius:6px;background:#213;color:#dff;border:none;cursor:pointer}}
     .btn:hover{{background:#324}}
+    .btn-back {{
+                display: inline-block;
+                padding: 8px 16px;
+                background-color: #333;
+                color: #fff;
+                text-decoration: none;
+                border: 1px solid #555;
+                border-radius: 4px;
+                margin-bottom: 20px;
+    }}
+    .btn-back:hover {{
+                background-color: #444;
+                border-color: #777;
+    }}
   </style>
 </head>
 <body>
 <div class='wrap'>
+<a href="report.html" class="btn-back">&larr; Voltar para Relatório</a>
   <h1>Git Leak Explorer</h1>
   <p class='muted'>Total de arquivos: <b>{len(rows)}</b></p>
   <header>
@@ -1430,8 +2381,7 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
     if os.path.exists(intel_path):
         with open(intel_path, 'r', encoding='utf-8') as f: remote_url = json.load(f).get("remote_url", "")
 
-    # Template padrão
-    html_content = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Git History</title><style>body{{font-family:Inter,Segoe UI,Roboto,monospace;background:#0f1111;color:#dff;padding:20px}}.wrap{{max-width:1200px;margin:0 auto;}}h1{{color:#6be;}}.commit-card{{border:1px solid #333;margin-bottom:15px;padding:15px;border-radius:6px;background:#161819;}}.sha{{font-weight:bold;color:#6be;}}.message{{margin-top:5px;white-space:pre-wrap;font-size:14px;}}.meta{{font-size:12px;color:#779;}}.files{{margin-top:10px;border-top:1px solid #333;padding-top:10px;}}.file-item{{display:block;margin-bottom:3px;}}.error{{color:#ff5252;}}.ok{{color:#6f6;}}a{{color:#6be;}}.source-tag{{font-size:10px;padding:2px 5px;border-radius:4px;margin-left:10px;}}.source-log{{background:#2a3;color:#fff;}}.source-walk{{background:#444;color:#ddd;}}#commits-container>div:nth-child(1) .commit-card{{border-color:#6be;box-shadow:0 0 5px rgba(102,187,238,0.3);}}.filter-header{{display:flex;align-items:center;gap:20px;margin-bottom:20px;}}input[type=text]{{padding:8px;width:100%;max-width:420px;border-radius:6px;border:1px solid #333;background:#071117;color:#dff;}}details{{margin-top:10px;cursor:pointer;}}summary{{font-weight:bold;}}.remote-info{{margin-bottom:20px;padding:10px;background:#1a1c1d;border-radius:6px;border-left:4px solid #6be;}}</style></head><body><div class='wrap'><h1>Reconstrução de Histórico para {site_base}</h1><div class="remote-info"><p class="meta">Referência HEAD: <span class='sha'>{head_sha}</span></p><p class="meta">Origem Remota: <b>{remote_url or "Não detectado"}</b></p><p class="meta">Total: <b>{len(commits)}</b></p></div><div class="filter-header"><input id='q' type='text' placeholder='Filtrar por SHA, autor ou mensagem...'><span id="result-count" class="meta"></span></div><div id='commits-container'></div></div><script>const COMMITS={commits_json};const container=document.getElementById('commits-container');const qInput=document.getElementById('q');const resultCount=document.getElementById('result-count');const remoteUrl="{remote_url}";function getCommitLink(sha){{if(!remoteUrl)return sha;let cleanUrl=remoteUrl.replace('.git','');return `<a href="${{cleanUrl}}/commit/${{sha}}" target="_blank">${{sha}}</a>`;}}function renderCommits(list){{container.innerHTML='';resultCount.textContent=`Exibindo ${{list.length}} commits.`;list.forEach(c=>{{const cardWrapper=document.createElement('div');const card=document.createElement('div');card.className='commit-card';let parentsHtml=c.parents.map(p=>`<a href='#${{p}}'>${{p.substring(0,10)}}</a>`).join(', ');let contentHtml='';let statusBadge='';const statusClass=c.ok?'ok':'error';const shaDisplay=getCommitLink(c.sha);const sourceTag=c.source==='log'?'<span class="source-tag source-log">VIA LOGS</span>':'<span class="source-tag source-walk">VIA GRAFO</span>';if(!c.ok){{let err='Indisponível';statusBadge='ERRO';if(c.error)err=c.error;contentHtml=`<p class='error'>[FALHA] ${{err}}</p>`;}}else{{statusBadge='OK';let filesHtml='';if(c.file_collection_error){{filesHtml=`<span class="error">${{c.file_collection_error}}</span>`;}}else if(c.files&&c.files.length>0){{filesHtml=c.files.map(f=>`<span class='file-item'>${{f.path}} (SHA: ${{f.sha.substring(0,8)}})</span>`).join('');}}else{{filesHtml='<span class="meta">Sem arquivos ou tree vazia.</span>';}}contentHtml=`<p><span class='ok'>[OK]</span> ${{c.message}}</p><p class='meta'>Data: ${{c.date||'?'}}</p><details><summary>Arquivos (${{c.file_count}})</summary><div class='files'>${{filesHtml}}</div></details>`;}}card.innerHTML=`<div><b>${{list.indexOf(c)+1}}.</b> ${{shaDisplay}} <span class='${{statusClass}}'>${{statusBadge}}</span> ${{sourceTag}}</div><div class='meta'>Autor: ${{c.author.replace('<', ' - ').replace('>', ' ')||'N/A'}} — Pais: ${{parentsHtml||'Nenhum'}}</div>${{contentHtml}}`;cardWrapper.appendChild(card);container.appendChild(cardWrapper);}});}}qInput.addEventListener('input',()=>{{const q=qInput.value.toLowerCase().trim();renderCommits(COMMITS.filter(c=>(c.sha||'').toLowerCase().includes(q)||(c.author.replace('<', ' - ').replace('>', ' ')||'').toLowerCase().includes(q)||(c.message||'').toLowerCase().includes(q)));}});renderCommits(COMMITS);</script></body></html>"""
+    html_content = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Git History</title><style>body{{font-family:Inter,Segoe UI,Roboto,monospace;background:#0f1111;color:#dff;padding:20px}}.wrap{{max-width:1200px;margin:0 auto;}}h1{{color:#6be;}}.commit-card{{border:1px solid #333;margin-bottom:15px;padding:15px;border-radius:6px;background:#161819;}}.sha{{font-weight:bold;color:#6be;}}.message{{margin-top:5px;white-space:pre-wrap;font-size:14px;}}.meta{{font-size:12px;color:#779;}}.files{{margin-top:10px;border-top:1px solid #333;padding-top:10px;}}.file-item{{display:block;margin-bottom:3px;}}.error{{color:#ff5252;}}.ok{{color:#6f6;}}a{{color:#6be;}}.source-tag{{font-size:10px;padding:2px 5px;border-radius:4px;margin-left:10px;}}.source-log{{background:#2a3;color:#fff;}}.source-walk{{background:#444;color:#ddd;}}#commits-container>div:nth-child(1) .commit-card{{border-color:#6be;box-shadow:0 0 5px rgba(102,187,238,0.3);}}.filter-header{{display:flex;align-items:center;gap:20px;margin-bottom:20px;}}input[type=text]{{padding:8px;width:100%;max-width:420px;border-radius:6px;border:1px solid #333;background:#071117;color:#dff;}}details{{margin-top:10px;cursor:pointer;}}summary{{font-weight:bold;}}.remote-info{{margin-bottom:20px;padding:10px;background:#1a1c1d;border-radius:6px;border-left:4px solid #6be;}}  .btn:hover{{background:#324}} .btn-back {{ display: inline-block; padding: 8px 16px; background-color: #333; color: #fff; text-decoration: none; border: 1px solid #555; border-radius: 4px; margin-bottom: 20px;}} .btn-back:hover {{ background-color: #444; border-color: #777; }}</style></head><body><div class='wrap'><a href="report.html" class="btn-back">&larr; Voltar para Relatório</a><h1>Reconstrução de Histórico para {site_base}</h1><div class="remote-info"><p class="meta">Referência HEAD: <span class='sha'>{head_sha}</span></p><p class="meta">Origem Remota: <b>{remote_url or "Não detectado"}</b></p><p class="meta">Total: <b>{len(commits)}</b></p></div><div class="filter-header"><input id='q' type='text' placeholder='Filtrar por SHA, autor ou mensagem...'><span id="result-count" class="meta"></span></div><div id='commits-container'></div></div><script>const COMMITS={commits_json};const container=document.getElementById('commits-container');const qInput=document.getElementById('q');const resultCount=document.getElementById('result-count');const remoteUrl="{remote_url}";function getCommitLink(sha){{if(!remoteUrl)return sha;let cleanUrl=remoteUrl.replace('.git','');return `<a href="${{cleanUrl}}/commit/${{sha}}" target="_blank">${{sha}}</a>`;}}function renderCommits(list){{container.innerHTML='';resultCount.textContent=`Exibindo ${{list.length}} commits.`;list.forEach(c=>{{const cardWrapper=document.createElement('div');const card=document.createElement('div');card.className='commit-card';let parentsHtml=c.parents.map(p=>`<a href='#${{p}}'>${{p.substring(0,10)}}</a>`).join(', ');let contentHtml='';let statusBadge='';const statusClass=c.ok?'ok':'error';const shaDisplay=getCommitLink(c.sha);const sourceTag=c.source==='log'?'<span class="source-tag source-log">VIA LOGS</span>':'<span class="source-tag source-walk">VIA GRAFO</span>';if(!c.ok){{let err='Indisponível';statusBadge='ERRO';if(c.error)err=c.error;contentHtml=`<p class='error'>[FALHA] ${{err}}</p>`;}}else{{statusBadge='OK';let filesHtml='';if(c.file_collection_error){{filesHtml=`<span class="error">${{c.file_collection_error}}</span>`;}}else if(c.files&&c.files.length>0){{filesHtml=c.files.map(f=>`<span class='file-item'>${{f.path}} (SHA: ${{f.sha.substring(0,8)}})</span>`).join('');}}else{{filesHtml='<span class="meta">Sem arquivos ou tree vazia.</span>';}}contentHtml=`<p><span class='ok'>[OK]</span> ${{c.message}}</p><p class='meta'>Data: ${{c.date||'?'}}</p><details><summary>Arquivos (${{c.file_count}})</summary><div class='files'>${{filesHtml}}</div></details>`;}}card.innerHTML=`<div><b>${{list.indexOf(c)+1}}.</b> ${{shaDisplay}} <span class='${{statusClass}}'>${{statusBadge}}</span> ${{sourceTag}}</div><div class='meta'>Autor: ${{c.author.replace('<', ' - ').replace('>', ' ')||'N/A'}} — Pais: ${{parentsHtml||'Nenhum'}}</div>${{contentHtml}}`;cardWrapper.appendChild(card);container.appendChild(cardWrapper);}});}}qInput.addEventListener('input',()=>{{const q=qInput.value.toLowerCase().trim();renderCommits(COMMITS.filter(c=>(c.sha||'').toLowerCase().includes(q)||(c.author.replace('<', ' - ').replace('>', ' ')||'').toLowerCase().includes(q)||(c.message||'').toLowerCase().includes(q)));}});renderCommits(COMMITS);</script></body></html>"""
     with open(out_html, "w", encoding="utf-8") as f: f.write(html_content)
 
 
@@ -1495,10 +2445,12 @@ def generate_users_report(outdir: str, authors_stats: Dict[str, int]):
     .stat-card{{display:inline-block;background:#1a1c1d;padding:15px;border-radius:6px;border:1px solid #333;margin-right:15px;margin-bottom:20px;}}
     .stat-num{{font-size:24px;font-weight:bold;color:#fff;}}
     .stat-label{{font-size:12px;color:#779;text-transform:uppercase;}}
+    .btn:hover{{background:#324}} .btn-back {{ display: inline-block; padding: 8px 16px; background-color: #333; color: #fff; text-decoration: none; border: 1px solid #555; border-radius: 4px; margin-bottom: 20px;}} .btn-back:hover {{ background-color: #444; border-color: #777; }}
   </style>
 </head>
 <body>
 <div class='wrap'>
+  <a href="report.html" class="btn-back">&larr; Voltar para Relatório</a>
   <h1>Identidades Encontradas (OSINT)</h1>
   <div>
       <div class='stat-card'>
@@ -1697,8 +2649,19 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
 
     # 1. Index / Blind
     # Tenta baixar o index
+    
     raw_index_path = os.path.join(output_dir, "_files", "raw_index")
-    ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index", raw_index_path, proxies=proxies)
+    
+    # Se o arquivo já existe, não baixar
+    if not os.path.exists(raw_index_path):
+        print("[*] Baixando .git/index...")
+        ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index", raw_index_path, proxies=proxies)
+    else:
+        print("[*] Usando .git/index local existente.")
+        ok_idx = True
+
+    # Ou se preferir que sempre seja substituído:
+    # ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index", raw_index_path, proxies=proxies)
     
     has_index = False
     if ok_idx:
@@ -1744,6 +2707,11 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
                         full_history=args.full_history, 
                         workers=args.workers, proxies=proxies)
     
+    if args.secrets:
+        scan_for_secrets(output_dir)
+
+    check_ds_store_exposure(base_url, output_dir, proxies=proxies)    
+    
     # Relatório final
     generate_unified_report(output_dir, base_url)
     success(f"Pipeline concluído para {base_url}")
@@ -1777,7 +2745,8 @@ def main():
     p.add_argument("--bruteforce", action="store_true", help="Ativa a tentativa de recuperação de arquivos comuns via força bruta")
     p.add_argument("--wordlist", help="Caminho para wordlist (Brute-Force) personalizada")
     p.add_argument("--proxy", help="URL do Proxy (ex: http://127.0.0.1:8080 para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor)")
-    p.add_argument("--no-random-agent", action="store_true", help="Desativa a rotação de User-Agents (Usa um fixo)")
+    p.add_argument("--no-random-agent", action="store_true", help="desativa a rotação de User-Agents (Usa um fixo)")
+    p.add_argument("--secrets", action="store_true", help="executa scanner de regex em busca de chaves e senhas nos arquivos baixados")
 
     args = p.parse_args()
 
@@ -1796,7 +2765,7 @@ def main():
         info("Rotação de User-Agents: DESATIVADA (Modo Estático)")
     else:
         USE_RANDOM_AGENT = True
-        info("Rotação de User-Agents: ATIVADA")
+        info("Rotação de User-Agents: ATIVADA (Padrão)")
 
     if args.serve and not args.base and not args.scan:
         serve_dir(args.serve_dir if args.serve_dir else args.output_dir)
