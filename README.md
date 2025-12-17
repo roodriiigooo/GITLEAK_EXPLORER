@@ -162,6 +162,7 @@ Principais funcionalidades implementadas:
  - --wordlist            : caminho para wordlist (Brute-Force) personalizada
  - --proxy               : URL do Proxy (ex: http://127.0.0.1:8080 para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor) 
  - --no-random-agent     : desativa a rotação de User-Agents (Usa um fixo)
+ - --secrets             : Executa scanner de regex/entropia em busca de chaves
  - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
  
 
@@ -305,6 +306,7 @@ python git_leak.py exemplo.com --output-dir teste_proxy --proxy socks5h://127.0.
 ```sql
 python git_leak.py exemplo.com --output-dir sua_pasta --proxy 127.0.0.1:8080 --no-random-agent --serve
 ```
+
 
 
 
