@@ -68,7 +68,7 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 
 ---
 
-## Screenshots
+## Screenshots (versão antiga - atualização em breve)
 
 <img width="1220" height="855" alt="image" src="https://github.com/user-attachments/assets/c5165d09-f341-450f-afcc-ab7086b4e553" />
 
@@ -305,6 +305,7 @@ python git_leak.py exemplo.com --output-dir teste_proxy --proxy socks5h://127.0.
 ```sql
 python git_leak.py exemplo.com --output-dir sua_pasta --proxy 127.0.0.1:8080 --no-random-agent --serve
 ```
+
 
 
 
