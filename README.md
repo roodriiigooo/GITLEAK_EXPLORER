@@ -7,8 +7,10 @@
 
    **Ferramenta avançada de análise forense, recuperação de repositórios Git e outros artefatos expostos publicamente na web via HTTP com saída visual, perfeita para aquele recon de respeito**
 
+<img width="1111" height="428" alt="_multi_menu" src="https://github.com/user-attachments/assets/c748af6a-3aa8-43a7-9690-8813f0cc16ab" />
 
- [Sobre](#sobre) | [Aviso Legal](#%EF%B8%8F-aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) 
+
+ [Sobre](#sobre) | [Aviso Legal](#%EF%B8%8F-aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) | [Agradecimentos](#tophat-obrigado-)
 
 
 <br>
@@ -18,6 +20,10 @@
   
   <a href="https://www.python.org/">
     <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python Version">
+  </a>
+
+  <a href="https://desktop.github.com/download/">
+    <img src="https://img.shields.io/badge/GitHub_Desktop-3.5.4%2B-3776AB?logo=github&logoColor=white" alt="Github">
   </a>
 
   <a href="LICENSE">
@@ -68,24 +74,74 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 
 ---
 
-## Screenshots (versão antiga - atualização em breve)
+## Screenshots
 
-<img width="1220" height="855" alt="image" src="https://github.com/user-attachments/assets/c5165d09-f341-450f-afcc-ab7086b4e553" />
+<details>
+  <summary># Visão Geral - Multi Scan</summary>
+  <img width="1111" height="660" alt="_multi_menu" src="https://github.com/user-attachments/assets/ef41828a-980f-4d8c-a72b-40945cb49a20" />
+</details>
 
+<details>
+  <summary># Visão Geral - Alvo</summary>
+  <img width="1349" height="1798" alt="_principal_demo" src="https://github.com/user-attachments/assets/5f032547-9480-4ea6-ad1e-565119a738c9" />
+</details>
 
----
+<details>
+  <summary># Secrets</summary>
+  <img width="1466" height="767" alt="_secrets" src="https://github.com/user-attachments/assets/67241847-3ef3-4e46-81e9-1eb25918418d" />
+</details>
 
-<img width="1226" height="779" alt="image" src="https://github.com/user-attachments/assets/9103cf7d-b51a-4baa-878d-23f09987dc10" />
+<details>
+  <summary># Hardening</summary>
+  <img width="1284" height="963" alt="_hardening" src="https://github.com/user-attachments/assets/34ecb782-f030-45cb-b7e7-2eeb1fd0b4e1" />
+</details>
 
----
+<details>
+  <summary># Usuarios - baseado em histórico</summary>
+  <img width="1284" height="963" alt="_users" src="https://github.com/user-attachments/assets/d757b98a-011e-4d4d-be90-637afaca9f1e" />
+</details>
 
-<img width="1227" height="510" alt="image" src="https://github.com/user-attachments/assets/462ebb53-1a08-40ce-8e5a-4042b4cb3b56" />
+<details>
+  <summary># Reconsrução de histórico</summary>
+  <img width="1903" height="1487" alt="_history" src="https://github.com/user-attachments/assets/bb890f7f-e82c-4e8a-b18d-d0a980cecfe4" />
+</details>
+
+<details>
+  <summary># Listagem de arquivos - com filtro</summary>
+  <img width="1641" height="1231" alt="_listing" src="https://github.com/user-attachments/assets/2084abe1-9f68-4a37-a91a-5a2dc4c66730" />
+</details>
+
+<details>
+  <summary># Bruteforce & Path traversal - com filtro</summary>
+  <img width="1512" height="822" alt="_brute_traversal" src="https://github.com/user-attachments/assets/e0d348c5-86ab-4494-84a7-a3f25643f32d" />
+</details>
+
+<details>
+  <summary># Outros</summary>
+  <img width="1136" height="852" alt="_outros" src="https://github.com/user-attachments/assets/1fd48b68-66c1-4791-9498-169bb6099967" />
+</details>
 
 
 
 ## 🚀 Instalação e Configuração
 
-Certifique-se de ter o **Python 3.8+** e o **Git** instalados no sistema (necessário para descompactação de objetos).
+> [!TIP]
+> ESTE REPOSITÓRIO POSSUI UMA BUILD STANDALONE PARA WINDOWS, se preferir utilizar ao invés do python.
+> >  Apenas copie o arquivo em um path que você desejar e registre-o no sistema para ser reconhecido como um cmdlet e pule os próximos passos.
+> > > Não exclui a necessidade de ter o Git instalado no sistema.
+
+<br>
+
+Certifique-se de ter os seguintes requisitos instalados: [**Python 3.8+**](https://www.python.org/downloads/) e [**Git**](https://desktop.github.com/download/) (necessário para descompactação de objetos):
+
+[![Python](https://img.shields.io/badge/Python-Download-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![GitHub Desktop](https://img.shields.io/badge/GitHub_Desktop-Download-181717?logo=github&logoColor=white)](https://desktop.github.com/download/)
+
+
+
+<br>
+
+
 
 ### Opção 1: Pip (Padrão)
 ```sql
@@ -306,6 +362,16 @@ python git_leak.py exemplo.com --output-dir teste_proxy --proxy socks5h://127.0.
 ```sql
 python git_leak.py exemplo.com --output-dir sua_pasta --proxy 127.0.0.1:8080 --no-random-agent --serve
 ```
+
+
+
+## :tophat: Obrigado ♥
+Err.. ninguém contribuiu ainda :(
+
+
+## :sparkling_heart: Support Me 
+<a href="https://www.buymeacoffee.com/rodrigoo" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-5C3317?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" target="_blank"></a>
+<!-- <a href="https://www.paypal.com/donate/?business=RNSQFDU927P8A&no_recurring=0&item_name=Every+penny+donated+is+an+investment+not+only+in+me+but+also+in+fulfilling+dreams+and+creating+opportunities.&currency_code=BRL" target="_blank"><img src="https://img.shields.io/badge/Paypal%20%28BRL%29-4287f5?style=for-the-badge&logo=paypal&logoColor=white" alt="Paypal" target="_blank"></a> -->
 
 
 
