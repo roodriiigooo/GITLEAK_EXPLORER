@@ -1,0 +1,1371 @@
+
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Timeline Git - https://mais-um-alvo.com.br</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --bg-body: #0f111a;
+                --bg-card: #1a1d2d;
+                --bg-hover: #23273a;
+                --text-primary: #e2e8f0;
+                --text-secondary: #94a3b8;
+                --accent-color: #6366f1;
+                --border-color: #2d3748;
+                --success: #10b981;
+                --danger: #ef4444;
+                --warning: #f59e0b;
+                --hash-color: #ec4899;
+            }
+
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            
+            body {
+                background-color: var(--bg-body);
+                color: var(--text-primary);
+                font-family: 'Inter', sans-serif;
+                min-height: 100vh;
+                padding: 2rem;
+            }
+
+            .container { max-width: 1600px; margin: 0 auto; }
+
+            /* Header */
+            .header {
+                display: flex; justify-content: space-between; align-items: center;
+                margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);
+            }
+            .title h1 { font-size: 1.5rem; font-weight: 600; color: var(--text-primary); }
+            .title p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }
+            
+            .meta-box {
+                display: flex; gap: 1rem;
+            }
+            .stat-badge {
+                background: var(--bg-card); padding: 0.5rem 1rem; border-radius: 6px;
+                border: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);
+            }
+            .highlight { color: var(--accent-color); font-weight: 600; }
+
+            /* Controls */
+            .controls { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+            .btn-back {
+                display: inline-flex; align-items: center; padding: 0.6rem 1.2rem;
+                background-color: var(--bg-card); color: var(--text-primary);
+                text-decoration: none; border-radius: 6px; border: 1px solid var(--border-color);
+                font-size: 0.9rem; transition: all 0.2s;
+            }
+            .btn-back:hover { border-color: var(--accent-color); color: var(--accent-color); }
+
+            .search-box { flex: 1; position: relative; max-width: 500px; }
+            .search-box input {
+                width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem;
+                background-color: var(--bg-card); border: 1px solid var(--border-color);
+                border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;
+            }
+            .search-box input:focus { outline: none; border-color: var(--accent-color); }
+            .search-icon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; }
+
+            /* Table */
+            .table-container {
+                background-color: var(--bg-card); border-radius: 8px;
+                border: 1px solid var(--border-color); overflow: hidden;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+            table { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }
+            
+            th {
+                background-color: rgba(255,255,255,0.03); padding: 1rem; text-align: left;
+                font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border-color);
+            }
+            
+            td { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-color); vertical-align: top; }
+            tbody tr:hover { background-color: var(--bg-hover); }
+
+            /* Colunas */
+            th:nth-child(1) { width: 12%; } /* Hash & Status */
+            th:nth-child(2) { width: 10%; } /* Data */
+            th:nth-child(3) { width: 18%; } /* Autor */
+            th:nth-child(4) { width: 40%; } /* Mensagem */
+            th:nth-child(5) { width: 20%; } /* Arquivos */
+
+            /* Elementos Internos */
+            .mono { font-family: 'JetBrains Mono', monospace; }
+            
+            .hash-link { color: var(--hash-color); text-decoration: none; font-weight: bold; }
+            .hash-link:hover { text-decoration: underline; }
+
+            .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-left: 5px; }
+            .badge-log { background: rgba(16, 185, 129, 0.15); color: var(--success); } /* Log = Verde */
+            .badge-walk { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }      /* Walk = Azul */
+            .badge-err { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+            .author-name { color: #fff; font-weight: 500; }
+            .author-email { font-size: 0.8rem; color: var(--text-secondary); }
+
+            .msg-text { color: #d1d5db; display: block; margin-bottom: 5px; }
+            .parents-info { font-size: 0.75rem; color: #64748b; }
+            .parents-info a { color: #64748b; text-decoration: none; }
+            .parents-info a:hover { color: var(--accent-color); }
+
+            /* Files Detail */
+            details { cursor: pointer; }
+            summary { font-weight: 500; color: var(--text-secondary); font-size: 0.85rem; user-select: none; transition: color 0.2s; }
+            summary:hover { color: var(--accent-color); }
+            
+            .file-list { 
+                margin-top: 8px; max-height: 200px; overflow-y: auto; 
+                background: rgba(0,0,0,0.2); border-radius: 4px; padding: 5px;
+            }
+            .file-item { display: block; font-size: 0.8rem; color: var(--text-secondary); padding: 2px 5px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+            .file-item:last-child { border-bottom: none; }
+            .file-sha { color: #555; font-size: 0.75rem; margin-left: 5px; }
+            
+            .err-msg { color: var(--danger); font-size: 0.8rem; font-style: italic; }
+
+            /* Pagination */
+            .pagination-container {
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary);
+            }
+            .page-btn {
+                background: var(--bg-card); border: 1px solid var(--border-color);
+                color: var(--text-primary); width: 32px; height: 32px; border-radius: 6px;
+                cursor: pointer; transition: all 0.2s;
+            }
+            .page-btn:hover:not(:disabled) { border-color: var(--accent-color); color: var(--accent-color); }
+            .page-btn.active { background: var(--accent-color); border-color: var(--accent-color); color: white; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+			<div style="position: absolute; width: 104px; height: 104px; left: 0px; top: 0px; z-index:1000"><a href="https://github.com/roodriiigooo/GITLEAK_EXPLORER" target="_blank" style="border:none;"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGgAAABoCAYAAAFqG4U3AAAACXBIWXMAAAsTAAALEwEAmpwYAAAFFmlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNi4wLWMwMDIgNzkuMTY0MzUyLCAyMDIwLzAxLzMwLTE1OjUwOjM4ICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgMjEuMSAoV2luZG93cykiIHhtcDpDcmVhdGVEYXRlPSIyMDI1LTEyLTI5VDE1OjE5OjI1LTAzOjAwIiB4bXA6TW9kaWZ5RGF0ZT0iMjAyNS0xMi0yOVQxNToyNToyNy0wMzowMCIgeG1wOk1ldGFkYXRhRGF0ZT0iMjAyNS0xMi0yOVQxNToyNToyNy0wMzowMCIgZGM6Zm9ybWF0PSJpbWFnZS9wbmciIHBob3Rvc2hvcDpDb2xvck1vZGU9IjMiIHBob3Rvc2hvcDpJQ0NQcm9maWxlPSJzUkdCIElFQzYxOTY2LTIuMSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDplOGE0ZDE2NS0wMzBjLWFmNDctYmIzMi04YzM1YjVhNmJlMmIiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6ZThhNGQxNjUtMDMwYy1hZjQ3LWJiMzItOGMzNWI1YTZiZTJiIiB4bXBNTTpPcmlnaW5hbERvY3VtZW50SUQ9InhtcC5kaWQ6ZThhNGQxNjUtMDMwYy1hZjQ3LWJiMzItOGMzNWI1YTZiZTJiIj4gPHhtcE1NOkhpc3Rvcnk+IDxyZGY6U2VxPiA8cmRmOmxpIHN0RXZ0OmFjdGlvbj0iY3JlYXRlZCIgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDplOGE0ZDE2NS0wMzBjLWFmNDctYmIzMi04YzM1YjVhNmJlMmIiIHN0RXZ0OndoZW49IjIwMjUtMTItMjlUMTU6MTk6MjUtMDM6MDAiIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkFkb2JlIFBob3Rvc2hvcCAyMS4xIChXaW5kb3dzKSIvPiA8L3JkZjpTZXE+IDwveG1wTU06SGlzdG9yeT4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz5QGtSjAAAd4klEQVR4nO1dfViT192+E0AxypfE+oF0RQuKtepaP1BmdTAvbO1V++5tpXbSTtGWzr6us3PD9d2LrrPYsmq1Y4Z2wja7Wru2q6y0UAuvVWmp4geIEMJ3QhI+AgmQhEBCnvePJ+fJk+TJFySKe72vy0vy8BzOcz/3Ob/zO7/zOye8+RnH4QIU18VA8oNYlG7zi/kZx5kCy6LDcEnWBwCQnzkWyOf6S6TAlhXREAqCcHBbAgCg/Yujk6PWvTAS6KwAAGxdvwBb1y9A8v4SyD57Myr60Zf1No/HLlC0NxnBEwJhGDZhQ3YppIVvLNcr6jscOJECpVkpAGAtcPr1J/RKydX5GcfN5F7CiSlgGDYBADZkl0JWdOh5vVLy2fyM4yb2E/HtCwRPCETy/hIoy/78vE5248T8jOND9rwD2Y8EAMn7S9BzpejZPsm3pwA4FGAeLzWnjHkknaxmU/fFT953VgAAeOxXbNKpn2g88ct/skm7LESNGJ/hBQSdcHWzzeMBeNHTAqQmzl8IY+6nVC3XOX/H2WB/eLiKUtZX4kjag1g4R4iC4lq8952Mqcihwa4/Vk8p6ysBAAvnCJGaU8YUEIvSA9icAAAb3mmkWqsuAAB+u5FuqKwnEZC3ynCKWbKaarl2npODWJQ+bX7GcRX5zAeA2fetYAqUZqUgVihgF5jDLgAA/LvuXUK13/iOKVBU0YIGlZ4UWDQ/43iLfc2BXY3XmA/styQWpS8CwPnO+QBwJO1BAGAXmOOsAGDRST9ktCENQOWsAGDXYC2vddBVAaYmS4EAd63bvpDTNujs8Wwu2BtNezz0h8sU+40DwPNrYtChGcTpqg7uQlzt1Rl+9HYNNT/juEMlpVkp6NAMYtfji/HO9hU2v+u88H4waeMORtkej+Q1UM1Xz4E0NAA4sTMRabnlOLEzERfrlHjukfts+oP8zLHIgabK/vkZx03Tf/A0XFa04Z1GqunK12i+eo659tHuNXji0Ne42tiN0qwUfHhWgryvrY1ZWvhGvF5R3w5Aby+4Q0UpuXVU2/Vv0HTla5vXU1Bci8Ehi41PiLFh0PbPA+sGO5trAXTZ23yHimbOW0op6yvRdv0b5pdkiAKA4usdeDxxDgAwlUgL30jTK+orAbRwjRFs8FbnVFLdTVU2FwmDekU/M9KyGbQXv/0zbeu1CwAaPelEABDIrqQ0K4X5g1vXL3CooLP85A719a8uAGiBizGIsyIAEAqC8PKj8QDoFmVfQV99+Wbl/+afA9AFgFMDjypS6Y3Y+2E1lkW3MV4MAAz1tD/Z8o+sYgB6AB6ZDWewMVwE5uHBzZL8Fz9y1oJGA1vLQJm3i0XpAfwJkz7wZSXsin4JgAce/7inltVbeGWBAdo7GOxTQder9Kqcg2VwZb0f+sNlSqfudKiE3S2cwHPr/cPDVZS+rxe6HmslxDEsKK61cRLtKwHsG4MT/OjtGmpA3Q1tt9TmepNcg9KsFNQr+jkrI0OERxWt+2Mt1dfdAW1Xm8310qwUTJpIv/mD2xJQfL3D3nUK4vLCOfGwSEL1dbVjwK6SZdFhAIC03HLUNKtQ06yCSm/jeQhg18GdjkcPiyRUt6wR2h7H1rVvy1IYhk3Mq7JjEgbA6HY8Amj3s6OlFoN9PTbX2X+Y/JyRa3UixaL0GQCGuDq7w6tLya2jlI3VnJWQJyfzluT9JWzfcQ6Afmfjkk1Fs+9bQcnrr2JI189ZCfmfTL1YTO4D0O1qbGJeXVT8MkpRfwVmk9HmBqEgCADtL7ArY1WyDIBifsZxrbNKACBAuHQj7rp3CdXZeA3UyIgDE8poxO/+UYWJPApr5t+FF45fZFfyEOhRttdVJQAQKIy5n+pqqgIo29GCDOcpS+/GprVxDiZGLEpfB0BiPwlwBr6q5bpDJUV7kwEA9Yp+HC2sQZNcw1XJdQDdnlQC2DVvoSAIp/YkAaDn2ge3JaBJrsFzf7Y6j2JRehKAWkslHg8pTEXLosMwa+okKFRaTA0NRkWtEoKJgdj7YTW7kkQAEgC93lQCWJp3rFCAebNCsevxxThaWIPefgM+KG+1r2SJhYnK20qYikQ7V6P4egcu1ilxcFsC2rsHmI5oqSQWtIul8bYCgkDAalKOflplw8JSSRSAfgAu+4k7MJYheX8JQoKD7CuJANAz1koAu1bHmuhDLEoPAWDwlTfEab3FovRgcJh6n1YkFqUHATD72u2yqcibGfNYKvLax/MGpNXx/FYDqcCfLABg2tzFFADo1V1ee7ejAM/t7N9dfMMZ1h66SgHAQG8XdKp2znueXxPDTOpJ+GpDQgyKKlpwqETiTXVMGNZjz9tTJB+pppKPVFM6TQ86JFeckinNSsE900MYpy0zvwIbEmJQUFyL87WdDgE9LsjPHAu0ON3MuO1WIU+x7o+1FABouhUY6GxzeW9SXCQOnKxEmaQHpVkzsXHxDOx6fDEUKq1NvCF66iSbsYqg88L7weqa0hEAlEfusDdIya2j+AEB6FW2oq9T5vb+7E2LsGjuNMb5TN5fgt0pcQCAkkopfrzye8jMr7CJDBAoSt8N62+oGAIwAie2eNSEHhZJKD6fjy5ZIwa65S7vZTtWF+uU2JBditKsFChUWqTllmNDQgxSc8oQEymwGQ4JZEWHputkN/QAjHAzcnlNiBDpaKmDTt3l8t6Pdq9BREgwM+cozUpBd5+BCQAdLazB7pQ4pOaU4a8/f8hmygAAss/fulcnvd4DOiBkgAcjpMeE1h+rpwICAiBvqIJhQOPy3qK9yWhs1zBkBodMjCJdmkHMEk5hnHjStNhkpKdfX6RXSnpAB58G4YU/4ZYQ6SNy8RUMG3Qu7xUKgnB463L09huwcI7QYWaYllvuMughLXzjIb2iXglgAIAOHDFZd3A6sEbFL6MCA4PQLr6MEaPrGCOxUqk5ZTaz/xM7E23UcAbp6dcf1Ssl7aA9bbWFyOjjjmzMiHuACggIgEJyFdSI67/5/JoY6AwmbF2/AKk5ZXhmdQwAYFpYMJbHz3RLpO3T7C2DHY0toAOnKgCD7mLM7sAQmjZ3MRUQEIDOhmugKNcqH0l7EK9+XI3HVs1hguHEimXknodo52pmlZUL0n/94Tm9vK4RQKeFzMBYiRAECu9ZQPECgtDdVA0na+MA6P6h0htRmpWCzPwKxEQKEDwhEAXFtdicFIfefgPScsuZGAQX2j8/kqGVVjexiPSDDuP4bgKhaq11eQMhIspYxVitebNCsXX9AmTmV2D9A1EInhCItNxyAMATh752+BvyL//04kDz5Xp7IqDNsK+40IRcEfnrzx9Cb78Bs4RTAABHP63Cc4/ch63rF8AwbMIlWR9CJgXi1dPcL0V5tuCFPvGFG6AnpD2gO70RY1wHcAVOQtmbFmF5/Exm9G7p0ePw1uV47pH70NiuwcI5Qjx7hF4aK5P0OJTvvvjJ1p4rRTUWAhrQZtgnfcQdbEIyB7cl4MOzEiyPn4mLdUoc3rqcMbtksVA/ZHTaR9TXv/pJZ/nJa6DHkD7Qg+JNIULAELok60NqThlO7UnCxTol3vysDqf2JKGguBYndiaivXuA6Sf2GGi+nCr/8k+XQI/sOtBuik8XZzyFTZNT6em3z3YmATgloldKnpCefv0CaBXIP7/1D0/Auc7mDsN9nU80n/zNGdAP79YDvpnwytseGdI92VCwqwg0EadzklsJjwhRpuHN9X9+4SPLx3FHgg3XhCjzT8V5O04AwHgmwYazPvQcgHdv9sP4AvZRn5dABwNvSzKAlVAmaCJHbuGz+AR+j5yGzojJmDg59BhlNqNHWuuwiOdb8Gp8FpfjAiEDAD1ttaDMfiVTC1D3+y0UvHx/2UvBk8MOA0B3czUos2sj+dHuNQC4px/uwasDqPsAP4SCASDh1bOZgpCIw3w+3ykZdpiXpN6R6JB34NUD1ALyyeeEEl49mzlpSkQ2j8enp/McZISCIIh2rmZSLMQyNSJCgpGWW26TCeEePIlYtG0B+4pPCa38/bl9k0OnZvP5PHRIrjiNTTyzms70O7gtAb/duACHSiQMkQ3ZpZ6SahKLtsXbD/g+I7Ty9+f2TQ6bmsXj86EQX3YZaGEvlaxdEo2ivck2ROwjqBxoFovS47h+4RNCqw6cz54SLszi8fiQ115yGzXK3rQIAD2lB4DefgNKs1Kw771KT9RpFYvS5wHc7tiYzfaqA+ezQ6felUmZzZDWfAuKcj0bIQ9bmkXH7dKS52FwyAT1gAEHtyXgYp3SYTWeAUXJxHnb57v6+2NSKPG1C2+GRU7PBIA2D8gQZOZXMFsRnjj0NeZGhSMiJBipOWVYNHcadyGKkovzts+Dm2nLqAlZyOwGgNaqcofkFzaEgiBmxaGoooVZ0ALAxPkAesbM2X8oSmFRxgy49vxHRSjxtQtvhgtn7AYAek+Aa2VEGaswSzgFpVkp+Nv5FlysU+LUniQIBUGoaVbh108uwcU6JwvKlLlLnLc9HrQyI3AzxfeaEJsMO8vbFcjoX1TRglN7ktDaOcCQWjhHCHm3lrvfUOZucd6OeaBJmOHB5NIrQmwy7IxyLiyLDkNpVgpKs1KwLDqMWRROzSnDprVxiJ0dgYzc8zj6aRVU/YOM5WOR6RXn7VgAL+MWHls5b8gAdAZnUUULujSDOLgtAcn7S9Ak1+DUniQYhk2YNDEQ/5P6fSaiZLPFgTKrxXk77gcdCjMCGPF0xuyRQqsOnM8Oi5y+GxTlsTIHTlZiQ0IMFGp6Fbs0KwU5n9J7Wgq/acaG7FJnZPrFeTseBDBMCHmzVuRWIQuZTLPZDLLtyBWZg9sSUNOsQpmkB7OKa/HK5qU4e00GncEE0c7VOHCyEuuWRHH/ASuZIQshr/OnXCoUMTt2Hxk03ZEBgF2PLcSBk5VYOEeI7E2L8N53MhQU12Ltkmicr+1EQXEt1i2JcmYAdOK8HStBNzE9Rhm0dKpQeNTczNCIaVkjRiNktd85uw0AvZK3aW0cDMMmlEl6UG0JKWdvAvPwB7clICP3POeyPSizXpy3YzVoVXTwcqHYLaHwqLmZIRF3ZY+YjGivu+T2j2xaG4ejn1ZhRvgkAPQASeLkW1ao8d53MijUes6sEFCUQZy3I9lCQmMhNOpIrENMIXRmzEuhU+86PGIchlJy1WXhLSuikbL0brR3D2B5/Ezmek2zCj8/cZnpUxm5552RGRLnbV8H6/rRmFf0AoRLN9qQCQkXHh4xDqGj4ZrLgr/duAB/LG3Ci48sAI/Hw4EPrmBoyIiGdg1+cH8UHntwNt4qqcfnl6Ro7+NaUaGGxXnbHwW96t0LOkPTMNaAJmMUQmfEZEwOjTw8NKhDR0OVqzKIFQqwdkk0SrNScPaaDLOEU7DrsYU4VCLB9++dhgMnKxEREgwANsv8LDJGsWj7Y6CbGFHG65wELgQIl25EyPTvbZ0cNvXd4cEB9EjFLgskxUVizYIZyP+yHj/6/myETZ6ISRMDESKYgPjpkxEUGICNq+bgw7MSXG7TcJExiUXbfww6Wbob1rwEn4Saecuyvto6KSQif1g/AI2iyS2ZVzYvZT5n5lcwfUS0czUAuJ7PACaxKP0/QOckdIIm5DMyABAYPCU83zCgQX9nq8sbk+IiMSuCjtQk7y9B0d5kHNyWgMz8Coh2rkZqThkSYyOh6HW6PcGeTA980GfswR/s63FL5sTORLyyeSnqFfQmDBIDAOg9KwXFtTi1Jwmnqzo489xgJdMLKxk9/LBsydc6SaEkiBUK8IsCen8FUSR4QiCK9iYjeX8JgicEQqHWu0qDYSujhB/JAG5cnxM7EyHauRovrItFUUULM+8npEh8gGtpnwZlEovSH4VtM/MbGcCF63NiZyIKzojxyualWLskmsndOXtNxpCaNyuU25UBAFAjYtH2h2E1zX4nAzhRqGhvMqaGBqNM0sMEMxrbNQieEIi1S6JRUFyLg9sSXJExiUWMB0DMs9/JAE4IBU8IRG+/AQDw2tMPIDWnDAvnCHHgJH3MweYkx21FVlAmsWj7GtDNrBs3SRkCmyaXvWkRYmdHMPmhJBOR7Wxm5legpYfDLwNgIbMStBvTb/k35j2+3oBRqGhvMhbNncasAJCmVt1Eb7F6+dF4ZOSeR0uP3pk7MyIWbV8Ka1aiGjeZDMAi1NtvYNLEFCotTu1JQmpOGZbHz8RHu9dgefxMNKickYFJLNq+ELQiGrDSx24GCTYYQoRIaVaKA6mIkGBX48yIWJQeD7qZqUHPZ25ZioyNUbAnBQAxkQJ3ZO4BnT7WD2v21S3LaXCwcmxSAJy5MgBNJgp05hVRxa/JfZ6A02yTlTQ3yswATYKkk93yTCxgdNlYI2JR+lRYE5i8ipv5G96uD5nFovRwWIPm4yatjMAbQmaxKH2K5WcjxmlWlqeEzJZN/8A4zZMj8IQQJRalT7T87HbB6VbDHSFKLEqfgNuACIErQpRYlM4+bm7ckwFcECJkbhciBM4I+T3tzF/g8hT8vr3Zn7AndFuTAWwJ3fZkgJu4i/5m4bbt/AShM2IyJkyacozHtzY2vboLek2Xn1NC/Q3eDYBaOOZkrNGmpI4Vy/eXvTRREHqYx7N2Fp26E3q1b4RJiot0ERD2J3h1dMYpPanza5KzP0ByjfmWHmM2m6FXd0OnVrrNO3aHLSuimXMQAeAVy/9uVrx8BJ7YIozNdNsvOc7+QMKrZzPXHrpKTQ6NPBwQEAgejw+tugvdzdXQ9si9EmfLCnpxOCku0ub65iQ6h7VJrkHy/hKk5pRBPWDA8viZKM1KwZYV0T7lRIMnkZ85FghQ8eBI0hvzGORvE0dywPl82pSZzRQGejuh81IUwJrtolBpUVIpRcyMEFS39jKJU2TfLtkKTo4fXhYdhn1bljpcHxt4jfIzf5o/0FRJAc5nNONWoJW/P7dPEBKeRQZ/ymxGX08XdN0ytxnUziAUBGHR7FCETArCrscX2/xOodLid6euokGldyoI+/oYzF6zqrJwnqryNEPC1XRz3Am06sD5bEFoRCaPdcynplsBbdfoheECu7eQo+6IIGRLckykwEaoJrkGUdOmIHhCoMO5ex6gpfPC+/GWg3s8EgcYR07CqgPnsyeHRWbyLV6ZmaKg6VZC29XmcWa7M5AzRAiIABuyS5kd/IZhE1JzyvDCulisXRKNU5ZrJ8skKL7egWdWx2BDQgwu1ilx5prccw+PoqTtxW/Ha9uqhi1XPBYHGAc9KPG1C29OCYvczZ7HqDuk6O+SjVkYwHqmEGnxxFNjjyPs3CXyPQ0AoB4wMNlko+gx7ZaTyMlSJ9NzvImg3TKBEl+78GZIxLTd7HlMj7IN/V0yl9sn3IEcy0qWgGOFAiZBTD1gQIboG4fl4efXxODjS+3MsRH298UKBdyJmNxol585tnigqZIkbzHb5QHvw5s3XaDE1y68GTr1LhthutubLceEjU0Y8oIBMOaJ9BJiygDaIfhFwUWo9Eab6wXFtZgcHMjkNT975JyztX5HUFRHe/Hb92vbqgygBQHGKA5wEwUiwvBZpqxT2gCtSjGm+tlgmyq2eVKotDhaWINLsj4HoQrOiJEYPx1rl9BzHPszsNyCMnfJPn/rfp3sBtnPQAQZkzAEfheIS5iOVjF0vZ1jqhew5opfbezG3863QKU32vSkJrkGH5xrxMv/uYQZV2qaVXj142pm0GeDiHr2mszp+UQMKKq7/Yujy7TSah1oYRzE8cVqjd8E4hJG2XQD+j6PzrF2CvZcxDBssjkMim2WdqfEMQKQI7uISATsrxchzgPb/HGCMvfKvji6XCe9rgUtBFscJtfEV0tpPnezyU7WgADmlH/IG67DMOD2FHOXWBYdhi1r78Xp71qZa8ETAh1M18uPxuPMNTkOlUjwr8vteGvHSia+Rs7jXBYdhh+v/B4+vmRNGX7vO5nr6ABl7pMW5qzSKyX9sOwzA71/hojil3wAn/UgIgyPxwOfzwdlNkPeWI0hrdNsJ49g32P2vVeJS7I+h8AmF8j9W9bei4VzhDAMm/DSu99645EBlLlfWpjzQ4swBtCCDMGu14yb7xmxR8Ts2H2hEdOy+JYeQ1EUFJJrGB4c23nmGxfPwHOP3OdgluxDLGyhnAloGDbhnc9vuPpyKUdQZp3ss0PrdPI6NaypcgbY9hq/5zaNWqCI2bH7poQLs/g8Hnh8PijzCBQNVTAavGidHIgVCvBU4j0AgA/KW6HWGx0Gf8Bzodhfo+gRKLOu7fQbjw52NBBhyD+SmU3M201Jb/JaoPCouZlTwoXZAXy6x5hHTFA0VmNk2DDmhyHfsNUk12BqaDAiQoIdhPBUKK+DmZTZIC3MedxygO8Q6GxZA+uf380ZFzwWKDxqbubk0KnZPD4fPB4fIyYjOhqrYTYNuy/sAhsXz0B5Ax3XIkcMNsk1yPn0usuxIlYowFs7Vo59CYCiDNLCN57SKyXdoEUhaczMKcu4hdmNbgUKnRnz0uTQyMN8Pm3KTMYhdDXVwOzmzGBPwDZLJNz/VOI9zKSRC/bjCXEi2FEDj0BRw9LCN9JYwpDdzHpYt2nf8rRTpwKFzojJEIRGHOPx+ODzeTANDaKrtW7M6/1cM/lZEQIboZzNQ9iRgtEvmlFG6ek3tuqVkk7QImhBbwJgm7Nxc2am467vGTEZwVPCjvEtpsxo0KFHWu+ztRj7xTACw7AJ8m4t5kaFA7COLeQraO3hdUgGlFFamPMzvaJeBqv50sLae8aVMASMQCHTv7c1eEp4Pglimgw6qOWNYw75v7N9BfPSAWsQs17RbzO/KfymGesevJuJnxEQoZLiIhE7MxQfX2r3VhiT7LNDP9O11yphNWNkywzpOeNOGALesqyvtk4UhObTgz8PQ9o+9HW0YiyRZQJ260/eX8K5lMwWipi3CEEQ9jx+PyPsqCaYgElWdPhFnaxGDloELWiBtLD2oCHQJ8+Mm00n9uCtzqGTFoa0avR3St3d7xLEBZ4aGszMQ9hfwsGem7CFOnCyEgODJuZoLLfxMNcwtX9x9L+0bVXtoIXRg+4pbGFuqWfmDXhLX/mC0vb4JuRvP14QUcjR/Oxr9rN99orn5qQ45h4vYJKX5P58oOWKFM57DCMMrEHNMbL2L0Z1SjgBu8cQN5ccB8OGM6He+fwGZoRPwqa1dD4a+SYlL2GSnxG9NNB0qQ3WMcatMAT/lgIJBUGIEAThxYfjHTwsYp5ee/oBzI0Kx8U6JRbNnWYT7Jw1dRLSkucxDoF6wIDX/3HNyx5DmZRn//Jin/hCK6xC2P/vVBiCfyuBlkWH4ddPLmFe7NFPq1De0GMTemGjSa7B3KhwJlGQ3XtGMehbQI10nHvvBU3tWfJ15M7cZbJ45nKMGe8CebQeZB9WsTdFabnlNjEy4kqnLL0bADBLOAVb1y/AgZOVmBUhQMrSu6H22gGgTF3ffPh8b/WXDaAFYAtiM8HEONjT7Cu47UHk+3gA2yhAk1yDd0vEjDdGjiSzF2rfe5V4YM5UJuXWe++MMqkq/5WuqjwtgXUdhpixYYxRmPHegzgFcjbbJwl/9iaN65sD2UIR8bwDNdJb9eVPu7798AasYX4SxBxiXRtTj7ntBGLP/Ll6BcAtFJnxs3sZe83fC5g0tWfTOs6dqAb94smXELIXy1wO/N7gthMIcL7m4olQ7Pu9hKm/4bs0Rek7lWCdxgCrGWMnZfhsjLktBSLwRCj1gAFPHPoaQkEQnlkd4+338gLAiLat6qn2L45ehlUAkmNms4IJPwz+t7VABPZCnb0mgzB0EhbOETICjQIjeqVkk/T06xWwHvxtgrXnsJP//OaVjXeBPHKzVXoj0nLLGeeBLKiNck1mxNDVsqn1k9+Tk9KJKMyJObAK8m/jLo8WXuXFXZL1YUN2qY3r7QVGhvs6NzWf/E2Z5TNblJvSW25HjCpx0UtxzMaBnieb/v6rr2B9+WxRgNsgqnyr4M8NXGaTvi+18W+7i2Gb7Q/4KLH8/wP8IZB5ZEj3dEPBrkLy2fL/HVFGAV8KRJmHB38iyX/xE8tndnbJHWFGCV8IRFEjxi3172Z8yLrm1T7MO3COsQhEgTI/K87b8Xf7X9wRxXcYjUAUKPN2cd6Ov7Av3hHFP/BOIMq8Q5y3I598vCOK/+HpiuoLAET+fpg7cIS7w5R2gT4c7444twjOBNoNWpi3b+Kz3AEH7AX6FWhhDt+CZ7kDDhCB/hu0MDm38FnugAP/B6+J+lhrhJPcAAAAAElFTkSuQmCC" alt="I love PHP" width="104" height="104" border="0"/></a></div>
+            <header class="header">
+                <div class="title">
+                    <h1>Reconstrução de Histórico</h1>
+                    <p>Target: https://mais-um-alvo.com.br</p>
+                </div>
+                <div class="meta-box">
+                    <div class="stat-badge">HEAD: <span class="highlight mono">N/A</span></div>
+                    <div class="stat-badge">Total: <span class="highlight" id="total-count">18</span></div>
+                    <div class="stat-badge">Remoto: <span class="highlight">git@ec2-99-999-99-9999.sa-east-1.compute.amazonaws.com:demo/demo.git</span></div>
+                </div>
+            </header>
+
+            <div class="controls">
+                <a href="report.html" class="btn-back">&larr; Voltar para Relatório</a>
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="q" placeholder="Filtrar por hash, autor, email ou mensagem...">
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table id="commits-table">
+                    <thead>
+                        <tr>
+                            <th>Commit & Status</th>
+                            <th>Data</th>
+                            <th>Autor</th>
+                            <th>Mensagem & Parents</th>
+                            <th>Arquivos Alterados</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-container">
+                <div id="entries-info">Carregando...</div>
+                <div id="pagination-controls" style="display:flex; gap:5px;"></div>
+            </div>
+        </div>
+
+        <script>
+            // Dados Injetados pelo Python
+            const COMMITS = [{"sha": "254f2025fe7ae6004b908a7107bbb94b8fe109da",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2018-03-28 13:05:34",
+  "message": "push",
+  "source": "log",
+  "parents": ["39ef4e75b426d179a16f1c643a150b6f8c12c1f2"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitattributes",
+      "sha": "a8763f8ef5f3ca507073252f6815171c00b47074",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitignore",
+      "sha": "6b3af3fee63af0fc31478b6cc2a77fa61b1112b3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "artisan",
+      "sha": "df630d0d6d5eec358975694522226a898a715019",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "composer.json",
+      "sha": "4943e17d00d4769130934258197af919f0b5afc8",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "composer.lock",
+      "sha": "d3b8387832891c2d1c3a07f2573acce0480b2711",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "gulpfile.js",
+      "sha": "dc6f1ebb4eafd867d781b3d635919002d357d85b",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "package.json",
+      "sha": "c4a056b6eef94dd1e273d9172cf19dcd2fb82320",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "phpunit.xml",
+      "sha": "3e884d179ccbab0bc8b0bc14c602cec03cc91480",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "readme.md",
+      "sha": "7f8816d62ad36a7bb204f466f71ce67bd954e263",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "server.php",
+      "sha": "f65c7c444f2bf9108a1df96408008ebd25e3c18f",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/index.blade.php",
+      "sha": "b523c58c3d67bbd88704f4db71f7bf1ecf603379",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/layout.blade.php",
+      "sha": "25141e0ae06e494c80e27d6c6f54beba67cda9bb",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/welcome.blade.php",
+      "sha": "87710acead3f9d3981326d82486a9d109829c86c",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/partials/header.blade.php",
+      "sha": "f8179295837b2ada0437f86b127e62b5f49beb9b",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/partials/sliderSites.blade.php",
+      "sha": "4a849769da10be9a05e475f25c9123acdad55a78",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/.htaccess",
+      "sha": "903f6392ca410eceab8338afb27da72e985b3cc0",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/favicon.ico",
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/index.php",
+      "sha": "c5820533bc15708540da48509ba70883ae9ed81a",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/robots.txt",
+      "sha": "eb0536286f3081c6c0646817037faf5446e3547d",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/web.config",
+      "sha": "624c1760fcb20be77e326c280b2040595c1d8987",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/.gitignore",
+      "sha": "aa204cb2691ea1fe0879128bb8b987155247b576",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/CONTRIBUTING.markdown",
+      "sha": "33b73ca15902fb2fea51800368f63851bc053169",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/ISSUE_TEMPLATE.md",
+      "sha": "7400336301cd26ca09a94d12d64fd1de81e25f4c",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/LICENSE",
+      "sha": "3ffd45227299db398ae12a02c276aaaa40cacc64",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/Makefile",
+      "sha": "eea6b9529ef1add5967aa7e5b54b9dc89436efe7",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/README.markdown",
+      "sha": "6dc5ca048121abd1418b4c4022507ba47e126300",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/bower.json",
+      "sha": "ff2c3793223447bdef60c3575fc7900aa83ef6e9",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/component.json",
+      "sha": "af23f007814dc7dc7cf46839b9007be90bc7ca0e",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/index.html",
+      "sha": "c8fab56c1d52aecaffc0d89aa311e24616839df3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/package.json",
+      "sha": "8f675a401a3991c79f2b4f1d50820bf1c0bef7f5",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/slick.jquery.json",
+      "sha": "7af760b472cf5c8cd448c5b7186d2f7a670a1f93",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/ajax-loader.gif",
+      "sha": "e0e6e9760bc04861cc4771e327f22ed7962e0858",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/config.rb",
+      "sha": "81f5ae3246711478002c3a3206d3497ee8286d5e",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/slick-theme.css",
+      "sha": "1232fcab02e2d8aea7ad438373a95e7bf6086f87",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/slick-theme.less",
+      "sha": "8f1075861f2930b9086b4ab0bc435f51e4c9584a",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/slick-theme.scss",
+      "sha": "7fe63e107ba446e4bf9f255062653f2d0633f456",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/slick.css",
+      "sha": "dd973fedfd9924242e2adf1123d1a24f4666e156",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/slick.js",
+      "sha": "5394604896ff03f682d9842b3ef15a8f8ec6a20b",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/slick.less",
+      "sha": "2fa0fb2ec1a660e51948c4ae074b1bef0bda4576",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/slick.min.js",
+      "sha": "88a8a6b3f558963ca0b0c098b2f0e195f821cc71",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/slick.scss",
+      "sha": "2fa0fb2ec1a660e51948c4ae074b1bef0bda4576",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/fonts/slick.eot",
+      "sha": "2cbab9ca97723bc24c50315a0a9bd155db4e0aa5",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/fonts/slick.svg",
+      "sha": "b36a66a6c454fb901133b8bce089a5ff7f74f871",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/fonts/slick.ttf",
+      "sha": "9d03461b653373f7cda3b4af104c6bca07f9892b",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/libs/slick/src/fonts/slick.woff",
+      "sha": "8ee99721bb81b59a5e1ceee1d3256b15f907d96b",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/js/app.js",
+      "sha": "72a2204a6cd4fcc6a0a39a0edb9683d6156d9fff",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/js/slick-config.js",
+      "sha": "01881c199d1e0d65fe69f330e2336d0d5c573b45",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/01.png",
+      "sha": "c536e67323be09893e08273eb19d5ba0491fc437",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/02.png",
+      "sha": "9121957c0c71ca87465b10d3411bcd1a3434fd15",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/03.png",
+      "sha": "db306bb17bc92c34a06fd8ff6bfbbb6532cc34d3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/04.png",
+      "sha": "3f3a3af3dda84e4b73124f880ecfaa8d500689db",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/05.png",
+      "sha": "4d274f9492abd54d333361c44d89efbb6e80cecb",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/06.png",
+      "sha": "6c177995e51af835293800565127a4bf06da3747",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/186325-justice.png",
+      "sha": "7b3dbab3a33a40007236e935d87ec0e3f7d3b518",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/189466-law.png",
+      "sha": "f6b0c6ac12d4328ee81e651efa767c8fe78033e3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/hammer-802296_640.jpg",
+      "sha": "3ae0356d3e245be6a65b010b5e23464ce1bb0ee8",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/law.jpg",
+      "sha": "9479af54e6c9dbbed6f8246f689cee28edc0d75e",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/law2.jpg",
+      "sha": "57211be6c57e25e1f01579305543c5c72e64c34e",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/transparencia.jpg",
+      "sha": "342d66b5c38b9f43d492f8ee67ad1637db13bed5",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/00.png",
+      "sha": "63dad9c2cf54ea4baa293380ca7e5cb6b37b1d76",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/01.png",
+      "sha": "db043076bc5412e4c08811271f63868541b9e729",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/02.png",
+      "sha": "1660e8dc37cf5d8d9ce7c7dac241cc8d868bda6e",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/03.png",
+      "sha": "7c3a93a3df5933332abe271daa51c32d260eb474",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/04.png",
+      "sha": "fc39f48f982e4661a03eeca886894b2e4921fed6",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/05.png",
+      "sha": "f904ddf9334befe831f56602cf650da3433412a4",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/06.png",
+      "sha": "710a04baf51d18ebbe68a810dfaf2bda9e34f4ae",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/07.png",
+      "sha": "5faeac7f06f463e5d139ab47852e14683bb0fb73",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/08.png",
+      "sha": "a4023378bbca08e77bac3c6ff3acfcee53ad36c3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/09.png",
+      "sha": "e535f523c5ca8e202ecac8617b45bfc517c75271",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/10.png",
+      "sha": "f34d268823dd04d96e33f0fa79568a2c3e699d63",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/11.png",
+      "sha": "9b06b87b1c9baf0fc5d571c11263a0e216892fe2",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/other-sites/12.png",
+      "sha": "87ba9fe4ecf8a4338e1b4c0a03f6340bc7986117",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/logos/escudo_cordoba.png",
+      "sha": "c379fdaa80ded0d00ab26b5a752bbb0fb51c07c4",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/logos/icon-share.png",
+      "sha": "e0309396126804e4acd8261cc12fb513fa84e8d1",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/logos/icon-share2.png",
+      "sha": "06bb3785d1593e687e274748bf86593d337e7c91",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/logos/iconpage.png",
+      "sha": "6b6e7a341363ba587c10772f99d61c8414e3b968",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/logos/iconpage2.png",
+      "sha": "a5132378bcb65be08b455f1fa62c446e1c442d1b",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/logos/iconpage22.png",
+      "sha": "92cc72f2927805d62ea2b0a8b41de94cabdf4721",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/images/logos/logo.png",
+      "sha": "fcaabd778be0ec7e311fd89a9d51f8fc1cb7fd0d",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/app.css",
+      "sha": "e427c921581b76f896b152efe2a7e71e83e48404",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/slick-config.css",
+      "sha": "81948912f8ce7072936980e8a7699cdb2615d167",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 116,
+  "tree": "69618b33c76a94c14965d646815a3e889ae66a49"
+},
+{
+  "sha": "39ef4e75b426d179a16f1c643a150b6f8c12c1f2",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2018-01-26 16:19:17",
+  "message": "push",
+  "source": "log",
+  "parents": ["32ec366d6cec85ad85ff54f49bd6f46b7f1a5d15"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitattributes",
+      "sha": "a8763f8ef5f3ca507073252f6815171c00b47074",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitignore",
+      "sha": "6b3af3fee63af0fc31478b6cc2a77fa61b1112b3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "artisan",
+      "sha": "df630d0d6d5eec358975694522226a898a715019",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/slick-config.css",
+      "sha": "81948912f8ce7072936980e8a7699cdb2615d167",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 114,
+  "tree": "572c67f8f22fa831cffc5abe0575489d84fff04d"
+},
+{
+  "sha": "32ec366d6cec85ad85ff54f49bd6f46b7f1a5d15",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2018-01-10 13:36:30",
+  "message": "push",
+  "source": "log",
+  "parents": ["f6000373e3213510d9334851a521c5005b0f1c26"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitattributes",
+      "sha": "a8763f8ef5f3ca507073252f6815171c00b47074",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitignore",
+      "sha": "6b3af3fee63af0fc31478b6cc2a77fa61b1112b3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "artisan",
+      "sha": "df630d0d6d5eec358975694522226a898a715019",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "composer.json",
+      "sha": "4943e17d00d4769130934258197af919f0b5afc8",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "composer.lock",
+      "sha": "d3b8387832891c2d1c3a07f2573acce0480b2711",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "gulpfile.js",
+      "sha": "dc6f1ebb4eafd867d781b3d635919002d357d85b",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 110,
+  "tree": "998e845d0579a2ee13b8bfa6a63e648c505ffc81"
+},
+{
+  "sha": "f6000373e3213510d9334851a521c5005b0f1c26",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-10-30 17:56:45",
+  "message": "push",
+  "source": "log",
+  "parents": ["ffd5716425651a2ed660383dd2c29fd263f14eec"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitattributes",
+      "sha": "a8763f8ef5f3ca507073252f6815171c00b47074",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitignore",
+      "sha": "6b3af3fee63af0fc31478b6cc2a77fa61b1112b3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "artisan",
+      "sha": "df630d0d6d5eec358975694522226a898a715019",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "composer.json",
+      "sha": "4943e17d00d4769130934258197af919f0b5afc8",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "composer.lock",
+      "sha": "d3b8387832891c2d1c3a07f2573acce0480b2711",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "gulpfile.js",
+      "sha": "dc6f1ebb4eafd867d781b3d635919002d357d85b",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 110,
+  "tree": "1ff63db31a3160e424b0e6f8ea3cc546dca0ef35"
+},
+{
+  "sha": "ffd5716425651a2ed660383dd2c29fd263f14eec",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-10-27 14:59:26",
+  "message": "push",
+  "source": "log",
+  "parents": ["4c5ad5ef0172e6323f8b9b008c9cde3cab8efbcc"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/slick-config.css",
+      "sha": "81948912f8ce7072936980e8a7699cdb2615d167",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 108,
+  "tree": "75eb7a5dfe46a718826fbfc0fcb99f0f1607792d"
+},
+{
+  "sha": "4c5ad5ef0172e6323f8b9b008c9cde3cab8efbcc",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-10-26 11:38:40",
+  "message": "push",
+  "source": "log",
+  "parents": ["058b20f3b80b9069c6c4b0cfc34ac957a9e1985a"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/slick-config.css",
+      "sha": "81948912f8ce7072936980e8a7699cdb2615d167",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 107,
+  "tree": "46c64d3c49b0dbcd2e9a350776bfb46bacb445da"
+},
+{
+  "sha": "058b20f3b80b9069c6c4b0cfc34ac957a9e1985a",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-10-26 11:36:19",
+  "message": "push",
+  "source": "log",
+  "parents": ["d881664820936456ab02738f0e438645c9314621"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/app.css",
+      "sha": "e427c921581b76f896b152efe2a7e71e83e48404",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/slick-config.css",
+      "sha": "81948912f8ce7072936980e8a7699cdb2615d167",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 107,
+  "tree": "11045ac9cd6c4bf0814527bc6fd4585c281d7afb"
+},
+{
+  "sha": "d881664820936456ab02738f0e438645c9314621",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-08-23 11:51:32",
+  "message": "push",
+  "source": "log",
+  "parents": ["4983296bb3960f0dd9e5e92efb5ef26d1930a19c"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitattributes",
+      "sha": "a8763f8ef5f3ca507073252f6815171c00b47074",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/slick-config.css",
+      "sha": "81948912f8ce7072936980e8a7699cdb2615d167",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 106,
+  "tree": "dc12e07cedc800bca89e41f0b065463596623391"
+},
+{
+  "sha": "4983296bb3960f0dd9e5e92efb5ef26d1930a19c",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-08-09 11:41:49",
+  "message": "push",
+  "source": "log",
+  "parents": ["5eb6dbbe5b50de7ea280e550629dd718785b79a6"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitattributes",
+      "sha": "a8763f8ef5f3ca507073252f6815171c00b47074",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": ".gitignore",
+      "sha": "6b3af3fee63af0fc31478b6cc2a77fa61b1112b3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "artisan",
+      "sha": "df630d0d6d5eec358975694522226a898a715019",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "composer.json",
+      "sha": "4943e17d00d4769130934258197af919f0b5afc8",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "composer.lock",
+      "sha": "d3b8387832891c2d1c3a07f2573acce0480b2711",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "gulpfile.js",
+      "sha": "dc6f1ebb4eafd867d781b3d635919002d357d85b",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "package.json",
+      "sha": "c4a056b6eef94dd1e273d9172cf19dcd2fb82320",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "phpunit.xml",
+      "sha": "3e884d179ccbab0bc8b0bc14c602cec03cc91480",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "readme.md",
+      "sha": "7f8816d62ad36a7bb204f466f71ce67bd954e263",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "server.php",
+      "sha": "f65c7c444f2bf9108a1df96408008ebd25e3c18f",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/index.blade.php",
+      "sha": "02bf3222ae706f536b87c16273b6c22ba63eb857",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/layout.blade.php",
+      "sha": "214cca310380ad82d9d4b1929beaa8ec39952193",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/welcome.blade.php",
+      "sha": "87710acead3f9d3981326d82486a9d109829c86c",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/partials/header.blade.php",
+      "sha": "c077ec2fcc15f3601cc24fcea2522aa0175b9ee3",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "resources/views/partials/sliderSites.blade.php",
+      "sha": "15a8f69cd80b842d06bd0d6efa4003c2ccf7ee68",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/.htaccess",
+      "sha": "903f6392ca410eceab8338afb27da72e985b3cc0",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/favicon.ico",
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/slick-config.css",
+      "sha": "81948912f8ce7072936980e8a7699cdb2615d167",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 106,
+  "tree": "45b0df4bb8a0f5195ae9d5ccb4edbe86cb0a85f0"
+},
+{
+  "sha": "5eb6dbbe5b50de7ea280e550629dd718785b79a6",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-08-01 14:31:03",
+  "message": "push",
+  "source": "log",
+  "parents": ["74bc15a9adb578931dac99ef8152b35b12a21da1"],
+  "files": [
+    {
+      "path": ".env.example",
+      "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+      "mode": "100644",
+      "blob_url": "#"
+    },
+    {
+      "path": "public/assets/css/app.css",
+      "sha": "0b94fafa0b2e2ea159c2b000313f48ddc2450b86",
+      "mode": "100644",
+      "blob_url": "#"
+    }
+  ],
+  "file_count": 66,
+  "tree": "5dfb132f7c115a51d6d227f8e1667b37fdd0cd8e"
+},
+{
+  "sha": "74bc15a9adb578931dac99ef8152b35b12a21da1",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-08-01 13:10:11",
+  "message": "push",
+  "source": "log",
+  "parents": ["26d432576d921e7341d6eced9830e4c5da212335"],
+  "files": [],
+  "file_count": 0,
+  "file_collection_error": "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+},
+{
+  "sha": "26d432576d921e7341d6eced9830e4c5da212335",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-08-01 13:01:01",
+  "message": "push",
+  "source": "log",
+  "parents": ["9aa4d05578e739e97fc483906f769180f38b38ab"],
+  "files": [],
+  "file_count": 0,
+  "file_collection_error": "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+},
+{
+  "sha": "9aa4d05578e739e97fc483906f769180f38b38ab",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-07-31 21:09:27",
+  "message": "push",
+  "source": "log",
+  "parents": ["33622e93f2a9a9d423df63ce2ab142669d81dce3"],
+  "files": [],
+  "file_count": 0,
+  "file_collection_error": "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+},
+{
+  "sha": "33622e93f2a9a9d423df63ce2ab142669d81dce3",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-07-28 16:47:04",
+  "message": "push",
+  "source": "log",
+  "parents": ["ac409ad7aebed449a62ba15c8b0d7a29a9c888b6"],
+  "files": [],
+  "file_count": 0,
+  "file_collection_error": "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+},
+{
+  "sha": "ac409ad7aebed449a62ba15c8b0d7a29a9c888b6",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-07-28 16:43:40",
+  "message": "push",
+  "source": "log",
+  "parents": ["b1d9a23455a0181143d7f664254ee3407e13cbc6"],
+  "files": [],
+  "file_count": 0,
+  "file_collection_error": "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+},
+{
+  "sha": "b1d9a23455a0181143d7f664254ee3407e13cbc6",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-07-28 16:36:21",
+  "message": "push",
+  "source": "log",
+  "parents": ["8bbaba25e047c70b1b17a0b32f238b8c8b079982"],
+  "files": [],
+  "file_count": 0,
+  "file_collection_error": "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+},
+{
+  "sha": "8bbaba25e047c70b1b17a0b32f238b8c8b079982",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-07-27 17:14:30",
+  "message": "push",
+  "source": "log",
+  "parents": ["b0d9eeada12cc138bbdb78ef53b174ad60f28205"],
+  "files": [],
+  "file_count": 0,
+  "file_collection_error": "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+},
+{
+  "sha": "b0d9eeada12cc138bbdb78ef53b174ad60f28205",
+  "ok": true,
+  "author": "José da Silva <tec@demo.com.br>",
+  "date": "2017-07-27 16:44:23",
+  "message": "push",
+  "source": "log",
+  "parents": ["3f4c078989d96b6634629c341a9e396783e6cad8"],
+  "files": [],
+  "file_count": 0,
+  "file_collection_error": "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+}];
+            const REMOTE_URL = "#";
+
+            // Elementos DOM
+            const tableBody = document.getElementById('table-body');
+            const searchInput = document.getElementById('q');
+            const entriesInfo = document.getElementById('entries-info');
+            const pgControls = document.getElementById('pagination-controls');
+            const totalCountEl = document.getElementById('total-count');
+
+            // Estado
+            let filteredCommits = COMMITS;
+            let currentPage = 1;
+            const itemsPerPage = 20; // Mais itens por página pois é tabela
+
+            // Helpers
+            function getLink(sha) {
+                if (!REMOTE_URL) return `<span class="hash-link">${sha.substring(0,8)}</span>`;
+                const cleanUrl = REMOTE_URL.replace('.git', '');
+                return `<a href="${cleanUrl}/commit/${sha}" target="_blank" class="hash-link">${sha.substring(0,8)}</a>`;
+            }
+
+            function safe(str) {
+                if (!str) return '';
+                return str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+
+            // Core Render
+            function renderTable() {
+                const totalPages = Math.ceil(filteredCommits.length / itemsPerPage) || 1;
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+
+                const start = (currentPage - 1) * itemsPerPage;
+                const end = start + itemsPerPage;
+                const pageData = filteredCommits.slice(start, end);
+
+                tableBody.innerHTML = '';
+
+                pageData.forEach((c, index) => {
+                    const tr = document.createElement('tr');
+                    
+                    // 1. Coluna Hash & Status
+                    const sourceBadge = c.source === 'log' 
+                        ? '<span class="badge badge-log">LOG</span>' 
+                        : '<span class="badge badge-walk">GRAPH</span>';
+                    
+                    const statusBadge = !c.ok 
+                        ? '<span class="badge badge-err">ERR</span>' 
+                        : '';
+
+                    const hashHtml = `<div class="mono">${getLink(c.sha)}</div><div>${statusBadge}${sourceBadge}</div>`;
+
+                    // 2. Coluna Data
+                    const dateHtml = `<div style="color:var(--text-secondary)">${c.date || '?'}</div>`;
+
+                    // 3. Coluna Autor
+                    // Sua lógica original de replace para tratar formato "Nome <email>"
+                    const cleanAuthor = safe(c.author).replace('&lt;', '<br><span class="author-email">').replace('&gt;', '</span>');
+                    
+                    // 4. Coluna Mensagem & Parents
+                    let parentsHtml = '';
+                    if (c.parents && c.parents.length > 0) {
+                        parentsHtml = c.parents.map(p => `<a href="#" onclick="filterBySha('${p}'); return false;">${p.substring(0,8)}</a>`).join(', ');
+                    }
+                    const msgHtml = `
+                        <span class="msg-text">${safe(c.message)}</span>
+                        ${parentsHtml ? `<div class="parents-info">Parent(s): ${parentsHtml}</div>` : ''}
+                        ${!c.ok ? `<div class="err-msg">Erro: ${c.error || 'Desconhecido'}</div>` : ''}
+                    `;
+
+                    // 5. Coluna Arquivos (Details)
+                    let filesHtml = '';
+                    if (c.file_collection_error) {
+                        filesHtml = `<span class="err-msg">${c.file_collection_error}</span>`;
+                    } else if (c.files && c.files.length > 0) {
+                        // Limita visualização se tiver muitos arquivos
+                        const fileListItems = c.files.map(f => 
+                            `<div class="file-item mono">${safe(f.path)} <span class="file-sha">${f.sha ? f.sha.substring(0,6) : ''}</span></div>`
+                        ).join('');
+                        
+                        filesHtml = `
+                            <details>
+                                <summary>${c.files.length} arquivo(s)</summary>
+                                <div class="file-list">
+                                    ${fileListItems}
+                                </div>
+                            </details>
+                        `;
+                    } else {
+                        filesHtml = '<span style="color:#555; font-size:0.8rem">Nenhum/Tree Vazia</span>';
+                    }
+
+                    // Montagem das células
+                    tr.innerHTML = `
+                        <td>${hashHtml}</td>
+                        <td>${dateHtml}</td>
+                        <td>${cleanAuthor}</td>
+                        <td>${msgHtml}</td>
+                        <td>${filesHtml}</td>
+                    `;
+                    tableBody.appendChild(tr);
+                });
+
+                // Atualiza Info
+                const startInfo = filteredCommits.length === 0 ? 0 : start + 1;
+                const endInfo = Math.min(end, filteredCommits.length);
+                entriesInfo.innerText = `Mostrando ${startInfo} a ${endInfo} de ${filteredCommits.length} commits`;
+                
+                renderPagination(totalPages);
+            }
+
+            // Filter
+            function filterCommits(query) {
+                const q = query.toLowerCase().trim();
+                filteredCommits = COMMITS.filter(c => {
+                    return (c.sha || '').toLowerCase().includes(q) ||
+                           (c.author || '').toLowerCase().includes(q) ||
+                           (c.message || '').toLowerCase().includes(q);
+                });
+                currentPage = 1;
+                renderTable();
+            }
+            
+            // Helper para links de parents clicáveis
+            window.filterBySha = function(sha) {
+                searchInput.value = sha;
+                filterCommits(sha);
+            }
+
+            // Pagination
+            function renderPagination(totalPages) {
+                pgControls.innerHTML = '';
+                
+                const createBtn = (label, page, disabled=false, active=false) => {
+                    const btn = document.createElement('button');
+                    btn.className = `page-btn ${active ? 'active' : ''}`;
+                    btn.innerHTML = label;
+                    btn.disabled = disabled;
+                    btn.onclick = () => { currentPage = page; renderTable(); };
+                    return btn;
+                };
+
+                pgControls.appendChild(createBtn('‹', currentPage - 1, currentPage === 1));
+
+                let startPage = Math.max(1, currentPage - 2);
+                let endPage = Math.min(totalPages, startPage + 4);
+                if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+
+                for (let i = startPage; i <= endPage; i++) {
+                    pgControls.appendChild(createBtn(i, i, false, i === currentPage));
+                }
+
+                pgControls.appendChild(createBtn('›', currentPage + 1, currentPage === totalPages));
+            }
+
+            // Events
+            searchInput.addEventListener('input', (e) => filterCommits(e.target.value));
+
+            // Init
+            renderTable();
+
+        </script>
+    </body>
+    </html>
+    

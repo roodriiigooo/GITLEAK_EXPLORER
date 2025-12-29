@@ -1,0 +1,342 @@
+
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Arquivos Recuperados - Git Leak Explorer</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --bg-body: #0f111a;
+                --bg-card: #1a1d2d;
+                --bg-hover: #23273a;
+                --text-primary: #e2e8f0;
+                --text-secondary: #94a3b8;
+                --accent-color: #6366f1;
+                --border-color: #2d3748;
+                --success: #10b981;
+                --warning: #f59e0b;
+                --hash-color: #ec4899;
+            }
+
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            
+            body {
+                background-color: var(--bg-body);
+                color: var(--text-primary);
+                font-family: 'Inter', sans-serif;
+                min-height: 100vh;
+                padding: 2rem;
+            }
+
+            .container { max-width: 1400px; margin: 0 auto; }
+
+            /* Header */
+            .header {
+                display: flex; justify-content: space-between; align-items: center;
+                margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);
+            }
+            .title h1 { font-size: 1.5rem; font-weight: 600; color: #fff; }
+            .title p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }
+            
+            .stats { background: var(--bg-card); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; color: var(--text-secondary); }
+            .highlight { color: var(--accent-color); font-weight: 600; }
+
+            /* Controls Bar */
+            .controls {
+                display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center;
+            }
+            
+            .btn-back {
+                display: inline-flex; align-items: center; padding: 0.6rem 1rem;
+                background-color: var(--bg-card); color: var(--text-primary);
+                text-decoration: none; border-radius: 6px; border: 1px solid var(--border-color);
+                font-size: 0.9rem; transition: all 0.2s;
+            }
+            .btn-back:hover { border-color: var(--accent-color); color: var(--accent-color); }
+
+            .search-box { flex: 1; position: relative; max-width: 500px; }
+            .search-box input {
+                width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem;
+                background-color: var(--bg-card); border: 1px solid var(--border-color);
+                border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;
+            }
+            .search-box input:focus { outline: none; border-color: var(--accent-color); }
+            .search-icon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; }
+
+            .select-box select {
+                padding: 0.6rem; background-color: var(--bg-card); border: 1px solid var(--border-color);
+                border-radius: 6px; color: var(--text-primary); cursor: pointer;
+            }
+
+            .btn-reset {
+                padding: 0.6rem 1rem; background: transparent; border: 1px solid var(--border-color);
+                color: var(--text-secondary); border-radius: 6px; cursor: pointer; transition: 0.2s;
+            }
+            .btn-reset:hover { background: rgba(255,255,255,0.05); color: #fff; }
+
+            /* Table */
+            .table-container {
+                background-color: var(--bg-card); border-radius: 8px;
+                border: 1px solid var(--border-color); overflow: hidden;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+
+            table { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }
+            
+            th {
+                background-color: rgba(255,255,255,0.03); padding: 1rem; text-align: left;
+                font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border-color);
+                cursor: pointer; user-select: none;
+            }
+            th:hover { color: var(--accent-color); }
+            
+            td { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+            tbody tr:hover { background-color: var(--bg-hover); }
+
+            /* Column Widths */
+            th:nth-child(1) { width: 45%; } /* Arquivo */
+            th:nth-child(2) { width: 20%; } /* Local */
+            th:nth-child(3) { width: 10%; } /* Remoto */
+            th:nth-child(4) { width: 25%; } /* Blob */
+
+            /* Typography */
+            .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+            .path-text { color: #e2e8f0; word-break: break-all; }
+            
+            .hash-link { color: var(--hash-color); text-decoration: none; }
+            .hash-link:hover { text-decoration: underline; }
+
+            /* Badges */
+            .badge {
+                padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;
+                text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 5px;
+            }
+            .badge-success { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+            .badge-missing { background: rgba(148, 163, 184, 0.15); color: var(--text-secondary); border: 1px solid rgba(148, 163, 184, 0.3); }
+
+            .link-icon { color: var(--accent-color); text-decoration: none; font-size: 0.9rem; }
+            .link-icon:hover { text-decoration: underline; }
+
+            /* Pagination */
+            .pagination-container {
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.9rem;
+            }
+            .page-btn {
+                background: var(--bg-card); border: 1px solid var(--border-color);
+                color: var(--text-primary); width: 32px; height: 32px; border-radius: 6px;
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: all 0.2s;
+            }
+            .page-btn:hover:not(:disabled) { border-color: var(--accent-color); color: var(--accent-color); }
+            .page-btn.active { background: var(--accent-color); border-color: var(--accent-color); color: white; }
+            .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header class="header">
+                <div class="title">
+                    <h1>Arquivos Recuperados</h1>
+                    <p>Índice completo do repositório (.git/index)</p>
+                </div>
+                <div class="stats">
+                    Total: <span class="highlight">0</span> arquivos
+                </div>
+            </header>
+
+            <div class="controls">
+                <a href="report.html" class="btn-back">← Voltar</a>
+                
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="q" placeholder="Buscar por nome, extensão ou SHA...">
+                </div>
+
+                <div class="select-box">
+                    <select id="pageSize">
+                        <option value="25">25 por pág</option>
+                        <option value="50">50 por pág</option>
+                        <option value="100" selected>100 por pág</option>
+                        <option value="500">500 por pág</option>
+                    </select>
+                </div>
+
+                <button id="reset" class="btn-reset">Limpar Filtros</button>
+            </div>
+
+            <div class="table-container">
+                <table id="tbl">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="path">Nome do Arquivo ↕</th>
+                            <th>Status Local</th>
+                            <th>Remoto</th>
+                            <th class="sortable" data-sort="sha">Blob SHA-1 ↕</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-container">
+                <div id="entriesInfo">Carregando...</div>
+                <div style="display:flex; gap:5px;">
+                    <button id="prev" class="page-btn">‹</button>
+                    <span id="pageDisplay" style="display:flex; align-items:center; padding:0 10px;">1</span>
+                    <button id="next" class="page-btn">›</button>
+                </div>
+            </div>
+            
+            <p style="text-align:center; color:#555; margin-top:2rem; font-size:0.8rem;">
+                Git Leak Explorer • Index Parsing
+            </p>
+        </div>
+
+        <script>
+            const DATA = [];
+            
+            // Estado
+            let filtered = DATA.slice();
+            let sortKey = null;
+            let sortDir = 1;
+            let pageSize = 100;
+            let curPage = 1;
+
+            // Elementos DOM
+            const tbody = document.getElementById('tbody');
+            const q = document.getElementById('q');
+            const pageSizeSel = document.getElementById('pageSize');
+            const entriesInfo = document.getElementById('entriesInfo');
+            const pageDisplay = document.getElementById('pageDisplay');
+            const btnPrev = document.getElementById('prev');
+            const btnNext = document.getElementById('next');
+
+            function render() {
+                // Lógica de Paginação
+                pageSize = parseInt(pageSizeSel.value, 10);
+                const total = filtered.length;
+                const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+                if (curPage > totalPages) curPage = totalPages;
+                if (curPage < 1) curPage = 1;
+
+                const start = (curPage - 1) * pageSize;
+                const end = start + pageSize;
+                const slice = filtered.slice(start, end);
+
+                // Render HTML
+                tbody.innerHTML = '';
+                slice.forEach(r => {
+                    const tr = document.createElement('tr');
+                    
+                    // Coluna 1: Path
+                    const pathHtml = `<span class="path-text mono" title="${r.path}">${r.path}</span>`;
+                    
+                    // Coluna 2: Local Status
+                    let localHtml = '';
+                    if (r.local_exists) {
+                        // Tenta link local (pode ser bloqueado pelo browser), mas visualmente indica sucesso
+                        localHtml = `<a href="${r.local_url}" target="_blank" style="text-decoration:none"><span class="badge badge-success">✓ RESTORED</span></a>`;
+                    } else {
+                        localHtml = `<span class="badge badge-missing">✖ MISSING</span>`;
+                    }
+
+                    // Coluna 3: Remote
+                    const remoteHtml = `<a href="${r.remote_url}" target="_blank" class="link-icon">Abrir ↗</a>`;
+
+                    // Coluna 4: SHA
+                    const shaHtml = r.sha 
+                        ? `<a href="${r.blob_url}" target="_blank" class="mono hash-link">${r.sha}</a>` 
+                        : '<span class="muted">-</span>';
+
+                    tr.innerHTML = `<td>${pathHtml}</td><td>${localHtml}</td><td>${remoteHtml}</td><td>${shaHtml}</td>`;
+                    tbody.appendChild(tr);
+                });
+
+                // Update Controls
+                const startInfo = total === 0 ? 0 : start + 1;
+                const endInfo = Math.min(end, total);
+                entriesInfo.innerText = `Mostrando ${startInfo} a ${endInfo} de ${total} arquivos`;
+                pageDisplay.innerText = `Pág ${curPage} / ${totalPages}`;
+
+                btnPrev.disabled = curPage === 1;
+                btnNext.disabled = curPage === totalPages;
+            }
+
+            function applyFilter() {
+                const term = q.value.trim().toLowerCase();
+                
+                if (!term) {
+                    filtered = DATA.slice();
+                } else {
+                    filtered = DATA.filter(r => 
+                        (r.path || '').toLowerCase().includes(term) || 
+                        (r.sha || '').toLowerCase().includes(term)
+                    );
+                }
+
+                if (sortKey) {
+                    filtered.sort((a, b) => {
+                        const A = (a[sortKey] || '').toLowerCase();
+                        const B = (b[sortKey] || '').toLowerCase();
+                        if (A < B) return -1 * sortDir;
+                        if (A > B) return 1 * sortDir;
+                        return 0;
+                    });
+                }
+
+                curPage = 1;
+                render();
+            }
+
+            // Listeners
+            q.addEventListener('input', applyFilter);
+            
+            pageSizeSel.addEventListener('change', () => {
+                curPage = 1;
+                render();
+            });
+
+            document.getElementById('reset').addEventListener('click', () => {
+                q.value = '';
+                pageSizeSel.value = '100';
+                sortKey = null;
+                sortDir = 1;
+                filtered = DATA.slice();
+                curPage = 1;
+                render();
+            });
+
+            btnPrev.addEventListener('click', () => {
+                if (curPage > 1) { curPage--; render(); }
+            });
+
+            btnNext.addEventListener('click', () => {
+                const totalPages = Math.ceil(filtered.length / pageSize);
+                if (curPage < totalPages) { curPage++; render(); }
+            });
+
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.addEventListener('click', () => {
+                    const k = th.getAttribute('data-sort');
+                    if (sortKey === k) {
+                        sortDir = -sortDir;
+                    } else {
+                        sortKey = k;
+                        sortDir = 1;
+                    }
+                    applyFilter();
+                });
+            });
+
+            // Init
+            render();
+        </script>
+    </body>
+    </html>
+    

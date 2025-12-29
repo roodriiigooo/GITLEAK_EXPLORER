@@ -1,0 +1,378 @@
+
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dashboard - Git Leak Explorer</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --bg-body: #0f111a;
+                --bg-card: #1a1d2d;
+                --text-primary: #e2e8f0;
+                --text-secondary: #94a3b8;
+                --accent-color: #6366f1;
+                --border-color: #2d3748;
+                --success: #10b981;
+                --danger: #ef4444;
+                --warning: #f59e0b;
+                --info: #3b82f6;
+                --hash-color: #ec4899;
+            }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body {
+                background-color: var(--bg-body); color: var(--text-primary);
+                font-family: 'Inter', sans-serif; padding: 20px;
+            }
+            .container { max-width: 1200px; margin: 0 auto; }
+
+            /* Typography */
+            h1 { font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem; }
+            .muted { color: var(--text-secondary); }
+            .small { font-size: 0.85rem; }
+            .mono { font-family: 'JetBrains Mono', monospace; }
+
+            /* Grid & Cards */
+            .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+            @media (max-width: 768px) { .dashboard-grid { grid-template-columns: 1fr; } }
+
+            .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+            .card-header { padding: 12px 16px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; }
+            .card-body { padding: 16px; flex: 1; }
+            .mb-4 { margin-bottom: 1.5rem; }
+
+            /* Tables */
+            .table-simple { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+            .table-simple td { padding: 8px 0; border-bottom: 1px solid var(--border-color); }
+            .table-simple tr:last-child td { border-bottom: none; }
+            .text-right { text-align: right; }
+
+            /* Badges */
+            .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+            .bg-danger { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); }
+            .bg-success { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+            .bg-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+            .bg-info { background: rgba(59, 130, 246, 0.2); color: var(--info); border: 1px solid rgba(59, 130, 246, 0.3); }
+            .bg-primary { background: rgba(99, 102, 241, 0.2); color: var(--accent-color); border: 1px solid rgba(99, 102, 241, 0.3); }
+            .bg-secondary { background: #333; color: #ccc; }
+            .bg-purple { background: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+            
+            .text-white { color: #fff !important; }
+            .d-flex { display: flex; }
+            .justify-content-between { justify-content: space-between; }
+            .align-items-center { align-items: center; }
+            .w-100 { width: 100%; }
+            .mt-2 { margin-top: 0.5rem; } .mt-3 { margin-top: 1rem; }
+            .m-0 { margin: 0; }
+
+            /* Buttons */
+            .btn { display: inline-block; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 0.9rem; text-align: center; transition: 0.2s; cursor: pointer; border: 1px solid transparent; }
+            .btn-primary { background: var(--accent-color); color: #fff; }
+            .btn-primary:hover { opacity: 0.9; }
+            .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
+            .btn-outline:hover { border-color: var(--accent-color); color: var(--accent-color); }
+            .btn-outline-danger { border: 1px solid var(--danger); color: var(--danger); }
+            .btn-outline-danger:hover { background: var(--danger); color: white; }
+
+            .big-stat { font-size: 3rem; font-weight: 800; color: #fff; line-height: 1; }
+            .stat-label { text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; color: var(--text-secondary); }
+
+            footer { margin-top: 40px; text-align: center; color: var(--text-secondary); font-size: 0.8rem; border-top: 1px solid var(--border-color); padding-top: 20px; }
+            a { color: var(--accent-color); text-decoration: none; }
+            a:hover { text-decoration: underline; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+		<div style="position: absolute; width: 104px; height: 104px; left: 0px; top: 0px; z-index:1000"><a href="https://github.com/roodriiigooo/GITLEAK_EXPLORER" target="_blank" style="border:none;"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGgAAABoCAYAAAFqG4U3AAAACXBIWXMAAAsTAAALEwEAmpwYAAAFFmlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNi4wLWMwMDIgNzkuMTY0MzUyLCAyMDIwLzAxLzMwLTE1OjUwOjM4ICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgMjEuMSAoV2luZG93cykiIHhtcDpDcmVhdGVEYXRlPSIyMDI1LTEyLTI5VDE1OjE5OjI1LTAzOjAwIiB4bXA6TW9kaWZ5RGF0ZT0iMjAyNS0xMi0yOVQxNToyNToyNy0wMzowMCIgeG1wOk1ldGFkYXRhRGF0ZT0iMjAyNS0xMi0yOVQxNToyNToyNy0wMzowMCIgZGM6Zm9ybWF0PSJpbWFnZS9wbmciIHBob3Rvc2hvcDpDb2xvck1vZGU9IjMiIHBob3Rvc2hvcDpJQ0NQcm9maWxlPSJzUkdCIElFQzYxOTY2LTIuMSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDplOGE0ZDE2NS0wMzBjLWFm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" alt="I love PHP" width="104" height="104" border="0"/></a></div>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1>Git Leak Explorer</h1>
+                    <p class="muted">Relatório de Análise Técnica</p>
+                </div>
+                <div class="text-right">
+                    <p class="small muted mb-0">Alvo:</p>
+                    <a href="https://alvo-demo.com.br/sobre" target="_blank" style="font-weight:bold;">https://alvo-demo.com.br/sobre</a>
+                </div>
+            </div>
+
+            
+        <div class="card mb-4 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h3 class="m-0" style="font-size:1.1rem">⚠️ SEGREDOS CRÍTICOS DETECTADOS (11)</h3>
+            </div>
+            <div class="card-body">
+                <table class="table-simple">
+                    
+          
+            <tr>
+                <td><span class="badge bg-danger">DotEnv Sensitive Assignment</span></td>
+                <td>_files\bruteforce\.env</td>
+                <td class="mono small">APP_KEY=base64:YHIMH7/8WzH48KMDvFsTlX24y3wVd4vknwsVHWMm6dQ=</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge bg-danger">DotEnv Sensitive Assignment</span></td>
+                <td>_files\bruteforce\.env</td>
+                <td class="mono small">DB_PASSWORD=secret</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge bg-danger">DotEnv Sensitive Assignment</span></td>
+                <td>_files\bruteforce\.env.example</td>
+                <td class="mono small">APP_KEY=SomeRandomString</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge bg-danger">DotEnv Sensitive Assignment</span></td>
+                <td>_files\bruteforce\.env.example</td>
+                <td class="mono small">DB_PASSWORD=secret</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge bg-danger">Laravel APP_KEY</span></td>
+                <td>_files\misc\.env</td>
+                <td class="mono small">APP_KEY=base64:YHIMH7/8WzH48KMDvFsTlX24y3wVd4vknwsVHWMm6dQ=</td>
+            </tr>
+            
+            <tr>
+                <td><span class="badge bg-danger">DotEnv Sensitive Assignment</span></td>
+                <td>_files\misc\.env</td>
+                <td class="mono small">DB_PASSWORD=secret</td>
+            </tr>
+            
+                </table>
+                <a href="secrets.html" class="btn btn-outline-danger w-100 mt-2">Ver Relatório de Segredos</a>
+            </div>
+        </div>
+        
+
+            <div class="dashboard-grid">
+                <div>
+                    
+    <div class="card">
+        <div class="card-header d-flex justify-content-between">
+            <span>🛡 Hardening & Config</span>
+            <span class="badge bg-danger">
+                6 Falhas
+            </span>
+        </div>
+        <div class="card-body">
+            <table class="table-simple">
+                <tr><td>HEAD</td><td><span class='badge bg-danger'>EXPOSTO</span></td></tr><tr><td>refs_heads</td><td><span class='badge bg-danger'>EXPOSTO</span></td></tr><tr><td>packed_refs</td><td><span class='badge bg-success'>OK</span></td></tr><tr><td>index</td><td><span class='badge bg-danger'>EXPOSTO</span></td></tr><tr><td>objects_root</td><td><span class='badge bg-danger'>EXPOSTO</span></td></tr><tr><td>logs</td><td><span class='badge bg-danger'>EXPOSTO</span></td></tr><tr><td>config</td><td><span class='badge bg-danger'>EXPOSTO</span></td></tr>
+            </table>
+            <a href="hardening_report.html" class="btn btn-outline w-100 mt-3">Ver Diagnóstico Completo</a>
+        </div>
+    </div>
+    
+                    <div style="margin-top:20px;"></div>
+                    
+    <div class="card">
+        <div class="card-header d-flex justify-content-between">
+            <span>⏳ Histórico Recente</span>
+            <span class="badge bg-info">18 Commits</span>
+        </div>
+        <div class="card-body">
+            <div class="meta mb-3">HEAD: <span class="mono">N/A</span></div>
+            <table class="table-simple">
+                
+        <tr>
+            <td class="mono"><span style="color:var(--hash-color)">254f202</span></td>
+            <td>push...</td>
+            <td class="text-right"><span class="badge bg-secondary">2018-03-28</span></td>
+        </tr>
+        
+        <tr>
+            <td class="mono"><span style="color:var(--hash-color)">39ef4e7</span></td>
+            <td>push...</td>
+            <td class="text-right"><span class="badge bg-secondary">2018-01-26</span></td>
+        </tr>
+        
+        <tr>
+            <td class="mono"><span style="color:var(--hash-color)">32ec366</span></td>
+            <td>push...</td>
+            <td class="text-right"><span class="badge bg-secondary">2018-01-10</span></td>
+        </tr>
+        
+        <tr>
+            <td class="mono"><span style="color:var(--hash-color)">f600037</span></td>
+            <td>push...</td>
+            <td class="text-right"><span class="badge bg-secondary">2017-10-30</span></td>
+        </tr>
+        
+        <tr>
+            <td class="mono"><span style="color:var(--hash-color)">ffd5716</span></td>
+            <td>push...</td>
+            <td class="text-right"><span class="badge bg-secondary">2017-10-27</span></td>
+        </tr>
+        
+            </table>
+            <a href="history.html" class="btn btn-outline w-100 mt-3">Explorar Timeline Completa</a>
+        </div>
+    </div>
+    
+                </div>
+                <div>
+                    
+    <div class="card">
+        <div class="card-header">👤 Identidades (OSINT)</div>
+        <div class="card-body text-center">
+            <div class="big-stat">1</div>
+            <div class="stat-label">Autores Identificados</div>
+            <p class="muted small mt-2">Desenvolvedores e e-mails extraídos do histórico.</p>
+            <a href="users.html" class="btn btn-primary w-100 mt-2">Ver Lista de Usuários</a>
+        </div>
+    </div>
+    
+                    <div style="margin-top:20px;"></div>
+                    
+    <div class="card">
+        <div class="card-header d-flex justify-content-between">
+            <span>📂 Arquivos (.git Index)</span>
+            <span class="badge bg-warning text-dark">253 Arquivos</span>
+        </div>
+        <div class="card-body">
+            <table class="table-simple">
+                
+        <tr>
+            <td class="mono">.env.example</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">.gitattributes</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">.gitignore</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">app/Console/Commands/Inspire.php</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">app/Console/Kernel.php</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">app/Events/Event.php</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">app/Exceptions/Handler.php</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">app/Http/Controllers/Auth/AuthController.php</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">app/Http/Controllers/Auth/PasswordController.php</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+        <tr>
+            <td class="mono">app/Http/Controllers/Controller.php</td>
+            <td class="text-right"><a href="#" target="_blank" class="link-icon">Blob Remoto</a></td>
+        </tr>
+        
+            </table>
+            <p class="text-center mt-2 small muted">... e mais 243 arquivos.</p>
+            <a href="listing.html" class="btn btn-outline w-100">Ver Listagem Completa</a>
+        </div>
+    </div>
+    
+                </div>
+            </div>
+
+            
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <span>🔨 Arquivos via Brute-Force</span>
+                <span class="badge bg-light text-primary">9</span>
+            </div>
+            <div class="card-body">
+                <table class="table-simple">
+                    <thead><tr><th>Origem</th><th>Arquivo</th><th>Ação</th></tr></thead>
+                    <tbody>
+            <tr>
+                <td><span class='badge bg-primary'>PADRÃO</span></td>
+                <td>.env</td>
+                <td class="text-right"><a href='https://alvo-demo.com.br/sobre/.env' target='_blank'>Link</a></td>
+            </tr>
+            
+            <tr>
+                <td><span class='badge bg-primary'>PADRÃO</span></td>
+                <td>.env.example</td>
+                <td class="text-right"><a href='https://alvo-demo.com.br/sobre/.env.example' target='_blank'>Link</a></td>
+            </tr>
+            
+            <tr>
+                <td><span class='badge bg-primary'>PADRÃO</span></td>
+                <td>.git/config</td>
+                <td class="text-right"><a href='https://alvo-demo.com.br/sobre/.git/config' target='_blank'>Link</a></td>
+            </tr>
+            
+            <tr>
+                <td><span class='badge bg-primary'>PADRÃO</span></td>
+                <td>.gitignore</td>
+                <td class="text-right"><a href='https://alvo-demo.com.br/sobre/.gitignore' target='_blank'>Link</a></td>
+            </tr>
+            
+            <tr>
+                <td><span class='badge bg-primary'>PADRÃO</span></td>
+                <td>package.json</td>
+                <td class="text-right"><a href='https://alvo-demo.com.br/sobre/package.json' target='_blank'>Link</a></td>
+            </tr>
+            </tbody>
+                </table>
+                <div class="text-center mt-3">
+                    <a href="bruteforce_report.html" class="btn btn-primary w-100">Ver Relatório de Brute-Force Completo</a>
+                </div>
+            </div>
+        </div>
+        
+
+            <div class="dashboard-grid">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between">
+                        <span>📦 Packfiles</span>
+                        <span class="badge bg-secondary">1</span>
+                    </div>
+                    <div class="card-body">
+                         <ul style='list-style:none; padding:0; margin:0; max-height: 180px; overflow-y: auto;'>
+            <li style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+                <a href="#" download class="mono" style="text-decoration:none; color: var(--accent-color); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 75%;" title="visualizar pack-9999999999999999999999999996f8b9134d4f4e.pack">pack-9999999999999999999999999996f8b9134d4f4e.pack</a>
+                <span style="color: var(--text-secondary); font-size: 0.75rem;">Listado</span>
+            </li>
+            </ul>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between">
+                        <span>⚠️ Outros Vazamentos (--full-scan)</span>
+                        <span class="badge bg-secondary">1</span>
+                    </div>
+                    <div class="card-body">
+                        <ul style='list-style:none; padding:0;'><li style='margin-bottom:5px;'><strong>ENV</strong>: <a href='env_report.html' target='_blank'>Ver Análise</a></li></ul>
+                    </div>
+                </div>
+            </div>
+
+            <footer>
+                <p>Gerado em 17/12/2025 10:52</p>
+                <p>Git Leak Explorer • Pentest & Forensic Tool</p>
+            </footer>
+        </div>
+    </body>
+    </html>
+    

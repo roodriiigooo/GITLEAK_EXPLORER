@@ -1,0 +1,1926 @@
+
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Arquivos Recuperados - Git Leak Explorer</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --bg-body: #0f111a;
+                --bg-card: #1a1d2d;
+                --bg-hover: #23273a;
+                --text-primary: #e2e8f0;
+                --text-secondary: #94a3b8;
+                --accent-color: #6366f1;
+                --border-color: #2d3748;
+                --success: #10b981;
+                --warning: #f59e0b;
+                --hash-color: #ec4899;
+            }
+
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            
+            body {
+                background-color: var(--bg-body);
+                color: var(--text-primary);
+                font-family: 'Inter', sans-serif;
+                min-height: 100vh;
+                padding: 2rem;
+            }
+
+            .container { max-width: 1400px; margin: 0 auto; }
+
+            /* Header */
+            .header {
+                display: flex; justify-content: space-between; align-items: center;
+                margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);
+            }
+            .title h1 { font-size: 1.5rem; font-weight: 600; color: #fff; }
+            .title p { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }
+            
+            .stats { background: var(--bg-card); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; color: var(--text-secondary); }
+            .highlight { color: var(--accent-color); font-weight: 600; }
+
+            /* Controls Bar */
+            .controls {
+                display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center;
+            }
+            
+            .btn-back {
+                display: inline-flex; align-items: center; padding: 0.6rem 1rem;
+                background-color: var(--bg-card); color: var(--text-primary);
+                text-decoration: none; border-radius: 6px; border: 1px solid var(--border-color);
+                font-size: 0.9rem; transition: all 0.2s;
+            }
+            .btn-back:hover { border-color: var(--accent-color); color: var(--accent-color); }
+
+            .search-box { flex: 1; position: relative; max-width: 500px; }
+            .search-box input {
+                width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem;
+                background-color: var(--bg-card); border: 1px solid var(--border-color);
+                border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;
+            }
+            .search-box input:focus { outline: none; border-color: var(--accent-color); }
+            .search-icon { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; }
+
+            .select-box select {
+                padding: 0.6rem; background-color: var(--bg-card); border: 1px solid var(--border-color);
+                border-radius: 6px; color: var(--text-primary); cursor: pointer;
+            }
+
+            .btn-reset {
+                padding: 0.6rem 1rem; background: transparent; border: 1px solid var(--border-color);
+                color: var(--text-secondary); border-radius: 6px; cursor: pointer; transition: 0.2s;
+            }
+            .btn-reset:hover { background: rgba(255,255,255,0.05); color: #fff; }
+
+            /* Table */
+            .table-container {
+                background-color: var(--bg-card); border-radius: 8px;
+                border: 1px solid var(--border-color); overflow: hidden;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+
+            table { width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }
+            
+            th {
+                background-color: rgba(255,255,255,0.03); padding: 1rem; text-align: left;
+                font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border-color);
+                cursor: pointer; user-select: none;
+            }
+            th:hover { color: var(--accent-color); }
+            
+            td { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+            tbody tr:hover { background-color: var(--bg-hover); }
+
+            /* Column Widths */
+            th:nth-child(1) { width: 45%; } /* Arquivo */
+            th:nth-child(2) { width: 20%; } /* Local */
+            th:nth-child(3) { width: 10%; } /* Remoto */
+            th:nth-child(4) { width: 25%; } /* Blob */
+
+            /* Typography */
+            .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+            .path-text { color: #e2e8f0; word-break: break-all; }
+            
+            .hash-link { color: var(--hash-color); text-decoration: none; }
+            .hash-link:hover { text-decoration: underline; }
+
+            /* Badges */
+            .badge {
+                padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;
+                text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 5px;
+            }
+            .badge-success { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+            .badge-missing { background: rgba(148, 163, 184, 0.15); color: var(--text-secondary); border: 1px solid rgba(148, 163, 184, 0.3); }
+
+            .link-icon { color: var(--accent-color); text-decoration: none; font-size: 0.9rem; }
+            .link-icon:hover { text-decoration: underline; }
+
+            /* Pagination */
+            .pagination-container {
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.9rem;
+            }
+            .page-btn {
+                background: var(--bg-card); border: 1px solid var(--border-color);
+                color: var(--text-primary); width: 32px; height: 32px; border-radius: 6px;
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: all 0.2s;
+            }
+            .page-btn:hover:not(:disabled) { border-color: var(--accent-color); color: var(--accent-color); }
+            .page-btn.active { background: var(--accent-color); border-color: var(--accent-color); color: white; }
+            .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        </style>
+    </head>
+    <body>
+        <div class="container">
+			<div style="position: absolute; width: 104px; height: 104px; left: 0px; top: 0px; z-index:1000"><a href="https://github.com/roodriiigooo/GITLEAK_EXPLORER" target="_blank" style="border:none;"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGgAAABoCAYAAAFqG4U3AAAACXBIWXMAAAsTAAALEwEAmpwYAAAFFmlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNi4wLWMwMDIgNzkuMTY0MzUyLCAyMDIwLzAxLzMwLTE1OjUwOjM4ICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgMjEuMSAoV2luZG93cykiIHhtcDpDcmVhdGVEYXRlPSIyMDI1LTEyLTI5VDE1OjE5OjI1LTAzOjAwIiB4bXA6TW9kaWZ5RGF0ZT0iMjAyNS0xMi0yOVQxNToyNToyNy0wMzowMCIgeG1wOk1ldGFkYXRhRGF0ZT0iMjAyNS0xMi0yOVQxNToyNToyNy0wMzowMCIgZGM6Zm9ybWF0PSJpbWFnZS9wbmciIHBob3Rvc2hvcDpDb2xvck1vZGU9IjMiIHBob3Rvc2hvcDpJQ0NQcm9maWxlPSJzUkdCIElFQzYxOTY2LTIuMSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDplOGE0ZDE2NS0wMzBjLWFmNDctYmIzMi04YzM1YjVhNmJlMmIiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6ZThhNGQxNjUtMDMwYy1hZjQ3LWJiMzItOGMzNWI1YTZiZTJiIiB4bXBNTTpPcmlnaW5hbERvY3VtZW50SUQ9InhtcC5kaWQ6ZThhNGQxNjUtMDMwYy1hZjQ3LWJiMzItOGMzNWI1YTZiZTJiIj4gPHhtcE1NOkhpc3Rvcnk+IDxyZGY6U2VxPiA8cmRmOmxpIHN0RXZ0OmFjdGlvbj0iY3JlYXRlZCIgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDplOGE0ZDE2NS0wMzBjLWFmNDctYmIzMi04YzM1YjVhNmJlMmIiIHN0RXZ0OndoZW49IjIwMjUtMTItMjlUMTU6MTk6MjUtMDM6MDAiIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkFkb2JlIFBob3Rvc2hvcCAyMS4xIChXaW5kb3dzKSIvPiA8L3JkZjpTZXE+IDwveG1wTU06SGlzdG9yeT4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz5QGtSjAAAd4klEQVR4nO1dfViT192+E0AxypfE+oF0RQuKtepaP1BmdTAvbO1V++5tpXbSTtGWzr6us3PD9d2LrrPYsmq1Y4Z2wja7Wru2q6y0UAuvVWmp4geIEMJ3QhI+AgmQhEBCnvePJ+fJk+TJFySKe72vy0vy8BzOcz/3Ob/zO7/zOye8+RnH4QIU18VA8oNYlG7zi/kZx5kCy6LDcEnWBwCQnzkWyOf6S6TAlhXREAqCcHBbAgCg/Yujk6PWvTAS6KwAAGxdvwBb1y9A8v4SyD57Myr60Zf1No/HLlC0NxnBEwJhGDZhQ3YppIVvLNcr6jscOJECpVkpAGAtcPr1J/RKydX5GcfN5F7CiSlgGDYBADZkl0JWdOh5vVLy2fyM4yb2E/HtCwRPCETy/hIoy/78vE5248T8jOND9rwD2Y8EAMn7S9BzpejZPsm3pwA4FGAeLzWnjHkknaxmU/fFT953VgAAeOxXbNKpn2g88ct/skm7LESNGJ/hBQSdcHWzzeMBeNHTAqQmzl8IY+6nVC3XOX/H2WB/eLiKUtZX4kjag1g4R4iC4lq8952Mqcihwa4/Vk8p6ysBAAvnCJGaU8YUEIvSA9icAAAb3mmkWqsuAAB+u5FuqKwnEZC3ynCKWbKaarl2npODWJQ+bX7GcRX5zAeA2fetYAqUZqUgVihgF5jDLgAA/LvuXUK13/iOKVBU0YIGlZ4UWDQ/43iLfc2BXY3XmA/styQWpS8CwPnO+QBwJO1BAGAXmOOsAGDRST9ktCENQOWsAGDXYC2vddBVAaYmS4EAd63bvpDTNujs8Wwu2BtNezz0h8sU+40DwPNrYtChGcTpqg7uQlzt1Rl+9HYNNT/juEMlpVkp6NAMYtfji/HO9hU2v+u88H4waeMORtkej+Q1UM1Xz4E0NAA4sTMRabnlOLEzERfrlHjukfts+oP8zLHIgabK/vkZx03Tf/A0XFa04Z1GqunK12i+eo659tHuNXji0Ne42tiN0qwUfHhWgryvrY1ZWvhGvF5R3w5Aby+4Q0UpuXVU2/Vv0HTla5vXU1Bci8Ehi41PiLFh0PbPA+sGO5trAXTZ23yHimbOW0op6yvRdv0b5pdkiAKA4usdeDxxDgAwlUgL30jTK+orAbRwjRFs8FbnVFLdTVU2FwmDekU/M9KyGbQXv/0zbeu1CwAaPelEABDIrqQ0K4X5g1vXL3CooLP85A719a8uAGiBizGIsyIAEAqC8PKj8QDoFmVfQV99+Wbl/+afA9AFgFMDjypS6Y3Y+2E1lkW3MV4MAAz1tD/Z8o+sYgB6AB6ZDWewMVwE5uHBzZL8Fz9y1oJGA1vLQJm3i0XpAfwJkz7wZSXsin4JgAce/7inltVbeGWBAdo7GOxTQder9Kqcg2VwZb0f+sNlSqfudKiE3S2cwHPr/cPDVZS+rxe6HmslxDEsKK61cRLtKwHsG4MT/OjtGmpA3Q1tt9TmepNcg9KsFNQr+jkrI0OERxWt+2Mt1dfdAW1Xm8310qwUTJpIv/mD2xJQfL3D3nUK4vLCOfGwSEL1dbVjwK6SZdFhAIC03HLUNKtQ06yCSm/jeQhg18GdjkcPiyRUt6wR2h7H1rVvy1IYhk3Mq7JjEgbA6HY8Amj3s6OlFoN9PTbX2X+Y/JyRa3UixaL0GQCGuDq7w6tLya2jlI3VnJWQJyfzluT9JWzfcQ6Afmfjkk1Fs+9bQcnrr2JI189ZCfmfTL1YTO4D0O1qbGJeXVT8MkpRfwVmk9HmBqEgCADtL7ArY1WyDIBifsZxrbNKACBAuHQj7rp3CdXZeA3UyIgDE8poxO/+UYWJPApr5t+FF45fZFfyEOhRttdVJQAQKIy5n+pqqgIo29GCDOcpS+/GprVxDiZGLEpfB0BiPwlwBr6q5bpDJUV7kwEA9Yp+HC2sQZNcw1XJdQDdnlQC2DVvoSAIp/YkAaDn2ge3JaBJrsFzf7Y6j2JRehKAWkslHg8pTEXLosMwa+okKFRaTA0NRkWtEoKJgdj7YTW7kkQAEgC93lQCWJp3rFCAebNCsevxxThaWIPefgM+KG+1r2SJhYnK20qYikQ7V6P4egcu1ilxcFsC2rsHmI5oqSQWtIul8bYCgkDAalKOflplw8JSSRSAfgAu+4k7MJYheX8JQoKD7CuJANAz1koAu1bHmuhDLEoPAWDwlTfEab3FovRgcJh6n1YkFqUHATD72u2yqcibGfNYKvLax/MGpNXx/FYDqcCfLABg2tzFFADo1V1ee7ejAM/t7N9dfMMZ1h66SgHAQG8XdKp2znueXxPDTOpJ+GpDQgyKKlpwqETiTXVMGNZjz9tTJB+pppKPVFM6TQ86JFeckinNSsE900MYpy0zvwIbEmJQUFyL87WdDgE9LsjPHAu0ON3MuO1WIU+x7o+1FABouhUY6GxzeW9SXCQOnKxEmaQHpVkzsXHxDOx6fDEUKq1NvCF66iSbsYqg88L7weqa0hEAlEfusDdIya2j+AEB6FW2oq9T5vb+7E2LsGjuNMb5TN5fgt0pcQCAkkopfrzye8jMr7CJDBAoSt8N62+oGAIwAie2eNSEHhZJKD6fjy5ZIwa65S7vZTtWF+uU2JBditKsFChUWqTllmNDQgxSc8oQEymwGQ4JZEWHputkN/QAjHAzcnlNiBDpaKmDTt3l8t6Pdq9BREgwM+cozUpBd5+BCQAdLazB7pQ4pOaU4a8/f8hmygAAss/fulcnvd4DOiBkgAcjpMeE1h+rpwICAiBvqIJhQOPy3qK9yWhs1zBkBodMjCJdmkHMEk5hnHjStNhkpKdfX6RXSnpAB58G4YU/4ZYQ6SNy8RUMG3Qu7xUKgnB463L09huwcI7QYWaYllvuMughLXzjIb2iXglgAIAOHDFZd3A6sEbFL6MCA4PQLr6MEaPrGCOxUqk5ZTaz/xM7E23UcAbp6dcf1Ssl7aA9bbWFyOjjjmzMiHuACggIgEJyFdSI67/5/JoY6AwmbF2/AKk5ZXhmdQwAYFpYMJbHz3RLpO3T7C2DHY0toAOnKgCD7mLM7sAQmjZ3MRUQEIDOhmugKNcqH0l7EK9+XI3HVs1hguHEimXknodo52pmlZUL0n/94Tm9vK4RQKeFzMBYiRAECu9ZQPECgtDdVA0na+MA6P6h0htRmpWCzPwKxEQKEDwhEAXFtdicFIfefgPScsuZGAQX2j8/kqGVVjexiPSDDuP4bgKhaq11eQMhIspYxVitebNCsXX9AmTmV2D9A1EInhCItNxyAMATh752+BvyL//04kDz5Xp7IqDNsK+40IRcEfnrzx9Cb78Bs4RTAABHP63Cc4/ch63rF8AwbMIlWR9CJgXi1dPcL0V5tuCFPvGFG6AnpD2gO70RY1wHcAVOQtmbFmF5/Exm9G7p0ePw1uV47pH70NiuwcI5Qjx7hF4aK5P0OJTvvvjJ1p4rRTUWAhrQZtgnfcQdbEIyB7cl4MOzEiyPn4mLdUoc3rqcMbtksVA/ZHTaR9TXv/pJZ/nJa6DHkD7Qg+JNIULAELok60NqThlO7UnCxTol3vysDqf2JKGguBYndiaivXuA6Sf2GGi+nCr/8k+XQI/sOtBuik8XZzyFTZNT6em3z3YmATgloldKnpCefv0CaBXIP7/1D0/Auc7mDsN9nU80n/zNGdAP79YDvpnwytseGdI92VCwqwg0EadzklsJjwhRpuHN9X9+4SPLx3FHgg3XhCjzT8V5O04AwHgmwYazPvQcgHdv9sP4AvZRn5dABwNvSzKAlVAmaCJHbuGz+AR+j5yGzojJmDg59BhlNqNHWuuwiOdb8Gp8FpfjAiEDAD1ttaDMfiVTC1D3+y0UvHx/2UvBk8MOA0B3czUos2sj+dHuNQC4px/uwasDqPsAP4SCASDh1bOZgpCIw3w+3ykZdpiXpN6R6JB34NUD1ALyyeeEEl49mzlpSkQ2j8enp/McZISCIIh2rmZSLMQyNSJCgpGWW26TCeEePIlYtG0B+4pPCa38/bl9k0OnZvP5PHRIrjiNTTyzms70O7gtAb/duACHSiQMkQ3ZpZ6SahKLtsXbD/g+I7Ty9+f2TQ6bmsXj86EQX3YZaGEvlaxdEo2ivck2ROwjqBxoFovS47h+4RNCqw6cz54SLszi8fiQ115yGzXK3rQIAD2lB4DefgNKs1Kw771KT9RpFYvS5wHc7tiYzfaqA+ezQ6felUmZzZDWfAuKcj0bIQ9bmkXH7dKS52FwyAT1gAEHtyXgYp3SYTWeAUXJxHnb57v6+2NSKPG1C2+GRU7PBIA2D8gQZOZXMFsRnjj0NeZGhSMiJBipOWVYNHcadyGKkovzts+Dm2nLqAlZyOwGgNaqcofkFzaEgiBmxaGoooVZ0ALAxPkAesbM2X8oSmFRxgy49vxHRSjxtQtvhgtn7AYAek+Aa2VEGaswSzgFpVkp+Nv5FlysU+LUniQIBUGoaVbh108uwcU6JwvKlLlLnLc9HrQyI3AzxfeaEJsMO8vbFcjoX1TRglN7ktDaOcCQWjhHCHm3lrvfUOZucd6OeaBJmOHB5NIrQmwy7IxyLiyLDkNpVgpKs1KwLDqMWRROzSnDprVxiJ0dgYzc8zj6aRVU/YOM5WOR6RXn7VgAL+MWHls5b8gAdAZnUUULujSDOLgtAcn7S9Ak1+DUniQYhk2YNDEQ/5P6fSaiZLPFgTKrxXk77gcdCjMCGPF0xuyRQqsOnM8Oi5y+GxTlsTIHTlZiQ0IMFGp6Fbs0KwU5n9J7Wgq/acaG7FJnZPrFeTseBDBMCHmzVuRWIQuZTLPZDLLtyBWZg9sSUNOsQpmkB7OKa/HK5qU4e00GncEE0c7VOHCyEuuWRHH/ASuZIQshr/OnXCoUMTt2Hxk03ZEBgF2PLcSBk5VYOEeI7E2L8N53MhQU12Ltkmicr+1EQXEt1i2JcmYAdOK8HStBNzE9Rhm0dKpQeNTczNCIaVkjRiNktd85uw0AvZK3aW0cDMMmlEl6UG0JKWdvAvPwB7clICP3POeyPSizXpy3YzVoVXTwcqHYLaHwqLmZIRF3ZY+YjGivu+T2j2xaG4ejn1ZhRvgkAPQASeLkW1ao8d53MijUes6sEFCUQZy3I9lCQmMhNOpIrENMIXRmzEuhU+86PGIchlJy1WXhLSuikbL0brR3D2B5/Ezmek2zCj8/cZnpUxm5552RGRLnbV8H6/rRmFf0AoRLN9qQCQkXHh4xDqGj4ZrLgr/duAB/LG3Ci48sAI/Hw4EPrmBoyIiGdg1+cH8UHntwNt4qqcfnl6Ro7+NaUaGGxXnbHwW96t0LOkPTMNaAJmMUQmfEZEwOjTw8NKhDR0OVqzKIFQqwdkk0SrNScPaaDLOEU7DrsYU4VCLB9++dhgMnKxEREgwANsv8LDJGsWj7Y6CbGFHG65wELgQIl25EyPTvbZ0cNvXd4cEB9EjFLgskxUVizYIZyP+yHj/6/myETZ6ISRMDESKYgPjpkxEUGICNq+bgw7MSXG7TcJExiUXbfww6Wbob1rwEn4Saecuyvto6KSQif1g/AI2iyS2ZVzYvZT5n5lcwfUS0czUAuJ7PACaxKP0/QOckdIIm5DMyABAYPCU83zCgQX9nq8sbk+IiMSuCjtQk7y9B0d5kHNyWgMz8Coh2rkZqThkSYyOh6HW6PcGeTA980GfswR/s63FL5sTORLyyeSnqFfQmDBIDAOg9KwXFtTi1Jwmnqzo489xgJdMLKxk9/LBsydc6SaEkiBUK8IsCen8FUSR4QiCK9iYjeX8JgicEQqHWu0qDYSujhB/JAG5cnxM7EyHauRovrItFUUULM+8npEh8gGtpnwZlEovSH4VtM/MbGcCF63NiZyIKzojxyualWLskmsndOXtNxpCaNyuU25UBAFAjYtH2h2E1zX4nAzhRqGhvMqaGBqNM0sMEMxrbNQieEIi1S6JRUFyLg9sSXJExiUWMB0DMs9/JAE4IBU8IRG+/AQDw2tMPIDWnDAvnCHHgJH3MweYkx21FVlAmsWj7GtDNrBs3SRkCmyaXvWkRYmdHMPmhJBOR7Wxm5legpYfDLwNgIbMStBvTb/k35j2+3oBRqGhvMhbNncasAJCmVt1Eb7F6+dF4ZOSeR0uP3pk7MyIWbV8Ka1aiGjeZDMAi1NtvYNLEFCotTu1JQmpOGZbHz8RHu9dgefxMNKickYFJLNq+ELQiGrDSx24GCTYYQoRIaVaKA6mIkGBX48yIWJQeD7qZqUHPZ25ZioyNUbAnBQAxkQJ3ZO4BnT7WD2v21S3LaXCwcmxSAJy5MgBNJgp05hVRxa/JfZ6A02yTlTQ3yswATYKkk93yTCxgdNlYI2JR+lRYE5i8ipv5G96uD5nFovRwWIPm4yatjMAbQmaxKH2K5WcjxmlWlqeEzJZN/8A4zZMj8IQQJRalT7T87HbB6VbDHSFKLEqfgNuACIErQpRYlM4+bm7ckwFcECJkbhciBM4I+T3tzF/g8hT8vr3Zn7AndFuTAWwJ3fZkgJu4i/5m4bbt/AShM2IyJkyacozHtzY2vboLek2Xn1NC/Q3eDYBaOOZkrNGmpI4Vy/eXvTRREHqYx7N2Fp26E3q1b4RJiot0ERD2J3h1dMYpPanza5KzP0ByjfmWHmM2m6FXd0OnVrrNO3aHLSuimXMQAeAVy/9uVrx8BJ7YIozNdNsvOc7+QMKrZzPXHrpKTQ6NPBwQEAgejw+tugvdzdXQ9si9EmfLCnpxOCku0ub65iQ6h7VJrkHy/hKk5pRBPWDA8viZKM1KwZYV0T7lRIMnkZ85FghQ8eBI0hvzGORvE0dywPl82pSZzRQGejuh81IUwJrtolBpUVIpRcyMEFS39jKJU2TfLtkKTo4fXhYdhn1bljpcHxt4jfIzf5o/0FRJAc5nNONWoJW/P7dPEBKeRQZ/ymxGX08XdN0ytxnUziAUBGHR7FCETArCrscX2/xOodLid6euokGldyoI+/oYzF6zqrJwnqryNEPC1XRz3Am06sD5bEFoRCaPdcynplsBbdfoheECu7eQo+6IIGRLckykwEaoJrkGUdOmIHhCoMO5ex6gpfPC+/GWg3s8EgcYR07CqgPnsyeHRWbyLV6ZmaKg6VZC29XmcWa7M5AzRAiIABuyS5kd/IZhE1JzyvDCulisXRKNU5ZrJ8skKL7egWdWx2BDQgwu1ilx5prccw+PoqTtxW/Ha9uqhi1XPBYHGAc9KPG1C29OCYvczZ7HqDuk6O+SjVkYwHqmEGnxxFNjjyPs3CXyPQ0AoB4wMNlko+gx7ZaTyMlSJ9NzvImg3TKBEl+78GZIxLTd7HlMj7IN/V0yl9sn3IEcy0qWgGOFAiZBTD1gQIboG4fl4efXxODjS+3MsRH298UKBdyJmNxol585tnigqZIkbzHb5QHvw5s3XaDE1y68GTr1LhthutubLceEjU0Y8oIBMOaJ9BJiygDaIfhFwUWo9Eab6wXFtZgcHMjkNT975JyztX5HUFRHe/Hb92vbqgygBQHGKA5wEwUiwvBZpqxT2gCtSjGm+tlgmyq2eVKotDhaWINLsj4HoQrOiJEYPx1rl9BzHPszsNyCMnfJPn/rfp3sBtnPQAQZkzAEfheIS5iOVjF0vZ1jqhew5opfbezG3863QKU32vSkJrkGH5xrxMv/uYQZV2qaVXj142pm0GeDiHr2mszp+UQMKKq7/Yujy7TSah1oYRzE8cVqjd8E4hJG2XQD+j6PzrF2CvZcxDBssjkMim2WdqfEMQKQI7uISATsrxchzgPb/HGCMvfKvji6XCe9rgUtBFscJtfEV0tpPnezyU7WgADmlH/IG67DMOD2FHOXWBYdhi1r78Xp71qZa8ETAh1M18uPxuPMNTkOlUjwr8vteGvHSia+Rs7jXBYdhh+v/B4+vmRNGX7vO5nr6ABl7pMW5qzSKyX9sOwzA71/hojil3wAn/UgIgyPxwOfzwdlNkPeWI0hrdNsJ49g32P2vVeJS7I+h8AmF8j9W9bei4VzhDAMm/DSu99645EBlLlfWpjzQ4swBtCCDMGu14yb7xmxR8Ts2H2hEdOy+JYeQ1EUFJJrGB4c23nmGxfPwHOP3OdgluxDLGyhnAloGDbhnc9vuPpyKUdQZp3ss0PrdPI6NaypcgbY9hq/5zaNWqCI2bH7poQLs/g8Hnh8PijzCBQNVTAavGidHIgVCvBU4j0AgA/KW6HWGx0Gf8Bzodhfo+gRKLOu7fQbjw52NBBhyD+SmU3M201Jb/JaoPCouZlTwoXZAXy6x5hHTFA0VmNk2DDmhyHfsNUk12BqaDAiQoIdhPBUKK+DmZTZIC3MedxygO8Q6GxZA+uf380ZFzwWKDxqbubk0KnZPD4fPB4fIyYjOhqrYTYNuy/sAhsXz0B5Ax3XIkcMNsk1yPn0usuxIlYowFs7Vo59CYCiDNLCN57SKyXdoEUhaczMKcu4hdmNbgUKnRnz0uTQyMN8Pm3KTMYhdDXVwOzmzGBPwDZLJNz/VOI9zKSRC/bjCXEi2FEDj0BRw9LCN9JYwpDdzHpYt2nf8rRTpwKFzojJEIRGHOPx+ODzeTANDaKrtW7M6/1cM/lZEQIboZzNQ9iRgtEvmlFG6ek3tuqVkk7QImhBbwJgm7Nxc2am467vGTEZwVPCjvEtpsxo0KFHWu+ztRj7xTACw7AJ8m4t5kaFA7COLeQraO3hdUgGlFFamPMzvaJeBqv50sLae8aVMASMQCHTv7c1eEp4Pglimgw6qOWNYw75v7N9BfPSAWsQs17RbzO/KfymGesevJuJnxEQoZLiIhE7MxQfX2r3VhiT7LNDP9O11yphNWNkywzpOeNOGALesqyvtk4UhObTgz8PQ9o+9HW0YiyRZQJ260/eX8K5lMwWipi3CEEQ9jx+PyPsqCaYgElWdPhFnaxGDloELWiBtLD2oCHQJ8+Mm00n9uCtzqGTFoa0avR3St3d7xLEBZ4aGszMQ9hfwsGem7CFOnCyEgODJuZoLLfxMNcwtX9x9L+0bVXtoIXRg+4pbGFuqWfmDXhLX/mC0vb4JuRvP14QUcjR/Oxr9rN99orn5qQ45h4vYJKX5P58oOWKFM57DCMMrEHNMbL2L0Z1SjgBu8cQN5ccB8OGM6He+fwGZoRPwqa1dD4a+SYlL2GSnxG9NNB0qQ3WMcatMAT/lgIJBUGIEAThxYfjHTwsYp5ee/oBzI0Kx8U6JRbNnWYT7Jw1dRLSkucxDoF6wIDX/3HNyx5DmZRn//Jin/hCK6xC2P/vVBiCfyuBlkWH4ddPLmFe7NFPq1De0GMTemGjSa7B3KhwJlGQ3XtGMehbQI10nHvvBU3tWfJ15M7cZbJ45nKMGe8CebQeZB9WsTdFabnlNjEy4kqnLL0bADBLOAVb1y/AgZOVmBUhQMrSu6H22gGgTF3ffPh8b/WXDaAFYAtiM8HEONjT7Cu47UHk+3gA2yhAk1yDd0vEjDdGjiSzF2rfe5V4YM5UJuXWe++MMqkq/5WuqjwtgXUdhpixYYxRmPHegzgFcjbbJwl/9iaN65sD2UIR8bwDNdJb9eVPu7798AasYX4SxBxiXRtTj7ntBGLP/Ll6BcAtFJnxs3sZe83fC5g0tWfTOs6dqAb94smXELIXy1wO/N7gthMIcL7m4olQ7Pu9hKm/4bs0Rek7lWCdxgCrGWMnZfhsjLktBSLwRCj1gAFPHPoaQkEQnlkd4+338gLAiLat6qn2L45ehlUAkmNms4IJPwz+t7VABPZCnb0mgzB0EhbOETICjQIjeqVkk/T06xWwHvxtgrXnsJP//OaVjXeBPHKzVXoj0nLLGeeBLKiNck1mxNDVsqn1k9+Tk9KJKMyJObAK8m/jLo8WXuXFXZL1YUN2qY3r7QVGhvs6NzWf/E2Z5TNblJvSW25HjCpx0UtxzMaBnieb/v6rr2B9+WxRgNsgqnyr4M8NXGaTvi+18W+7i2Gb7Q/4KLH8/wP8IZB5ZEj3dEPBrkLy2fL/HVFGAV8KRJmHB38iyX/xE8tndnbJHWFGCV8IRFEjxi3172Z8yLrm1T7MO3COsQhEgTI/K87b8Xf7X9wRxXcYjUAUKPN2cd6Ov7Av3hHFP/BOIMq8Q5y3I598vCOK/+HpiuoLAET+fpg7cIS7w5R2gT4c7444twjOBNoNWpi3b+Kz3AEH7AX6FWhhDt+CZ7kDDhCB/hu0MDm38FnugAP/B6+J+lhrhJPcAAAAAElFTkSuQmCC" alt="I love PHP" width="104" height="104" border="0"/></a></div>
+            <header class="header">
+                <div class="title">
+                    <h1>Arquivos Recuperados</h1>
+                    <p>Índice completo do repositório (.git/index)</p>
+                </div>
+                <div class="stats">
+                    Total: <span class="highlight">253</span> arquivos
+                </div>
+            </header>
+
+            <div class="controls">
+                <a href="report.html" class="btn-back">← Voltar</a>
+                
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="q" placeholder="Buscar por nome, extensão ou SHA...">
+                </div>
+
+                <div class="select-box">
+                    <select id="pageSize">
+                        <option value="25">25 por pág</option>
+                        <option value="50">50 por pág</option>
+                        <option value="100" selected>100 por pág</option>
+                        <option value="500">500 por pág</option>
+                    </select>
+                </div>
+
+                <button id="reset" class="btn-reset">Limpar Filtros</button>
+            </div>
+
+            <div class="table-container">
+                <table id="tbl">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="path">Nome do Arquivo ↕</th>
+                            <th>Status Local</th>
+                            <th>Remoto</th>
+                            <th class="sortable" data-sort="sha">Blob SHA-1 ↕</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody">
+                        </tbody>
+                </table>
+            </div>
+
+            <div class="pagination-container">
+                <div id="entriesInfo">Carregando...</div>
+                <div style="display:flex; gap:5px;">
+                    <button id="prev" class="page-btn">‹</button>
+                    <span id="pageDisplay" style="display:flex; align-items:center; padding:0 10px;">1</span>
+                    <button id="next" class="page-btn">›</button>
+                </div>
+            </div>
+            
+            <p style="text-align:center; color:#555; margin-top:2rem; font-size:0.8rem;">
+                Git Leak Explorer • Index Parsing
+            </p>
+        </div>
+
+        <script>
+            const DATA = [{
+  "path": ".env.example",
+  "remote_url": "https://alvo-demo.com.br/sobre/.env.example",
+  "blob_url": "#",
+  "sha": "9a9d0dc7e0052663cc5572bb0e96cbcb7888b8cd",
+  "local_exists": true,
+  "local_url": "file://\\.env.example"
+},
+{
+  "path": ".gitattributes",
+  "remote_url": "https://alvo-demo.com.br/sobre/.gitattributes",
+  "blob_url": "#",
+  "sha": "a8763f8ef5f3ca507073252f6815171c00b47074",
+  "local_exists": true,
+  "local_url": "file://\\.gitattributes"
+},
+{
+  "path": ".gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/.gitignore",
+  "blob_url": "#",
+  "sha": "6b3af3fee63af0fc31478b6cc2a77fa61b1112b3",
+  "local_exists": true,
+  "local_url": "file://\\.gitignore"
+},
+{
+  "path": "app/Console/Commands/Inspire.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Console/Commands/Inspire.php",
+  "blob_url": "#",
+  "sha": "db9ab85422f50760857a432bfec55323243b0fe6",
+  "local_exists": true,
+  "local_url": "file://\\app\\Console\\Commands\\Inspire.php"
+},
+{
+  "path": "app/Console/Kernel.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Console/Kernel.php",
+  "blob_url": "#",
+  "sha": "71c519d32770449e73d225687093d1e41a9ce554",
+  "local_exists": false,
+  "local_url": "file://\\app\\Console\\Kernel.php"
+},
+{
+  "path": "app/Events/Event.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Events/Event.php",
+  "blob_url": "#",
+  "sha": "ba2f88838c0182fc39b8324aedfefb03dfb843ac",
+  "local_exists": false,
+  "local_url": "file://\\app\\Events\\Event.php"
+},
+{
+  "path": "app/Exceptions/Handler.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Exceptions/Handler.php",
+  "blob_url": "#",
+  "sha": "53617ef4adc1d171d542aeb6f3c525ddc6f83e21",
+  "local_exists": false,
+  "local_url": "file://\\app\\Exceptions\\Handler.php"
+},
+{
+  "path": "app/Http/Controllers/Auth/AuthController.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Controllers/Auth/AuthController.php",
+  "blob_url": "#",
+  "sha": "a100dd6ef3fdc7ad243c1744b59ca56001e72b91",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Controllers\\Auth\\AuthController.php"
+},
+{
+  "path": "app/Http/Controllers/Auth/PasswordController.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Controllers/Auth/PasswordController.php",
+  "blob_url": "#",
+  "sha": "1ceed97bbaefcff82a5f4d081a91bcf8b24b16fe",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Controllers\\Auth\\PasswordController.php"
+},
+{
+  "path": "app/Http/Controllers/Controller.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Controllers/Controller.php",
+  "blob_url": "#",
+  "sha": "d492e0b32b880e8a447f34a827d3f0edd956eedf",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Controllers\\Controller.php"
+},
+{
+  "path": "app/Http/Kernel.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Kernel.php",
+  "blob_url": "#",
+  "sha": "bffcfd9fed3aa6a841589f8467a9da90213e05ea",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Kernel.php"
+},
+{
+  "path": "app/Http/Middleware/Authenticate.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Middleware/Authenticate.php",
+  "blob_url": "#",
+  "sha": "67abcaea917c61a1f7c1864386be2930ed2de80c",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Middleware\\Authenticate.php"
+},
+{
+  "path": "app/Http/Middleware/EncryptCookies.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Middleware/EncryptCookies.php",
+  "blob_url": "#",
+  "sha": "3aa15f8dd91d421fa5bc761866f762b8e90c6c74",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Middleware\\EncryptCookies.php"
+},
+{
+  "path": "app/Http/Middleware/RedirectIfAuthenticated.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Middleware/RedirectIfAuthenticated.php",
+  "blob_url": "#",
+  "sha": "e27860e24ed265719a02f5e2d06d856f6fd3fc46",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Middleware\\RedirectIfAuthenticated.php"
+},
+{
+  "path": "app/Http/Middleware/VerifyCsrfToken.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Middleware/VerifyCsrfToken.php",
+  "blob_url": "#",
+  "sha": "a2c3541410796ce4a59971917e06de17840bd9c6",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Middleware\\VerifyCsrfToken.php"
+},
+{
+  "path": "app/Http/Requests/Request.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/Requests/Request.php",
+  "blob_url": "#",
+  "sha": "76b2ffd43e4c8817502868f608b5d487d39c30d3",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\Requests\\Request.php"
+},
+{
+  "path": "app/Http/routes.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Http/routes.php",
+  "blob_url": "#",
+  "sha": "bd104d63b293f44a73dabe51b0e958a6828c27de",
+  "local_exists": false,
+  "local_url": "file://\\app\\Http\\routes.php"
+},
+{
+  "path": "app/Jobs/Job.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Jobs/Job.php",
+  "blob_url": "#",
+  "sha": "55ece29acb3dbcea3ad5efe11d96a28808a6a302",
+  "local_exists": false,
+  "local_url": "file://\\app\\Jobs\\Job.php"
+},
+{
+  "path": "app/Listeners/.gitkeep",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Listeners/.gitkeep",
+  "blob_url": "#",
+  "sha": "8b137891791fe96927ad78e64b0aad7bded08bdc",
+  "local_exists": false,
+  "local_url": "file://\\app\\Listeners\\.gitkeep"
+},
+{
+  "path": "app/Policies/.gitkeep",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Policies/.gitkeep",
+  "blob_url": "#",
+  "sha": "8b137891791fe96927ad78e64b0aad7bded08bdc",
+  "local_exists": false,
+  "local_url": "file://\\app\\Policies\\.gitkeep"
+},
+{
+  "path": "app/Providers/AppServiceProvider.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Providers/AppServiceProvider.php",
+  "blob_url": "#",
+  "sha": "35471f6ff156325ed0fdb98b03e611c2cd43f675",
+  "local_exists": false,
+  "local_url": "file://\\app\\Providers\\AppServiceProvider.php"
+},
+{
+  "path": "app/Providers/AuthServiceProvider.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Providers/AuthServiceProvider.php",
+  "blob_url": "#",
+  "sha": "57d88ea3f95581fc89a7f4d56ce8ee168b19aaef",
+  "local_exists": false,
+  "local_url": "file://\\app\\Providers\\AuthServiceProvider.php"
+},
+{
+  "path": "app/Providers/EventServiceProvider.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Providers/EventServiceProvider.php",
+  "blob_url": "#",
+  "sha": "58ce9624988b6b372641d0069991415072e0b6a6",
+  "local_exists": false,
+  "local_url": "file://\\app\\Providers\\EventServiceProvider.php"
+},
+{
+  "path": "app/Providers/RouteServiceProvider.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/Providers/RouteServiceProvider.php",
+  "blob_url": "#",
+  "sha": "bde08819a9042c9999fafb0075317b75f6594627",
+  "local_exists": false,
+  "local_url": "file://\\app\\Providers\\RouteServiceProvider.php"
+},
+{
+  "path": "app/User.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/app/User.php",
+  "blob_url": "#",
+  "sha": "75741ae4285959552fc2099c112f2e7a0f7ec0c0",
+  "local_exists": false,
+  "local_url": "file://\\app\\User.php"
+},
+{
+  "path": "artisan",
+  "remote_url": "https://alvo-demo.com.br/sobre/artisan",
+  "blob_url": "#",
+  "sha": "df630d0d6d5eec358975694522226a898a715019",
+  "local_exists": false,
+  "local_url": "file://\\artisan"
+},
+{
+  "path": "bootstrap/app.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/bootstrap/app.php",
+  "blob_url": "#",
+  "sha": "f2801adf6f14436fc9d3e1d6748d25ed601da062",
+  "local_exists": false,
+  "local_url": "file://\\bootstrap\\app.php"
+},
+{
+  "path": "bootstrap/autoload.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/bootstrap/autoload.php",
+  "blob_url": "#",
+  "sha": "383013796f3c2041b20081e8dc93bddb4ccde0ad",
+  "local_exists": false,
+  "local_url": "file://\\bootstrap\\autoload.php"
+},
+{
+  "path": "bootstrap/cache/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/bootstrap/cache/.gitignore",
+  "blob_url": "#",
+  "sha": "d6b7ef32c8478a48c3994dcadc86837f4371184d",
+  "local_exists": false,
+  "local_url": "file://\\bootstrap\\cache\\.gitignore"
+},
+{
+  "path": "composer.json",
+  "remote_url": "https://alvo-demo.com.br/sobre/composer.json",
+  "blob_url": "#",
+  "sha": "4943e17d00d4769130934258197af919f0b5afc8",
+  "local_exists": false,
+  "local_url": "file://\\composer.json"
+},
+{
+  "path": "composer.lock",
+  "remote_url": "https://alvo-demo.com.br/sobre/composer.lock",
+  "blob_url": "#",
+  "sha": "d3b8387832891c2d1c3a07f2573acce0480b2711",
+  "local_exists": false,
+  "local_url": "file://\\composer.lock"
+},
+{
+  "path": "config/app.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/app.php",
+  "blob_url": "#",
+  "sha": "4fc7a63ffea4ec8ad7b8e6dabc45600ef6b24cf9",
+  "local_exists": false,
+  "local_url": "file://\\config\\app.php"
+},
+{
+  "path": "config/auth.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/auth.php",
+  "blob_url": "#",
+  "sha": "3fa7f491b30019836f5fea390d38c567e3470c6a",
+  "local_exists": false,
+  "local_url": "file://\\config\\auth.php"
+},
+{
+  "path": "config/broadcasting.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/broadcasting.php",
+  "blob_url": "#",
+  "sha": "abaaac32a780ff114a584d0a7e3bf5f92824c99a",
+  "local_exists": false,
+  "local_url": "file://\\config\\broadcasting.php"
+},
+{
+  "path": "config/cache.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/cache.php",
+  "blob_url": "#",
+  "sha": "3ffa840b0ba9d28be165370bc1f3b5ceb2ff89cf",
+  "local_exists": false,
+  "local_url": "file://\\config\\cache.php"
+},
+{
+  "path": "config/compile.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/compile.php",
+  "blob_url": "#",
+  "sha": "04807eac450d32158f752dfcb69e7c6be76a1561",
+  "local_exists": false,
+  "local_url": "file://\\config\\compile.php"
+},
+{
+  "path": "config/database.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/database.php",
+  "blob_url": "#",
+  "sha": "8451a62fbf2635da0714f17996c7b14683489f14",
+  "local_exists": false,
+  "local_url": "file://\\config\\database.php"
+},
+{
+  "path": "config/filesystems.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/filesystems.php",
+  "blob_url": "#",
+  "sha": "75b50022b0cb9cf3cb7b8776620b621c99efa56b",
+  "local_exists": false,
+  "local_url": "file://\\config\\filesystems.php"
+},
+{
+  "path": "config/mail.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/mail.php",
+  "blob_url": "#",
+  "sha": "a07658856c784aca37f611c9de957aeb4c76bb8c",
+  "local_exists": false,
+  "local_url": "file://\\config\\mail.php"
+},
+{
+  "path": "config/queue.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/queue.php",
+  "blob_url": "#",
+  "sha": "d0f732a6fa37209845683cdc5b289d169baed844",
+  "local_exists": false,
+  "local_url": "file://\\config\\queue.php"
+},
+{
+  "path": "config/services.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/services.php",
+  "blob_url": "#",
+  "sha": "287b1186229bb603e6cee9e9738691682cdb31bb",
+  "local_exists": false,
+  "local_url": "file://\\config\\services.php"
+},
+{
+  "path": "config/session.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/session.php",
+  "blob_url": "#",
+  "sha": "b501055b2751de18fce03175c04717fbff4b94bf",
+  "local_exists": false,
+  "local_url": "file://\\config\\session.php"
+},
+{
+  "path": "config/view.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/config/view.php",
+  "blob_url": "#",
+  "sha": "e193ab61d910e0ce50230fc4616c5f9d9c9cdc33",
+  "local_exists": false,
+  "local_url": "file://\\config\\view.php"
+},
+{
+  "path": "database/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/database/.gitignore",
+  "blob_url": "#",
+  "sha": "9b1dffd90fdce0601e734330eecdff3a301fa2e9",
+  "local_exists": false,
+  "local_url": "file://\\database\\.gitignore"
+},
+{
+  "path": "database/factories/ModelFactory.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/database/factories/ModelFactory.php",
+  "blob_url": "#",
+  "sha": "f596d0b59b5004c8eb0e6fac529fc9fd3fa933b6",
+  "local_exists": false,
+  "local_url": "file://\\database\\factories\\ModelFactory.php"
+},
+{
+  "path": "database/migrations/.gitkeep",
+  "remote_url": "https://alvo-demo.com.br/sobre/database/migrations/.gitkeep",
+  "blob_url": "#",
+  "sha": "8b137891791fe96927ad78e64b0aad7bded08bdc",
+  "local_exists": false,
+  "local_url": "file://\\database\\migrations\\.gitkeep"
+},
+{
+  "path": "database/migrations/2014_10_12_000000_create_users_table.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/database/migrations/2014_10_12_000000_create_users_table.php",
+  "blob_url": "#",
+  "sha": "59aa01a5591488bc7e964615a12616db98c52164",
+  "local_exists": false,
+  "local_url": "file://\\database\\migrations\\2014_10_12_000000_create_users_table.php"
+},
+{
+  "path": "database/migrations/2014_10_12_100000_create_password_resets_table.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/database/migrations/2014_10_12_100000_create_password_resets_table.php",
+  "blob_url": "#",
+  "sha": "00057f9cffa277455d2b42a54a220e2186294cc3",
+  "local_exists": false,
+  "local_url": "file://\\database\\migrations\\2014_10_12_100000_create_password_resets_table.php"
+},
+{
+  "path": "database/seeds/.gitkeep",
+  "remote_url": "https://alvo-demo.com.br/sobre/database/seeds/.gitkeep",
+  "blob_url": "#",
+  "sha": "8b137891791fe96927ad78e64b0aad7bded08bdc",
+  "local_exists": false,
+  "local_url": "file://\\database\\seeds\\.gitkeep"
+},
+{
+  "path": "database/seeds/DatabaseSeeder.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/database/seeds/DatabaseSeeder.php",
+  "blob_url": "#",
+  "sha": "e119db624aa8f894d74ef57283c4947e734015b0",
+  "local_exists": false,
+  "local_url": "file://\\database\\seeds\\DatabaseSeeder.php"
+},
+{
+  "path": "gulpfile.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/gulpfile.js",
+  "blob_url": "#",
+  "sha": "dc6f1ebb4eafd867d781b3d635919002d357d85b",
+  "local_exists": false,
+  "local_url": "file://\\gulpfile.js"
+},
+{
+  "path": "package.json",
+  "remote_url": "https://alvo-demo.com.br/sobre/package.json",
+  "blob_url": "#",
+  "sha": "c4a056b6eef94dd1e273d9172cf19dcd2fb82320",
+  "local_exists": false,
+  "local_url": "file://\\package.json"
+},
+{
+  "path": "phpunit.xml",
+  "remote_url": "https://alvo-demo.com.br/sobre/phpunit.xml",
+  "blob_url": "#",
+  "sha": "3e884d179ccbab0bc8b0bc14c602cec03cc91480",
+  "local_exists": false,
+  "local_url": "file://\\phpunit.xml"
+},
+{
+  "path": "public/.htaccess",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/.htaccess",
+  "blob_url": "#",
+  "sha": "903f6392ca410eceab8338afb27da72e985b3cc0",
+  "local_exists": false,
+  "local_url": "file://\\public\\.htaccess"
+},
+{
+  "path": "public/assets/css/app.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/css/app.css",
+  "blob_url": "#",
+  "sha": "e427c921581b76f896b152efe2a7e71e83e48404",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\css\\app.css"
+},
+{
+  "path": "public/assets/css/slick-config.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/css/slick-config.css",
+  "blob_url": "#",
+  "sha": "81948912f8ce7072936980e8a7699cdb2615d167",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\css\\slick-config.css"
+},
+{
+  "path": "public/assets/images/01.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/01.png",
+  "blob_url": "#",
+  "sha": "c536e67323be09893e08273eb19d5ba0491fc437",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\01.png"
+},
+{
+  "path": "public/assets/images/02.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/02.png",
+  "blob_url": "#",
+  "sha": "9121957c0c71ca87465b10d3411bcd1a3434fd15",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\02.png"
+},
+{
+  "path": "public/assets/images/03.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/03.png",
+  "blob_url": "#",
+  "sha": "db306bb17bc92c34a06fd8ff6bfbbb6532cc34d3",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\03.png"
+},
+{
+  "path": "public/assets/images/04.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/04.png",
+  "blob_url": "#",
+  "sha": "3f3a3af3dda84e4b73124f880ecfaa8d500689db",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\04.png"
+},
+{
+  "path": "public/assets/images/05.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/05.png",
+  "blob_url": "#",
+  "sha": "4d274f9492abd54d333361c44d89efbb6e80cecb",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\05.png"
+},
+{
+  "path": "public/assets/images/06.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/06.png",
+  "blob_url": "#",
+  "sha": "6c177995e51af835293800565127a4bf06da3747",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\06.png"
+},
+{
+  "path": "public/assets/images/186325-justice.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/186325-justice.png",
+  "blob_url": "#",
+  "sha": "7b3dbab3a33a40007236e935d87ec0e3f7d3b518",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\186325-justice.png"
+},
+{
+  "path": "public/assets/images/189466-law.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/189466-law.png",
+  "blob_url": "#",
+  "sha": "f6b0c6ac12d4328ee81e651efa767c8fe78033e3",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\189466-law.png"
+},
+{
+  "path": "public/assets/images/hammer-802296_640.jpg",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/hammer-802296_640.jpg",
+  "blob_url": "#",
+  "sha": "3ae0356d3e245be6a65b010b5e23464ce1bb0ee8",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\hammer-802296_640.jpg"
+},
+{
+  "path": "public/assets/images/law.jpg",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/law.jpg",
+  "blob_url": "#",
+  "sha": "9479af54e6c9dbbed6f8246f689cee28edc0d75e",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\law.jpg"
+},
+{
+  "path": "public/assets/images/law2.jpg",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/law2.jpg",
+  "blob_url": "#",
+  "sha": "57211be6c57e25e1f01579305543c5c72e64c34e",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\law2.jpg"
+},
+{
+  "path": "public/assets/images/logos/escudo_cordoba.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/logos/escudo_cordoba.png",
+  "blob_url": "#",
+  "sha": "c379fdaa80ded0d00ab26b5a752bbb0fb51c07c4",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\logos\\escudo_cordoba.png"
+},
+{
+  "path": "public/assets/images/logos/icon-share.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/logos/icon-share.png",
+  "blob_url": "#",
+  "sha": "e0309396126804e4acd8261cc12fb513fa84e8d1",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\logos\\icon-share.png"
+},
+{
+  "path": "public/assets/images/logos/icon-share2.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/logos/icon-share2.png",
+  "blob_url": "#",
+  "sha": "06bb3785d1593e687e274748bf86593d337e7c91",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\logos\\icon-share2.png"
+},
+{
+  "path": "public/assets/images/logos/iconpage.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/logos/iconpage.png",
+  "blob_url": "#",
+  "sha": "6b6e7a341363ba587c10772f99d61c8414e3b968",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\logos\\iconpage.png"
+},
+{
+  "path": "public/assets/images/logos/iconpage2.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/logos/iconpage2.png",
+  "blob_url": "#",
+  "sha": "a5132378bcb65be08b455f1fa62c446e1c442d1b",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\logos\\iconpage2.png"
+},
+{
+  "path": "public/assets/images/logos/iconpage22.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/logos/iconpage22.png",
+  "blob_url": "#",
+  "sha": "92cc72f2927805d62ea2b0a8b41de94cabdf4721",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\logos\\iconpage22.png"
+},
+{
+  "path": "public/assets/images/logos/logo.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/logos/logo.png",
+  "blob_url": "#",
+  "sha": "fcaabd778be0ec7e311fd89a9d51f8fc1cb7fd0d",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\logos\\logo.png"
+},
+{
+  "path": "public/assets/images/other-sites/00.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/00.png",
+  "blob_url": "#",
+  "sha": "63dad9c2cf54ea4baa293380ca7e5cb6b37b1d76",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\00.png"
+},
+{
+  "path": "public/assets/images/other-sites/01.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/01.png",
+  "blob_url": "#",
+  "sha": "db043076bc5412e4c08811271f63868541b9e729",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\01.png"
+},
+{
+  "path": "public/assets/images/other-sites/02.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/02.png",
+  "blob_url": "#",
+  "sha": "1660e8dc37cf5d8d9ce7c7dac241cc8d868bda6e",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\02.png"
+},
+{
+  "path": "public/assets/images/other-sites/03.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/03.png",
+  "blob_url": "#",
+  "sha": "7c3a93a3df5933332abe271daa51c32d260eb474",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\03.png"
+},
+{
+  "path": "public/assets/images/other-sites/04.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/04.png",
+  "blob_url": "#",
+  "sha": "fc39f48f982e4661a03eeca886894b2e4921fed6",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\04.png"
+},
+{
+  "path": "public/assets/images/other-sites/05.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/05.png",
+  "blob_url": "#",
+  "sha": "f904ddf9334befe831f56602cf650da3433412a4",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\05.png"
+},
+{
+  "path": "public/assets/images/other-sites/06.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/06.png",
+  "blob_url": "#",
+  "sha": "710a04baf51d18ebbe68a810dfaf2bda9e34f4ae",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\06.png"
+},
+{
+  "path": "public/assets/images/other-sites/07.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/07.png",
+  "blob_url": "#",
+  "sha": "5faeac7f06f463e5d139ab47852e14683bb0fb73",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\07.png"
+},
+{
+  "path": "public/assets/images/other-sites/08.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/08.png",
+  "blob_url": "#",
+  "sha": "a4023378bbca08e77bac3c6ff3acfcee53ad36c3",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\08.png"
+},
+{
+  "path": "public/assets/images/other-sites/09.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/09.png",
+  "blob_url": "#",
+  "sha": "e535f523c5ca8e202ecac8617b45bfc517c75271",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\09.png"
+},
+{
+  "path": "public/assets/images/other-sites/10.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/10.png",
+  "blob_url": "#",
+  "sha": "f34d268823dd04d96e33f0fa79568a2c3e699d63",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\10.png"
+},
+{
+  "path": "public/assets/images/other-sites/11.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/11.png",
+  "blob_url": "#",
+  "sha": "9b06b87b1c9baf0fc5d571c11263a0e216892fe2",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\11.png"
+},
+{
+  "path": "public/assets/images/other-sites/12.png",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/other-sites/12.png",
+  "blob_url": "#",
+  "sha": "87ba9fe4ecf8a4338e1b4c0a03f6340bc7986117",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\other-sites\\12.png"
+},
+{
+  "path": "public/assets/images/transparencia.jpg",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/images/transparencia.jpg",
+  "blob_url": "#",
+  "sha": "342d66b5c38b9f43d492f8ee67ad1637db13bed5",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\images\\transparencia.jpg"
+},
+{
+  "path": "public/assets/js/app.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/js/app.js",
+  "blob_url": "#",
+  "sha": "72a2204a6cd4fcc6a0a39a0edb9683d6156d9fff",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\js\\app.js"
+},
+{
+  "path": "public/assets/js/slick-config.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/js/slick-config.js",
+  "blob_url": "#",
+  "sha": "01881c199d1e0d65fe69f330e2336d0d5c573b45",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\js\\slick-config.js"
+},
+{
+  "path": "public/assets/libs/bootstrap/css/bootstrap-theme.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/css/bootstrap-theme.css",
+  "blob_url": "#",
+  "sha": "31d8882661324aedb8693f8bb7322c4af8374ae0",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\css\\bootstrap-theme.css"
+},
+{
+  "path": "public/assets/libs/bootstrap/css/bootstrap-theme.css.map",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/css/bootstrap-theme.css.map",
+  "blob_url": "#",
+  "sha": "d876f60fb4fd2a1c421a4813ef080ac97b670465",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\css\\bootstrap-theme.css.map"
+},
+{
+  "path": "public/assets/libs/bootstrap/css/bootstrap-theme.min.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/css/bootstrap-theme.min.css",
+  "blob_url": "#",
+  "sha": "5e39401957d87d5d810f3d05ab05aca5febd7b5d",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\css\\bootstrap-theme.min.css"
+},
+{
+  "path": "public/assets/libs/bootstrap/css/bootstrap-theme.min.css.map",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/css/bootstrap-theme.min.css.map",
+  "blob_url": "#",
+  "sha": "94813e9006074c2ce411b02c4014be94b5bb6039",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\css\\bootstrap-theme.min.css.map"
+},
+{
+  "path": "public/assets/libs/bootstrap/css/bootstrap.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/css/bootstrap.css",
+  "blob_url": "#",
+  "sha": "6167622cecfb5c0f04156363565e3d4109fc55c5",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\css\\bootstrap.css"
+},
+{
+  "path": "public/assets/libs/bootstrap/css/bootstrap.css.map",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/css/bootstrap.css.map",
+  "blob_url": "#",
+  "sha": "f010c82d113c25336f5ae7df32ce5de0caaddbd2",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\css\\bootstrap.css.map"
+},
+{
+  "path": "public/assets/libs/bootstrap/css/bootstrap.min.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/css/bootstrap.min.css",
+  "blob_url": "#",
+  "sha": "ed3905e0e0c91d4ed7d8aa14412dffeb038745ff",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\css\\bootstrap.min.css"
+},
+{
+  "path": "public/assets/libs/bootstrap/css/bootstrap.min.css.map",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/css/bootstrap.min.css.map",
+  "blob_url": "#",
+  "sha": "6c7fa40b98db056a6d36faf96c77ef85d4a68bba",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\css\\bootstrap.min.css.map"
+},
+{
+  "path": "public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.eot",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.eot",
+  "blob_url": "#",
+  "sha": "b93a4953fff68df523aa7656497ee339d6026d64",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\fonts\\glyphicons-halflings-regular.eot"
+},
+{
+  "path": "public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.svg",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.svg",
+  "blob_url": "#",
+  "sha": "94fb5490a2ed10b2c69a4a567a4fd2e4f706d841",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\fonts\\glyphicons-halflings-regular.svg"
+},
+{
+  "path": "public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.ttf",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.ttf",
+  "blob_url": "#",
+  "sha": "1413fc609ab6f21774de0cb7e01360095584f65b",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\fonts\\glyphicons-halflings-regular.ttf"
+},
+{
+  "path": "public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.woff",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.woff",
+  "blob_url": "#",
+  "sha": "9e612858f802245ddcbf59788a0db942224bab35",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\fonts\\glyphicons-halflings-regular.woff"
+},
+{
+  "path": "public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.woff2",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/fonts/glyphicons-halflings-regular.woff2",
+  "blob_url": "#",
+  "sha": "64539b54c3751a6d9adb44c8e3a45ba5a73b77f0",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\fonts\\glyphicons-halflings-regular.woff2"
+},
+{
+  "path": "public/assets/libs/bootstrap/js/bootstrap.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/js/bootstrap.js",
+  "blob_url": "#",
+  "sha": "8a2e99a535d47e5798b167d1074ae2c77cab21e7",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\js\\bootstrap.js"
+},
+{
+  "path": "public/assets/libs/bootstrap/js/bootstrap.min.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/js/bootstrap.min.js",
+  "blob_url": "#",
+  "sha": "9bcd2fccaed9442f1460191d6670ca5e8e08520c",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\js\\bootstrap.min.js"
+},
+{
+  "path": "public/assets/libs/bootstrap/js/collapse.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/js/collapse.js",
+  "blob_url": "#",
+  "sha": "12038693d9d26e6acf0f5b4f71553f24258d56f8",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\js\\collapse.js"
+},
+{
+  "path": "public/assets/libs/bootstrap/js/npm.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/js/npm.js",
+  "blob_url": "#",
+  "sha": "bf6aa80602d9303b61e8d5e63c10568e55b6a4d8",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\js\\npm.js"
+},
+{
+  "path": "public/assets/libs/bootstrap/js/transition.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/bootstrap/js/transition.js",
+  "blob_url": "#",
+  "sha": "db76596e84e4e8104086499c99cc454d2633757f",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\bootstrap\\js\\transition.js"
+},
+{
+  "path": "public/assets/libs/font-awesome/HELP-US-OUT.txt",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/HELP-US-OUT.txt",
+  "blob_url": "#",
+  "sha": "83d083dd770c94ee238774e2df508094ff5cc3a1",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\HELP-US-OUT.txt"
+},
+{
+  "path": "public/assets/libs/font-awesome/css/font-awesome.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/css/font-awesome.css",
+  "blob_url": "#",
+  "sha": "ee906a8196d0fbd581c27a9d5615db4c250860f2",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\css\\font-awesome.css"
+},
+{
+  "path": "public/assets/libs/font-awesome/css/font-awesome.min.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/css/font-awesome.min.css",
+  "blob_url": "#",
+  "sha": "540440ce89f2a408aa699b65100e18f15e0f09ca",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\css\\font-awesome.min.css"
+},
+{
+  "path": "public/assets/libs/font-awesome/fonts/FontAwesome.otf",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/fonts/FontAwesome.otf",
+  "blob_url": "#",
+  "sha": "401ec0f36e4f73b8efa40bd6f604fe80d286db70",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\fonts\\FontAwesome.otf"
+},
+{
+  "path": "public/assets/libs/font-awesome/fonts/fontawesome-webfont.eot",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/fonts/fontawesome-webfont.eot",
+  "blob_url": "#",
+  "sha": "e9f60ca953f93e35eab4108bd414bc02ddcf3928",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\fonts\\fontawesome-webfont.eot"
+},
+{
+  "path": "public/assets/libs/font-awesome/fonts/fontawesome-webfont.svg",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/fonts/fontawesome-webfont.svg",
+  "blob_url": "#",
+  "sha": "855c845e538b65548118279537a04eab2ec6ef0d",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\fonts\\fontawesome-webfont.svg"
+},
+{
+  "path": "public/assets/libs/font-awesome/fonts/fontawesome-webfont.ttf",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/fonts/fontawesome-webfont.ttf",
+  "blob_url": "#",
+  "sha": "35acda2fa1196aad98c2adf4378a7611dd713aa3",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\fonts\\fontawesome-webfont.ttf"
+},
+{
+  "path": "public/assets/libs/font-awesome/fonts/fontawesome-webfont.woff",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/fonts/fontawesome-webfont.woff",
+  "blob_url": "#",
+  "sha": "400014a4b06eee3d0c0d54402a47ab2601b2862b",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\fonts\\fontawesome-webfont.woff"
+},
+{
+  "path": "public/assets/libs/font-awesome/fonts/fontawesome-webfont.woff2",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/fonts/fontawesome-webfont.woff2",
+  "blob_url": "#",
+  "sha": "4d13fc60404b91e398a37200c4a77b645cfd9586",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\fonts\\fontawesome-webfont.woff2"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/animated.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/animated.less",
+  "blob_url": "#",
+  "sha": "66ad52a5ba052ced428dcc7ec7016bc25438a2ca",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\animated.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/bordered-pulled.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/bordered-pulled.less",
+  "blob_url": "#",
+  "sha": "f1c8ad75f52bbc6c84a6dc3a341fe39e8d3edfd4",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\bordered-pulled.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/core.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/core.less",
+  "blob_url": "#",
+  "sha": "c577ac84a6a55ef39ff7f4e25d60c3977a902ed1",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\core.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/fixed-width.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/fixed-width.less",
+  "blob_url": "#",
+  "sha": "110289f2f4b5260ce04dd035408961f1e4f2785b",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\fixed-width.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/font-awesome.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/font-awesome.less",
+  "blob_url": "#",
+  "sha": "c3677def3131af54af2a87d9cd2bb737a321e97e",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\font-awesome.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/icons.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/icons.less",
+  "blob_url": "#",
+  "sha": "159d600425c73c282be34f94af12179f091a16d2",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\icons.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/larger.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/larger.less",
+  "blob_url": "#",
+  "sha": "c9d646770e2186c73632cbe042d82d1d1acaa25b",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\larger.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/list.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/list.less",
+  "blob_url": "#",
+  "sha": "0b440382f61f0bb1683e5b15c2a00e4e398f9980",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\list.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/mixins.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/mixins.less",
+  "blob_url": "#",
+  "sha": "beef231d0e176a47375d93fb7365270eea52f7b4",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\mixins.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/path.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/path.less",
+  "blob_url": "#",
+  "sha": "835be41f8151b6439f799be29ec7921af1b72593",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\path.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/rotated-flipped.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/rotated-flipped.less",
+  "blob_url": "#",
+  "sha": "f6ba81475b92355723f0dc12767f715995a34162",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\rotated-flipped.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/screen-reader.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/screen-reader.less",
+  "blob_url": "#",
+  "sha": "11c188196d5ade55930b7b94fc5a1dd0f6d1a800",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\screen-reader.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/stacked.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/stacked.less",
+  "blob_url": "#",
+  "sha": "fc53fb0e7ab49594e1eac97208c32a290558efeb",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\stacked.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/less/variables.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/less/variables.less",
+  "blob_url": "#",
+  "sha": "7ddbbc0115f5b017bae9f401651f00d824a396b2",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\less\\variables.less"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_animated.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_animated.scss",
+  "blob_url": "#",
+  "sha": "8a020dbfff7822bf57c7217eafdaa4884b8aa943",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_animated.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_bordered-pulled.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_bordered-pulled.scss",
+  "blob_url": "#",
+  "sha": "d4b85a02f24adad8890ad69f7a1db6c7e3ec8a7d",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_bordered-pulled.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_core.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_core.scss",
+  "blob_url": "#",
+  "sha": "7425ef85fc80ce6b035065906fc27490715e3733",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_core.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_fixed-width.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_fixed-width.scss",
+  "blob_url": "#",
+  "sha": "b221c98133a4d4a8449c848ccb69bf631d1c3e5d",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_fixed-width.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_icons.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_icons.scss",
+  "blob_url": "#",
+  "sha": "e63e702c4d9c28fb78922cefa5daf91858b12c9a",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_icons.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_larger.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_larger.scss",
+  "blob_url": "#",
+  "sha": "41e9a8184aa287c5970cc8415e3c5a6310dc9f79",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_larger.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_list.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_list.scss",
+  "blob_url": "#",
+  "sha": "7d1e4d54d6c293333eb638aa56feba7b62e15564",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_list.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_mixins.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_mixins.scss",
+  "blob_url": "#",
+  "sha": "c3bbd5745d35bebda3e16ce18aeff7a4a0ce5ae1",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_mixins.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_path.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_path.scss",
+  "blob_url": "#",
+  "sha": "bb457c23a8e4e0688ebd9383e34ab9f2b3acecab",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_path.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_rotated-flipped.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_rotated-flipped.scss",
+  "blob_url": "#",
+  "sha": "a3558fd09ca7cb968166d5445f4df1a0bc2d5a7e",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_rotated-flipped.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_screen-reader.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_screen-reader.scss",
+  "blob_url": "#",
+  "sha": "637426f0da6dcef3602d764d9e359dabb4a5a862",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_screen-reader.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_stacked.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_stacked.scss",
+  "blob_url": "#",
+  "sha": "aef7403660c9a2ccc02a264c62c6b105f7d8d532",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_stacked.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/_variables.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/_variables.scss",
+  "blob_url": "#",
+  "sha": "498fc4a087c614614166df2e9f08bb5e0071daf4",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\_variables.scss"
+},
+{
+  "path": "public/assets/libs/font-awesome/scss/font-awesome.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/font-awesome/scss/font-awesome.scss",
+  "blob_url": "#",
+  "sha": "f1c83aaa5d24da542d81b09677307f47f374401e",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\font-awesome\\scss\\font-awesome.scss"
+},
+{
+  "path": "public/assets/libs/jquery/jquery-3.2.1.min.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/jquery/jquery-3.2.1.min.js",
+  "blob_url": "#",
+  "sha": "644d35e274fd64ddaf6d12af813e820c424176a9",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\jquery\\jquery-3.2.1.min.js"
+},
+{
+  "path": "public/assets/libs/slick/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/.gitignore",
+  "blob_url": "#",
+  "sha": "aa204cb2691ea1fe0879128bb8b987155247b576",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\.gitignore"
+},
+{
+  "path": "public/assets/libs/slick/CONTRIBUTING.markdown",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/CONTRIBUTING.markdown",
+  "blob_url": "#",
+  "sha": "33b73ca15902fb2fea51800368f63851bc053169",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\CONTRIBUTING.markdown"
+},
+{
+  "path": "public/assets/libs/slick/ISSUE_TEMPLATE.md",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/ISSUE_TEMPLATE.md",
+  "blob_url": "#",
+  "sha": "7400336301cd26ca09a94d12d64fd1de81e25f4c",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\ISSUE_TEMPLATE.md"
+},
+{
+  "path": "public/assets/libs/slick/LICENSE",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/LICENSE",
+  "blob_url": "#",
+  "sha": "3ffd45227299db398ae12a02c276aaaa40cacc64",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\LICENSE"
+},
+{
+  "path": "public/assets/libs/slick/Makefile",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/Makefile",
+  "blob_url": "#",
+  "sha": "eea6b9529ef1add5967aa7e5b54b9dc89436efe7",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\Makefile"
+},
+{
+  "path": "public/assets/libs/slick/README.markdown",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/README.markdown",
+  "blob_url": "#",
+  "sha": "6dc5ca048121abd1418b4c4022507ba47e126300",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\README.markdown"
+},
+{
+  "path": "public/assets/libs/slick/bower.json",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/bower.json",
+  "blob_url": "#",
+  "sha": "ff2c3793223447bdef60c3575fc7900aa83ef6e9",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\bower.json"
+},
+{
+  "path": "public/assets/libs/slick/component.json",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/component.json",
+  "blob_url": "#",
+  "sha": "af23f007814dc7dc7cf46839b9007be90bc7ca0e",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\component.json"
+},
+{
+  "path": "public/assets/libs/slick/index.html",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/index.html",
+  "blob_url": "#",
+  "sha": "c8fab56c1d52aecaffc0d89aa311e24616839df3",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\index.html"
+},
+{
+  "path": "public/assets/libs/slick/package.json",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/package.json",
+  "blob_url": "#",
+  "sha": "8f675a401a3991c79f2b4f1d50820bf1c0bef7f5",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\package.json"
+},
+{
+  "path": "public/assets/libs/slick/slick.jquery.json",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/slick.jquery.json",
+  "blob_url": "#",
+  "sha": "7af760b472cf5c8cd448c5b7186d2f7a670a1f93",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\slick.jquery.json"
+},
+{
+  "path": "public/assets/libs/slick/src/ajax-loader.gif",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/ajax-loader.gif",
+  "blob_url": "#",
+  "sha": "e0e6e9760bc04861cc4771e327f22ed7962e0858",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\ajax-loader.gif"
+},
+{
+  "path": "public/assets/libs/slick/src/config.rb",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/config.rb",
+  "blob_url": "#",
+  "sha": "81f5ae3246711478002c3a3206d3497ee8286d5e",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\config.rb"
+},
+{
+  "path": "public/assets/libs/slick/src/fonts/slick.eot",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/fonts/slick.eot",
+  "blob_url": "#",
+  "sha": "2cbab9ca97723bc24c50315a0a9bd155db4e0aa5",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\fonts\\slick.eot"
+},
+{
+  "path": "public/assets/libs/slick/src/fonts/slick.svg",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/fonts/slick.svg",
+  "blob_url": "#",
+  "sha": "b36a66a6c454fb901133b8bce089a5ff7f74f871",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\fonts\\slick.svg"
+},
+{
+  "path": "public/assets/libs/slick/src/fonts/slick.ttf",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/fonts/slick.ttf",
+  "blob_url": "#",
+  "sha": "9d03461b653373f7cda3b4af104c6bca07f9892b",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\fonts\\slick.ttf"
+},
+{
+  "path": "public/assets/libs/slick/src/fonts/slick.woff",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/fonts/slick.woff",
+  "blob_url": "#",
+  "sha": "8ee99721bb81b59a5e1ceee1d3256b15f907d96b",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\fonts\\slick.woff"
+},
+{
+  "path": "public/assets/libs/slick/src/slick-theme.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/slick-theme.css",
+  "blob_url": "#",
+  "sha": "1232fcab02e2d8aea7ad438373a95e7bf6086f87",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\slick-theme.css"
+},
+{
+  "path": "public/assets/libs/slick/src/slick-theme.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/slick-theme.less",
+  "blob_url": "#",
+  "sha": "8f1075861f2930b9086b4ab0bc435f51e4c9584a",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\slick-theme.less"
+},
+{
+  "path": "public/assets/libs/slick/src/slick-theme.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/slick-theme.scss",
+  "blob_url": "#",
+  "sha": "7fe63e107ba446e4bf9f255062653f2d0633f456",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\slick-theme.scss"
+},
+{
+  "path": "public/assets/libs/slick/src/slick.css",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/slick.css",
+  "blob_url": "#",
+  "sha": "dd973fedfd9924242e2adf1123d1a24f4666e156",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\slick.css"
+},
+{
+  "path": "public/assets/libs/slick/src/slick.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/slick.js",
+  "blob_url": "#",
+  "sha": "5394604896ff03f682d9842b3ef15a8f8ec6a20b",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\slick.js"
+},
+{
+  "path": "public/assets/libs/slick/src/slick.less",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/slick.less",
+  "blob_url": "#",
+  "sha": "2fa0fb2ec1a660e51948c4ae074b1bef0bda4576",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\slick.less"
+},
+{
+  "path": "public/assets/libs/slick/src/slick.min.js",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/slick.min.js",
+  "blob_url": "#",
+  "sha": "88a8a6b3f558963ca0b0c098b2f0e195f821cc71",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\slick.min.js"
+},
+{
+  "path": "public/assets/libs/slick/src/slick.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/assets/libs/slick/src/slick.scss",
+  "blob_url": "#",
+  "sha": "2fa0fb2ec1a660e51948c4ae074b1bef0bda4576",
+  "local_exists": false,
+  "local_url": "file://\\public\\assets\\libs\\slick\\src\\slick.scss"
+},
+{
+  "path": "public/favicon.ico",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/favicon.ico",
+  "blob_url": "#",
+  "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+  "local_exists": false,
+  "local_url": "file://\\public\\favicon.ico"
+},
+{
+  "path": "public/index.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/index.php",
+  "blob_url": "#",
+  "sha": "c5820533bc15708540da48509ba70883ae9ed81a",
+  "local_exists": false,
+  "local_url": "file://\\public\\index.php"
+},
+{
+  "path": "public/robots.txt",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/robots.txt",
+  "blob_url": "#",
+  "sha": "eb0536286f3081c6c0646817037faf5446e3547d",
+  "local_exists": false,
+  "local_url": "file://\\public\\robots.txt"
+},
+{
+  "path": "public/web.config",
+  "remote_url": "https://alvo-demo.com.br/sobre/public/web.config",
+  "blob_url": "#",
+  "sha": "624c1760fcb20be77e326c280b2040595c1d8987",
+  "local_exists": false,
+  "local_url": "file://\\public\\web.config"
+},
+{
+  "path": "readme.md",
+  "remote_url": "https://alvo-demo.com.br/sobre/readme.md",
+  "blob_url": "#",
+  "sha": "7f8816d62ad36a7bb204f466f71ce67bd954e263",
+  "local_exists": false,
+  "local_url": "file://\\readme.md"
+},
+{
+  "path": "resources/assets/sass/app.scss",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/assets/sass/app.scss",
+  "blob_url": "#",
+  "sha": "bb76e29c86195c859181a97a97b24458817752af",
+  "local_exists": false,
+  "local_url": "file://\\resources\\assets\\sass\\app.scss"
+},
+{
+  "path": "resources/lang/en/auth.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/lang/en/auth.php",
+  "blob_url": "#",
+  "sha": "e5506df2907a7c8f63f3841a918611b93d67e84e",
+  "local_exists": false,
+  "local_url": "file://\\resources\\lang\\en\\auth.php"
+},
+{
+  "path": "resources/lang/en/pagination.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/lang/en/pagination.php",
+  "blob_url": "#",
+  "sha": "fcab34b253172b61762a9cb6a343299977cb564e",
+  "local_exists": false,
+  "local_url": "file://\\resources\\lang\\en\\pagination.php"
+},
+{
+  "path": "resources/lang/en/passwords.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/lang/en/passwords.php",
+  "blob_url": "#",
+  "sha": "e5544d2016657f3b661a279f89194440ea7ba256",
+  "local_exists": false,
+  "local_url": "file://\\resources\\lang\\en\\passwords.php"
+},
+{
+  "path": "resources/lang/en/validation.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/lang/en/validation.php",
+  "blob_url": "#",
+  "sha": "b1e612044f1924c19c7d073934df42ba18b0b193",
+  "local_exists": false,
+  "local_url": "file://\\resources\\lang\\en\\validation.php"
+},
+{
+  "path": "resources/views/errors/503.blade.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/views/errors/503.blade.php",
+  "blob_url": "#",
+  "sha": "4a4150592d41e7059ff87d200fe3bb9362642537",
+  "local_exists": false,
+  "local_url": "file://\\resources\\views\\errors\\503.blade.php"
+},
+{
+  "path": "resources/views/index.blade.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/views/index.blade.php",
+  "blob_url": "#",
+  "sha": "b523c58c3d67bbd88704f4db71f7bf1ecf603379",
+  "local_exists": false,
+  "local_url": "file://\\resources\\views\\index.blade.php"
+},
+{
+  "path": "resources/views/layout.blade.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/views/layout.blade.php",
+  "blob_url": "#",
+  "sha": "25141e0ae06e494c80e27d6c6f54beba67cda9bb",
+  "local_exists": false,
+  "local_url": "file://\\resources\\views\\layout.blade.php"
+},
+{
+  "path": "resources/views/partials/header.blade.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/views/partials/header.blade.php",
+  "blob_url": "#",
+  "sha": "f8179295837b2ada0437f86b127e62b5f49beb9b",
+  "local_exists": false,
+  "local_url": "file://\\resources\\views\\partials\\header.blade.php"
+},
+{
+  "path": "resources/views/partials/sliderSites.blade.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/views/partials/sliderSites.blade.php",
+  "blob_url": "#",
+  "sha": "4a849769da10be9a05e475f25c9123acdad55a78",
+  "local_exists": false,
+  "local_url": "file://\\resources\\views\\partials\\sliderSites.blade.php"
+},
+{
+  "path": "resources/views/vendor/.gitkeep",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/views/vendor/.gitkeep",
+  "blob_url": "#",
+  "sha": "8b137891791fe96927ad78e64b0aad7bded08bdc",
+  "local_exists": false,
+  "local_url": "file://\\resources\\views\\vendor\\.gitkeep"
+},
+{
+  "path": "resources/views/welcome.blade.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/resources/views/welcome.blade.php",
+  "blob_url": "#",
+  "sha": "87710acead3f9d3981326d82486a9d109829c86c",
+  "local_exists": false,
+  "local_url": "file://\\resources\\views\\welcome.blade.php"
+},
+{
+  "path": "server.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/server.php",
+  "blob_url": "#",
+  "sha": "f65c7c444f2bf9108a1df96408008ebd25e3c18f",
+  "local_exists": false,
+  "local_url": "file://\\server.php"
+},
+{
+  "path": "storage/app/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/storage/app/.gitignore",
+  "blob_url": "#",
+  "sha": "8f4803c05638697d84ea28d40693324ec70f7990",
+  "local_exists": false,
+  "local_url": "file://\\storage\\app\\.gitignore"
+},
+{
+  "path": "storage/app/public/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/storage/app/public/.gitignore",
+  "blob_url": "#",
+  "sha": "d6b7ef32c8478a48c3994dcadc86837f4371184d",
+  "local_exists": false,
+  "local_url": "file://\\storage\\app\\public\\.gitignore"
+},
+{
+  "path": "storage/framework/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/storage/framework/.gitignore",
+  "blob_url": "#",
+  "sha": "b02b700f1bfc86318cff8f4c4a7f0820974d464a",
+  "local_exists": false,
+  "local_url": "file://\\storage\\framework\\.gitignore"
+},
+{
+  "path": "storage/framework/cache/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/storage/framework/cache/.gitignore",
+  "blob_url": "#",
+  "sha": "d6b7ef32c8478a48c3994dcadc86837f4371184d",
+  "local_exists": false,
+  "local_url": "file://\\storage\\framework\\cache\\.gitignore"
+},
+{
+  "path": "storage/framework/sessions/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/storage/framework/sessions/.gitignore",
+  "blob_url": "#",
+  "sha": "d6b7ef32c8478a48c3994dcadc86837f4371184d",
+  "local_exists": false,
+  "local_url": "file://\\storage\\framework\\sessions\\.gitignore"
+},
+{
+  "path": "storage/framework/views/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/storage/framework/views/.gitignore",
+  "blob_url": "#",
+  "sha": "d6b7ef32c8478a48c3994dcadc86837f4371184d",
+  "local_exists": false,
+  "local_url": "file://\\storage\\framework\\views\\.gitignore"
+},
+{
+  "path": "storage/logs/.gitignore",
+  "remote_url": "https://alvo-demo.com.br/sobre/storage/logs/.gitignore",
+  "blob_url": "#",
+  "sha": "d6b7ef32c8478a48c3994dcadc86837f4371184d",
+  "local_exists": false,
+  "local_url": "file://\\storage\\logs\\.gitignore"
+},
+{
+  "path": "tests/ExampleTest.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/tests/ExampleTest.php",
+  "blob_url": "#",
+  "sha": "7e81d37aadc805dd3045615117d676bd4c284f63",
+  "local_exists": false,
+  "local_url": "file://\\tests\\ExampleTest.php"
+},
+{
+  "path": "tests/TestCase.php",
+  "remote_url": "https://alvo-demo.com.br/sobre/tests/TestCase.php",
+  "blob_url": "#",
+  "sha": "8578b17e4a6da6270027662adab9917b36c1eabb",
+  "local_exists": false,
+  "local_url": "file://\\tests\\TestCase.php"
+}];
+            
+            // Estado
+            let filtered = DATA.slice();
+            let sortKey = null;
+            let sortDir = 1;
+            let pageSize = 100;
+            let curPage = 1;
+
+            // Elementos DOM
+            const tbody = document.getElementById('tbody');
+            const q = document.getElementById('q');
+            const pageSizeSel = document.getElementById('pageSize');
+            const entriesInfo = document.getElementById('entriesInfo');
+            const pageDisplay = document.getElementById('pageDisplay');
+            const btnPrev = document.getElementById('prev');
+            const btnNext = document.getElementById('next');
+
+            function render() {
+                // Lógica de Paginação
+                pageSize = parseInt(pageSizeSel.value, 10);
+                const total = filtered.length;
+                const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+                if (curPage > totalPages) curPage = totalPages;
+                if (curPage < 1) curPage = 1;
+
+                const start = (curPage - 1) * pageSize;
+                const end = start + pageSize;
+                const slice = filtered.slice(start, end);
+
+                // Render HTML
+                tbody.innerHTML = '';
+                slice.forEach(r => {
+                    const tr = document.createElement('tr');
+                    
+                    // Coluna 1: Path
+                    const pathHtml = `<span class="path-text mono" title="${r.path}">${r.path}</span>`;
+                    
+                    // Coluna 2: Local Status
+                    let localHtml = '';
+                    if (r.local_exists) {
+                        // Tenta link local (pode ser bloqueado pelo browser), mas visualmente indica sucesso
+                        localHtml = `<a href="${r.local_url}" target="_blank" style="text-decoration:none"><span class="badge badge-success">✓ RESTORED</span></a>`;
+                    } else {
+                        localHtml = `<span class="badge badge-missing">✖ MISSING</span>`;
+                    }
+
+                    // Coluna 3: Remote
+                    const remoteHtml = `<a href="${r.remote_url}" target="_blank" class="link-icon">Abrir ↗</a>`;
+
+                    // Coluna 4: SHA
+                    const shaHtml = r.sha 
+                        ? `<a href="${r.blob_url}" target="_blank" class="mono hash-link">${r.sha}</a>` 
+                        : '<span class="muted">-</span>';
+
+                    tr.innerHTML = `<td>${pathHtml}</td><td>${localHtml}</td><td>${remoteHtml}</td><td>${shaHtml}</td>`;
+                    tbody.appendChild(tr);
+                });
+
+                // Update Controls
+                const startInfo = total === 0 ? 0 : start + 1;
+                const endInfo = Math.min(end, total);
+                entriesInfo.innerText = `Mostrando ${startInfo} a ${endInfo} de ${total} arquivos`;
+                pageDisplay.innerText = `Pág ${curPage} / ${totalPages}`;
+
+                btnPrev.disabled = curPage === 1;
+                btnNext.disabled = curPage === totalPages;
+            }
+
+            function applyFilter() {
+                const term = q.value.trim().toLowerCase();
+                
+                if (!term) {
+                    filtered = DATA.slice();
+                } else {
+                    filtered = DATA.filter(r => 
+                        (r.path || '').toLowerCase().includes(term) || 
+                        (r.sha || '').toLowerCase().includes(term)
+                    );
+                }
+
+                if (sortKey) {
+                    filtered.sort((a, b) => {
+                        const A = (a[sortKey] || '').toLowerCase();
+                        const B = (b[sortKey] || '').toLowerCase();
+                        if (A < B) return -1 * sortDir;
+                        if (A > B) return 1 * sortDir;
+                        return 0;
+                    });
+                }
+
+                curPage = 1;
+                render();
+            }
+
+            // Listeners
+            q.addEventListener('input', applyFilter);
+            
+            pageSizeSel.addEventListener('change', () => {
+                curPage = 1;
+                render();
+            });
+
+            document.getElementById('reset').addEventListener('click', () => {
+                q.value = '';
+                pageSizeSel.value = '100';
+                sortKey = null;
+                sortDir = 1;
+                filtered = DATA.slice();
+                curPage = 1;
+                render();
+            });
+
+            btnPrev.addEventListener('click', () => {
+                if (curPage > 1) { curPage--; render(); }
+            });
+
+            btnNext.addEventListener('click', () => {
+                const totalPages = Math.ceil(filtered.length / pageSize);
+                if (curPage < totalPages) { curPage++; render(); }
+            });
+
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.addEventListener('click', () => {
+                    const k = th.getAttribute('data-sort');
+                    if (sortKey === k) {
+                        sortDir = -sortDir;
+                    } else {
+                        sortKey = k;
+                        sortDir = 1;
+                    }
+                    applyFilter();
+                });
+            });
+
+            // Init
+            render();
+        </script>
+    </body>
+    </html>
+    
