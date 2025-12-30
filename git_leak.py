@@ -480,6 +480,51 @@ def recover_one_sha(base_git_url: str, sha: str, outdir: str, original_path: Opt
         return False
 
 
+def recover_stash_content(base_git_url: str, outdir: str, proxies: Optional[Dict] = None) -> Optional[str]:
+    stash_url = base_git_url.rstrip("/") + "/.git/refs/stash"
+    
+    ok, data = http_get_bytes(stash_url, proxies=proxies)
+    if not ok:
+        return None
+    
+    stash_sha = data.decode(errors='ignore').strip()
+    if len(stash_sha) != 40:
+        return None
+
+    info(f"[!] STASH ENCONTRADO! SHA: {stash_sha}")
+    
+    ok_obj, raw_obj = fetch_object_raw(base_git_url, stash_sha, proxies=proxies)
+    if not ok_obj:
+        warn(f"Falha ao baixar objeto do Stash {stash_sha}")
+        return None
+
+    _, parsed = parse_git_object(raw_obj)
+    meta = parse_commit_content(parsed[1])
+    tree_sha = meta.get("tree")
+    
+    if not tree_sha:
+        warn("Commit do Stash não possui Tree.")
+        return None
+
+    info(f" -> Extraindo arquivos do Stash (Tree: {tree_sha})...")
+    
+    stash_files = collect_files_from_tree(base_git_url, tree_sha, proxies=proxies, ignore_missing=True)
+    
+    if stash_files:
+        success(f"Recuperados {len(stash_files)} arquivos do Stash.")
+        
+        stash_json_path = os.path.join(outdir, "_files", "stash.json")
+        output = {"entries": [{"path": f["path"], "sha1": f["sha"]} for f in stash_files]}
+        
+        with open(stash_json_path, "w", encoding="utf-8") as f:
+            json.dump(output, f, indent=2)
+            
+        return stash_sha
+    else:
+        warn("Stash encontrado, mas a árvore de arquivos estava vazia ou inacessível.")
+        return stash_sha
+
+
 def reconstruct_all(input_json: str, base_git_url: str, outdir: str, workers: int = 10):
     entries = load_dump_entries(input_json)
     info(f"Entradas detectadas: {len(entries)} — iniciando downloads (workers={workers})")
@@ -722,7 +767,32 @@ MISC_SIGNATURES = {
     "svn": {"path": "/.svn/wc.db", "magic": b"SQLite format 3", "desc": "Repositório SVN (wc.db)"},
     "hg": {"path": "/.hg/store/00manifest.i", "magic": b"\x00\x00\x00\x01", "desc": "Repositório Mercurial"},
     "ds_store": {"path": "/.DS_Store", "magic": b"\x00\x00\x00\x01", "desc": "Metadados macOS (.DS_Store)"},
-    "env": {"path": "/.env", "regex": br"^\s*[A-Z_0-9]+\s*=", "desc": "Variáveis de Ambiente (.env)"}
+    "env": {"path": "/.env", "regex": br"^\s*[A-Z_0-9]+\s*=", "desc": "Variáveis de Ambiente (.env)"},
+    "exclude": {
+        "path": "/.git/info/exclude", 
+        "desc": "Git Ignore Local (info/exclude)",
+        "regex": br"(?m)^#.*git ls-files" 
+    },
+    "description": {
+        "path": "/.git/description", 
+        "desc": "Descrição GitWeb",
+        "min_len": 5 
+    },
+    "commit_msg": {
+        "path": "/.git/COMMIT_EDITMSG", 
+        "desc": "Última Mensagem de Commit",
+        "min_len": 1
+    },
+    "hook_sample": {
+        "path": "/.git/hooks/pre-commit.sample", 
+        "desc": "Hook Sample (Exposição de Dir)",
+        "magic": b"#!"
+    },
+    "hook_active": {
+        "path": "/.git/hooks/pre-commit", 
+        "desc": "Hook Ativo (RCE Potencial)",
+        "magic": b"#!"
+    }
 }
 
 
@@ -1554,11 +1624,16 @@ def detect_misc_leaks(base_url: str, outdir: str, proxies: Optional[Dict] = None
 
         if ok:
             is_valid = False
+            
             if "magic" in sig:
                 if data.startswith(sig["magic"]): is_valid = True
                 if key == "ds_store" and data.startswith(b"\x00\x00\x00\x01Bud1"): is_valid = True
+            
             elif "regex" in sig:
                 if re.search(sig["regex"], data, re.MULTILINE): is_valid = True
+            
+            elif "min_len" in sig:
+                if len(data) >= sig["min_len"]: is_valid = True
 
             if is_valid:
                 success(f"Vazamento Confirmado: {sig['desc']}")
@@ -1567,6 +1642,10 @@ def detect_misc_leaks(base_url: str, outdir: str, proxies: Optional[Dict] = None
                 if key == "env": filename = ".env"
                 elif key == "svn": filename = "wc.db"
                 elif key == "ds_store": filename = "DS_Store_dump"
+                elif key == "exclude": filename = "info_exclude.txt"
+                elif key == "description": filename = "description.txt"
+                elif key == "commit_msg": filename = "COMMIT_EDITMSG.txt"
+                elif "hook" in key: filename = "hook_script.sh"
 
                 dump_path = os.path.join(misc_dir, filename)
 
@@ -1575,34 +1654,29 @@ def detect_misc_leaks(base_url: str, outdir: str, proxies: Optional[Dict] = None
 
                 html_name = f"{key}_report.html"
                 content_display = ""
-                is_text = False
-
-                if key == "env":
-                    is_text = True
-                    content_display = data.decode("utf-8", "ignore")
+                
+                text_keys = ["env", "exclude", "description", "commit_msg", "hook_sample", "hook_active"]
+                is_text = key in text_keys
+                
+                if is_text:
+                    try:
+                        content_display = data.decode("utf-8", "ignore")
+                    except:
+                        content_display = "[Erro na decodificação de texto]"
+                        is_text = False
 
                 elif key == "ds_store":
                     try:
                         extracted_files = parse_ds_store(dump_path)
-                        
                         full_urls = [f"{base}/{f}" for f in extracted_files]
-                        
-                        ds_json_path = os.path.join(outdir, "_files", "ds_store_leaks.json")
-                        with open(ds_json_path, "w", encoding="utf-8") as f:
-                            json.dump(full_urls, f, indent=2)
-                        
                         if extracted_files:
                             is_text = True
-                            content_display = "=== URLs EXTRAÍDAS DO .DS_Store ===\n\n"
-                            content_display += "\n".join(full_urls) 
-                            content_display += f"\n\n[!] Total: {len(full_urls)} caminhos descobertos."
+                            content_display = "=== URLs EXTRAÍDAS DO .DS_Store ===\n\n" + "\n".join(full_urls)
                         else:
                             is_text = True
-                            content_display = "=== ARQUIVO .DS_Store VÁLIDO ===\n\nO arquivo não contém registros de nomes visíveis."
-                            
+                            content_display = "=== ARQUIVO .DS_Store VÁLIDO ===\n\nSem registros visíveis."
                     except Exception as e:
-                        warn(f"Erro ao analisar .DS_Store: {e}")
-                        content_display = f"Erro ao decodificar: {e}"
+                        content_display = f"Erro: {e}"
 
                 generate_misc_html(os.path.join(outdir, html_name), sig['desc'], content_display, is_text)
 
@@ -1663,43 +1737,61 @@ def parse_git_config_file(file_path: str) -> Optional[str]:
 
 
 def gather_intelligence(base_git_url: str, outdir: str, proxies: Optional[Dict] = None) -> Dict[str, Any]:
-    info("Coletando inteligência (Config, Logs, Refs)...")
+    info("Coletando inteligência (Config, Logs, Refs, Info/Refs)...")
     base = base_git_url.rstrip("/")
     if not base.endswith("/.git"): base += "/.git"
 
     meta_dir = os.path.join(outdir, "_files", "metadata")
     os.makedirs(meta_dir, exist_ok=True)
-    intel = {"remote_url": None, "logs": [], "packed_refs": []}
+    
+    intel = {"remote_url": None, "logs": [], "packed_refs": [], "info_refs": []}
 
     ok, data = http_get_bytes(base + "/config", proxies=proxies)
     if ok:
-        cfg_path = os.path.join(meta_dir, "config");
-        with open(cfg_path, "wb") as f:
-            f.write(data)
+        cfg_path = os.path.join(meta_dir, "config")
+        with open(cfg_path, "wb") as f: f.write(data)
         intel["remote_url"] = parse_git_config_file(cfg_path)
         if intel["remote_url"]: success(f"Remote Origin detectado: {intel['remote_url']}")
 
     ok, data = http_get_bytes(base + "/logs/HEAD" , proxies=proxies)
     if ok:
-        log_path = os.path.join(meta_dir, "logs_HEAD");
+        log_path = os.path.join(meta_dir, "logs_HEAD")
         with open(log_path, "wb") as f: f.write(data)
         intel["logs"] = parse_git_log_file(log_path)
         success(f"Logs de histórico recuperados: {len(intel['logs'])} entradas.")
 
     ok, data = http_get_bytes(base + "/packed-refs" , proxies=proxies)
     if ok:
-        pr_path = os.path.join(meta_dir, "packed-refs");
-        with open(pr_path, "wb") as f:
-            f.write(data)
+        pr_path = os.path.join(meta_dir, "packed-refs")
+        with open(pr_path, "wb") as f: f.write(data)
         refs = []
         for line in data.decode(errors='ignore').splitlines():
             if not line.startswith("#") and " " in line:
-                sha, ref = line.split(" ", 1)
-                refs.append({"sha": sha, "ref": ref})
+                parts = line.split(" ", 1)
+                if len(parts) == 2:
+                    refs.append({"sha": parts[0], "ref": parts[1].strip()})
         intel["packed_refs"] = refs
+
+    ok, data = http_get_bytes(base + "/info/refs", proxies=proxies)
+    if ok:
+        ir_path = os.path.join(meta_dir, "info_refs")
+        with open(ir_path, "wb") as f: f.write(data)
+        
+        info_refs_list = []
+        content = data.decode(errors='ignore')
+        
+        matches = re.findall(r'([0-9a-f]{40})\s+([^\s]+)', content)
+        
+        for sha, ref in matches:
+            info_refs_list.append({"sha": sha, "ref": ref})
+            
+        intel["info_refs"] = info_refs_list
+        if info_refs_list:
+            success(f"Info/Refs recuperado: {len(info_refs_list)} referências encontradas.")
 
     with open(os.path.join(outdir, "_files", "intelligence.json"), "w", encoding="utf-8") as f:
         json.dump(intel, f, indent=2, ensure_ascii=False)
+    
     return intel
 
 
@@ -1710,6 +1802,15 @@ def find_candidate_shas(base_git_url: str, proxies: Optional[Dict] = None) -> Li
     base = base_git_url.rstrip("/")
     if not base.endswith("/.git"): base += "/.git"
     candidates = {}
+
+    info_refs_url = base + "/info/refs"
+    ok, data = http_get_bytes(info_refs_url, proxies=proxies)
+    if ok:
+        content = data.decode(errors='ignore')
+        matches = re.findall(r'([0-9a-f]{40})\s+([^\s]+)', content)
+        for sha, ref in matches:
+            if sha not in candidates:
+                candidates[sha] = {"sha": sha, "ref": ref, "source": info_refs_url}
 
     head_urls = [base + "/HEAD"]
     for url in head_urls:
@@ -1791,7 +1892,9 @@ def detect_hardening(base_git_url: str, outdir: str, proxies: Optional[Dict] = N
                   "index": [base + "/index", base + "/.git/index"],
                   "objects_root": [base + "/objects/", base + "/.git/objects/"],
                   "logs": [base + "/logs/HEAD", base + "/.git/logs/HEAD"],
-                  "config": [base + "/config", base + "/.git/config"]}
+                  "config": [base + "/config", base + "/.git/config"],
+                  "stash": [base + "/refs/stash", base + "/.git/refs/stash"],
+                  "info_refs": [base + "/info/refs", base + "/.git/info/refs"]}
     report = {"base": base_git_url, "checked_at": datetime.now(timezone.utc).isoformat(), "results": {}}
     for name, urls in candidates.items():
         status = {"exposed": False, "positive_urls": []}
@@ -1830,7 +1933,9 @@ def generate_hardening_html(report: Dict[str, Any], out_html: str):
         "index": ".git/index acessível",
         "objects_root": ".git/objects/ acessível", 
         "logs": ".git/logs/ acessível",
-        "config": ".git/config acessível"
+        "config": ".git/config acessível",
+        "stash": ".git/refs/stash",
+        "info_refs": ".git/info/refs (Mapa de Referências/SmartHTTP)"
     }
     
     total_score = 0
@@ -1844,7 +1949,7 @@ def generate_hardening_html(report: Dict[str, Any], out_html: str):
         action = "Nenhuma ação necessária."
         
         if exposed:
-            if k in ("index", "objects_root", "config"):
+            if k in ("index", "objects_root", "config", "stash", "info_refs"):
                 status = "CRÍTICO"
                 total_score += 5
                 action = "Bloquear acesso imediatamente (HTTP 403) via .htaccess ou regras do servidor."
@@ -2543,6 +2648,42 @@ def generate_unified_report(outdir: str, base_url: str):
     try: secrets_data = json.load(open(os.path.join(files_dir, "secrets.json")))
     except: secrets_data = []
 
+    try: stash_entries = load_dump_entries(os.path.join(files_dir, "stash.json"))
+    except: stash_entries = []
+
+    stash_section = ""
+    if stash_entries:
+        stash_rows = ""
+        # Lista apenas os 5 primeiros para não poluir
+        for e in stash_entries[:5]:
+            path = e.get('path', '')
+            sha = e.get('sha1', '')[:7]
+            stash_rows += f"""
+            <tr>
+                <td class="mono">{path}</td>
+                <td class="text-right"><a href="{make_blob_url_from_git(base_url, e.get('sha1', ''))}" target="_blank" class="link-icon">Ver Blob</a></td>
+            </tr>
+            """
+        
+        stash_section = f"""
+        <div class="card mb-4" style="border: 1px solid #f59e0b;">
+            <div class="card-header d-flex justify-content-between" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                <span>💾 Git Stash Recuperado</span>
+                <span class="badge bg-warning text-dark">{len(stash_entries)} Arquivos</span>
+            </div>
+            <div class="card-body">
+                <div class="alert-box" style="margin-bottom:15px; font-size:0.85rem; color:#ccc;">
+                    O Stash contém modificações que não foram commitadas. Examine estes arquivos com prioridade.
+                </div>
+                <table class="table-simple">
+                    {stash_rows}
+                </table>
+                <p class="text-center mt-2 small muted">... e mais {max(0, len(stash_entries) - 5)} arquivos.</p>
+                <a href="_files/stash.json" target="_blank" class="btn btn-outline w-100">Ver JSON Completo</a>
+            </div>
+        </div>
+        """
+
     hardening_rows = ""
     h_vuln_count = 0
     for k, v in hardening.get("results", {}).items():
@@ -2831,6 +2972,8 @@ def generate_unified_report(outdir: str, base_url: str):
             </div>
 
             {secrets_section}
+
+            {stash_section}
 
             <div class="dashboard-grid">
                 <div>
@@ -4186,6 +4329,10 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
     # 2. Hardening & Misc
     detect_hardening(base_url, output_dir, proxies=proxies)
     gather_intelligence(base_url, output_dir, proxies=proxies)
+    stash_sha = recover_stash_content(base_url, output_dir, proxies=proxies)
+    if stash_sha:
+        reconstruct_all(os.path.join(output_dir, "_files", "stash.json"), base_url, os.path.join(output_dir, "stash_restored"), workers=args.workers)
+        pass
     
     # Lógica Condicional de Full Scan (Brute Force + Misc)
     if args.full_scan:
