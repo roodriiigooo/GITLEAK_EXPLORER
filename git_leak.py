@@ -52,6 +52,8 @@ import subprocess
 import re
 import hashlib
 import random
+import difflib
+
 try:
     from ds_store import DSStore
     HAS_DS_STORE_LIB = True
@@ -65,8 +67,22 @@ from typing import List, Dict, Any, Tuple, Optional
 from datetime import datetime, timezone
 
 
+
 #  ssl - Disable warn
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# ---------------------------
+# Global Session Setup (Performance)
+# ---------------------------
+
+requests.packages.urllib3.disable_warnings()
+SESSION = requests.Session()
+# Aumenta o pool para suportar multithreading pesado
+adapter = requests.adapters.HTTPAdapter(pool_connections=100, pool_maxsize=100, max_retries=1)
+SESSION.mount('http://', adapter)
+SESSION.mount('https://', adapter)
+
+
 
 # ---------------------------
 # Logging helpers
@@ -168,10 +184,9 @@ def normalize_url(url, proxies: Optional[Dict] = None):
         return f"http://{url}"
 
 
-def http_get_bytes(url: str, timeout: int = DEFAULT_TIMEOUT, proxies: Optional[Dict] = None) -> Tuple[bool, bytes | str]:
+def http_get_bytes(url: str, timeout: int = 15, proxies: Optional[Dict] = None) -> Tuple[bool, bytes | str]:
     try:
-        requests.packages.urllib3.disable_warnings()
-        r = requests.get(url, timeout=timeout, stream=True, verify=False, headers=get_random_headers(), proxies=proxies)
+        r = SESSION.get(url, timeout=timeout, stream=True, verify=False, headers=get_random_headers(), proxies=proxies)
         if r.status_code != 200:
             return False, f"HTTP {r.status_code}"
         return True, r.content
@@ -179,31 +194,25 @@ def http_get_bytes(url: str, timeout: int = DEFAULT_TIMEOUT, proxies: Optional[D
         return False, str(e)
 
 
-def http_get_to_file(url: str, outpath: str, timeout: int = DEFAULT_TIMEOUT, proxies: Optional[Dict] = None) -> Tuple[bool, str]:
+def http_get_to_file(url: str, outpath: str, timeout: int = 15, proxies: Optional[Dict] = None) -> Tuple[bool, str]:
     try:
-        requests.packages.urllib3.disable_warnings()
-        print(f"[!] Tentando baixar {url} ...")
-        r = requests.get(url, timeout=timeout, stream=True, verify=False, headers=get_random_headers(), proxies=proxies)
-        print(f"[!] {url} - Status: {r.status_code}")
+        print(f"[!] Baixando {url} ...")
+        r = SESSION.get(url, timeout=timeout, stream=True, verify=False, headers=get_random_headers(), proxies=proxies)
         if r.status_code != 200:
-            print(f"[!] Falha ao baixar {url} - Status: {r.status_code}")
             return False, f"HTTP {r.status_code}"
         
         os.makedirs(os.path.dirname(outpath), exist_ok=True)
         with open(outpath, "wb") as f:
             for chunk in r.iter_content(8192):
-                if chunk:
-                    f.write(chunk)
+                if chunk: f.write(chunk)
         return True, "ok"
     except Exception as e:
-        print(f"[!] Falha ao baixar {url} - expt: {e}")
         return False, str(e)
 
 
 def http_head_status(url: str, timeout: int = 6, proxies: Optional[Dict] = None) -> Tuple[bool, Optional[int], str]:
     try:
-        requests.packages.urllib3.disable_warnings()
-        r = requests.head(url, timeout=timeout, allow_redirects=True, verify=False, headers=get_random_headers(), proxies=proxies)
+        r = SESSION.head(url, timeout=timeout, allow_redirects=True, verify=False, headers=get_random_headers(), proxies=proxies)
         code = getattr(r, "status_code", None)
         if code and 200 <= code < 300:
             return True, code, "OK"
@@ -332,6 +341,58 @@ def parse_git_index(index_path):
     return entries
 
 
+def compute_diff(base_url, sha_old, sha_new, proxies=None):
+    MAX_SIZE = 100 * 1024  # Limite de 100KB para processar diff
+    
+    def get_content(sha):
+        if not sha: return []
+        ok, raw = fetch_object_raw(base_url, sha, proxies)
+        if not ok: return None
+        
+        is_valid, parsed_data = parse_git_object(raw)
+        if not is_valid: return None
+        
+        _, content = parsed_data
+        
+        # Proteção 1: Se for muito grande, ignora
+        if len(content) > MAX_SIZE:
+            return ["<Arquivo muito grande para exibir diff>"]
+            
+        # Proteção 2: Tenta decodificar
+        try:
+            return content.decode('utf-8').splitlines()
+        except UnicodeDecodeError:
+            try:
+                return content.decode('latin-1').splitlines()
+            except:
+                return None # Binário
+
+    lines_old = get_content(sha_old)
+    lines_new = get_content(sha_new)
+
+    if lines_old is None or lines_new is None:
+        return "Arquivo binário ou codificação desconhecida."
+        
+    if lines_old == ["<Arquivo muito grande para exibir diff>"] or lines_new == ["<Arquivo muito grande para exibir diff>"]:
+        return "Arquivo excede o limite de tamanho para visualização (100KB)."
+
+    try:
+        diff = difflib.unified_diff(
+            lines_old, 
+            lines_new, 
+            fromfile=f'a/{sha_old[:7] if sha_old else "null"}', 
+            tofile=f'b/{sha_new[:7] if sha_new else "null"}',
+            lineterm=''
+        )
+        diff_text = '\n'.join(diff)
+        
+        # Proteção 3: Limite no tamanho do texto final do diff
+        if len(diff_text) > MAX_SIZE:
+            return diff_text[:MAX_SIZE] + "\n... [Diff truncado por excesso de tamanho]"
+            
+        return diff_text if diff_text else "Sem alterações textuais visíveis."
+    except Exception as e:
+        return f"Erro ao calcular diff: {str(e)}"
 
 
 def index_to_json(index_path, json_out_path):
@@ -2614,15 +2675,27 @@ def generate_unified_report(outdir: str, base_url: str):
     info("Gerando Dashboard Unificado (report.html)...")
     files_dir = os.path.join(outdir, "_files")
     
-    try: hardening = json.load(open(os.path.join(files_dir, "hardening_report.json")))
-    except: hardening = {}
+    # Helper para carregar JSON com segurança e UTF-8 explícito
+    def safe_load_json(filename, default_val):
+        path = os.path.join(files_dir, filename)
+        if not os.path.exists(path): return default_val
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            # Em caso de erro, imprime para debug mas não quebra o fluxo
+            print(f"[!] Erro ao carregar {filename} para o relatório: {e}")
+            return default_val
 
-    try: misc = json.load(open(os.path.join(files_dir, "misc_leaks.json")))
-    except: misc = []
-
-    try: packs = json.load(open(os.path.join(files_dir, "packfiles.json")))
-    except: packs = []
-
+    # Carrega dados usando o helper seguro
+    hardening = safe_load_json("hardening_report.json", {})
+    misc = safe_load_json("misc_leaks.json", [])
+    packs = safe_load_json("packfiles.json", [])
+    bruteforce_data = safe_load_json("bruteforce.json", [])
+    users_data = safe_load_json("users.json", [])
+    secrets_data = safe_load_json("secrets.json", [])
+    
+    # Carrega Dump (Listing)
     try:
         listing_entries = load_dump_entries(os.path.join(files_dir, "dump.json"))
         listing_count = len(listing_entries)
@@ -2630,31 +2703,22 @@ def generate_unified_report(outdir: str, base_url: str):
         listing_entries = []
         listing_count = 0
 
+    # Carrega Histórico (Ponto Crítico do Erro Anterior)
+    history_data = safe_load_json("history.json", {})
+    commits = history_data.get('commits', [])
+    head_sha = history_data.get('head', 'N/A')
+
+    # Carrega Stash
     try:
-        history_data = json.load(open(os.path.join(files_dir, "history.json")))
-        commits = history_data.get('commits', [])
-        head_sha = history_data.get('head', 'N/A')
-    except:
-        history_data = {}
-        commits = []
-        head_sha = "N/A"
+        stash_entries = load_dump_entries(os.path.join(files_dir, "stash.json"))
+    except: 
+        stash_entries = []
 
-    try: bruteforce_data = json.load(open(os.path.join(files_dir, "bruteforce.json")))
-    except: bruteforce_data = []
-
-    try: users_data = json.load(open(os.path.join(files_dir, "users.json")))
-    except: users_data = []
-    
-    try: secrets_data = json.load(open(os.path.join(files_dir, "secrets.json")))
-    except: secrets_data = []
-
-    try: stash_entries = load_dump_entries(os.path.join(files_dir, "stash.json"))
-    except: stash_entries = []
+    # --- MONTAGEM DO HTML ---
 
     stash_section = ""
     if stash_entries:
         stash_rows = ""
-        # Lista apenas os 5 primeiros para não poluir
         for e in stash_entries[:5]:
             path = e.get('path', '')
             sha = e.get('sha1', '')[:7]
@@ -2722,18 +2786,28 @@ def generate_unified_report(outdir: str, base_url: str):
     </div>
     """
 
+    # --- SEÇÃO DE HISTÓRICO ---
     hist_rows = ""
-    for c in commits[:5]:
-        msg = c.get('message', '').splitlines()[0][:50]
-        msg = msg.replace("<", "&lt;").replace(">", "&gt;")
-        sha = c.get('sha', '')[:7]
-        hist_rows += f"""
-        <tr>
-            <td class="mono"><span style="color:var(--hash-color)">{sha}</span></td>
-            <td>{msg}...</td>
-            <td class="text-right"><span class="badge bg-secondary">{c.get('date', '').split(' ')[0]}</span></td>
-        </tr>
-        """
+    if commits:
+        for c in commits[:5]:
+            # Proteção extra contra mensagens que quebram HTML
+            raw_msg = c.get('message', '')
+            if not raw_msg: raw_msg = "Sem mensagem"
+            msg = raw_msg.splitlines()[0][:50]
+            msg = msg.replace("<", "&lt;").replace(">", "&gt;")
+            
+            sha = c.get('sha', '')[:7]
+            date_str = str(c.get('date', '')).split(' ')[0]
+            
+            hist_rows += f"""
+            <tr>
+                <td class="mono"><span style="color:var(--hash-color)">{sha}</span></td>
+                <td>{msg}...</td>
+                <td class="text-right"><span class="badge bg-secondary">{date_str}</span></td>
+            </tr>
+            """
+    else:
+        hist_rows = "<tr><td colspan='3' class='text-center muted'>Nenhum histórico recuperado ou erro ao carregar JSON.</td></tr>"
     
     history_card = f"""
     <div class="card">
@@ -3410,8 +3484,7 @@ def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
     success(f"Dashboard de Listagem gerado: {outpath}")
 
 
-def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_url: str):
-    # 1. Carregamento de Dados (Preservando sua lógica)
+def generate_history_html(in_json, out_html, site_base, base_git_url):
     import json, os
     
     with open(in_json, 'r', encoding='utf-8') as f: 
@@ -3420,15 +3493,18 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
     commits = data.get('commits', [])
     head_sha = data.get('head', 'N/A')
     
-    # Prepara o JSON para o JavaScript
-    commits_json = json.dumps(commits, ensure_ascii=False)
+    # Sanitização para JS
+    commits_json = json.dumps(commits, ensure_ascii=True)\
+        .replace('<', '\\u003c')\
+        .replace('>', '\\u003e')
 
-    # Tenta obter URL remota (Sua lógica original)
     intel_path = os.path.join(os.path.dirname(in_json), "intelligence.json")
     remote_url = ""
     if os.path.exists(intel_path):
-        with open(intel_path, 'r', encoding='utf-8') as f: 
-            remote_url = json.load(f).get("remote_url", "")
+        try:
+            with open(intel_path, 'r', encoding='utf-8') as f: 
+                remote_url = json.load(f).get("remote_url", "")
+        except: pass
 
     html_content = f"""
     <!DOCTYPE html>
@@ -3439,174 +3515,127 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
         <title>Timeline Git - {site_base}</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
         <style>
-            :root {{
-                --bg-body: #0f111a;
-                --bg-card: #1a1d2d;
-                --bg-hover: #23273a;
-                --text-primary: #e2e8f0;
-                --text-secondary: #94a3b8;
-                --accent-color: #6366f1;
-                --border-color: #2d3748;
-                --success: #10b981;
-                --danger: #ef4444;
-                --warning: #f59e0b;
-                --hash-color: #ec4899;
-            }}
-
+            :root {{ --bg-body: #0f111a; --bg-card: #1a1d2d; --bg-hover: #23273a; --bg-details: #151824; --text-primary: #e2e8f0; --text-secondary: #94a3b8; --accent-color: #6366f1; --border-color: #2d3748; --success: #10b981; --danger: #ef4444; --warning: #f59e0b; --hash-color: #ec4899; }}
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ background-color: var(--bg-body); color: var(--text-primary); font-family: 'Inter', sans-serif; min-height: 100vh; padding: 2rem; }}
+            .container {{ max-width: 1400px; margin: 0 auto; }}
             
-            body {{
-                background-color: var(--bg-body);
-                color: var(--text-primary);
-                font-family: 'Inter', sans-serif;
-                min-height: 100vh;
-                padding: 2rem;
-            }}
-
-            .container {{ max-width: 1600px; margin: 0 auto; }}
-
             /* Header */
-            .header {{
-                display: flex; justify-content: space-between; align-items: center;
-                margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);
-            }}
+            .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }}
             .title h1 {{ font-size: 1.5rem; font-weight: 600; color: var(--text-primary); }}
-            .title p {{ color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }}
-            
-            .meta-box {{
-                display: flex; gap: 1rem;
-            }}
-            .stat-badge {{
-                background: var(--bg-card); padding: 0.5rem 1rem; border-radius: 6px;
-                border: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);
-            }}
+            .stat-badge {{ background: var(--bg-card); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary); margin-left: 10px; display: inline-block; }}
             .highlight {{ color: var(--accent-color); font-weight: 600; }}
-
-            /* Controls */
-            .controls {{ display: flex; gap: 1rem; margin-bottom: 1.5rem; }}
-            .btn-back {{
-                display: inline-flex; align-items: center; padding: 0.6rem 1.2rem;
-                background-color: var(--bg-card); color: var(--text-primary);
-                text-decoration: none; border-radius: 6px; border: 1px solid var(--border-color);
-                font-size: 0.9rem; transition: all 0.2s;
+            
+            /* Controls Grid */
+            .controls {{ 
+                display: grid; 
+                grid-template-columns: auto 1fr 1fr; 
+                gap: 1rem; 
+                margin-bottom: 1.5rem; 
+                align-items: center;
             }}
+            .btn-back {{ display: inline-flex; align-items: center; padding: 0.7rem 1.2rem; background-color: var(--bg-card); color: var(--text-primary); text-decoration: none; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; transition: all 0.2s; height: 42px; }}
             .btn-back:hover {{ border-color: var(--accent-color); color: var(--accent-color); }}
-
-            .search-box {{ flex: 1; position: relative; max-width: 500px; }}
-            .search-box input {{
-                width: 100%; padding: 0.6rem 1rem 0.6rem 2.5rem;
-                background-color: var(--bg-card); border: 1px solid var(--border-color);
-                border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;
-            }}
+            
+            .search-box {{ position: relative; }}
+            .search-box input {{ width: 100%; padding: 0.7rem 1rem 0.7rem 2.5rem; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; height: 42px; }}
             .search-box input:focus {{ outline: none; border-color: var(--accent-color); }}
             .search-icon {{ position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; }}
 
-            /* Table */
-            .table-container {{
-                background-color: var(--bg-card); border-radius: 8px;
-                border: 1px solid var(--border-color); overflow: hidden;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            }}
+            /* Master-Detail Table */
+            .table-container {{ background-color: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }}
             table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }}
+            th {{ background-color: rgba(255,255,255,0.03); padding: 1rem; text-align: left; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); }}
             
-            th {{
-                background-color: rgba(255,255,255,0.03); padding: 1rem; text-align: left;
-                font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border-color);
-            }}
+            /* Main Row */
+            .commit-row {{ cursor: pointer; transition: background 0.2s; }}
+            .commit-row:hover {{ background-color: var(--bg-hover); }}
+            .commit-row td {{ padding: 1rem; border-bottom: 1px solid var(--border-color); vertical-align: top; }}
             
-            td {{ padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-color); vertical-align: top; }}
-            tbody tr:hover {{ background-color: var(--bg-hover); }}
+            /* Expanded Details Row */
+            .details-row {{ background-color: var(--bg-details); display: none; }}
+            .details-row.active {{ display: table-row; }}
+            .details-content {{ padding: 20px; border-bottom: 1px solid var(--border-color); box-shadow: inset 0 0 15px rgba(0,0,0,0.3); }}
 
-            /* Colunas */
-            th:nth-child(1) {{ width: 12%; }} /* Hash & Status */
-            th:nth-child(2) {{ width: 10%; }} /* Data */
-            th:nth-child(3) {{ width: 18%; }} /* Autor */
-            th:nth-child(4) {{ width: 40%; }} /* Mensagem */
-            th:nth-child(5) {{ width: 20%; }} /* Arquivos */
+            /* Columns Width */
+            th:nth-child(1) {{ width: 10%; }} /* Hash */
+            th:nth-child(2) {{ width: 12%; }} /* Date */
+            th:nth-child(3) {{ width: 18%; }} /* Author */
+            th:nth-child(4) {{ width: 45%; }} /* Message */
+            th:nth-child(5) {{ width: 15%; }} /* Files Summary */
 
-            /* Elementos Internos */
+            /* Typography */
             .mono {{ font-family: 'JetBrains Mono', monospace; }}
-            
             .hash-link {{ color: var(--hash-color); text-decoration: none; font-weight: bold; }}
-            .hash-link:hover {{ text-decoration: underline; }}
-
             .badge {{ font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-left: 5px; }}
-            .badge-log {{ background: rgba(16, 185, 129, 0.15); color: var(--success); }} /* Log = Verde */
-            .badge-walk {{ background: rgba(59, 130, 246, 0.15); color: #3b82f6; }}      /* Walk = Azul */
-            .badge-err {{ background: rgba(239, 68, 68, 0.15); color: var(--danger); }}
+            .msg-text {{ color: #d1d5db; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
 
-            .author-name {{ color: #fff; font-weight: 500; }}
-            .author-email {{ font-size: 0.8rem; color: var(--text-secondary); }}
-
-            .msg-text {{ color: #d1d5db; display: block; margin-bottom: 5px; }}
-            .parents-info {{ font-size: 0.75rem; color: #64748b; }}
-            .parents-info a {{ color: #64748b; text-decoration: none; }}
-            .parents-info a:hover {{ color: var(--accent-color); }}
-
-            /* Files Detail */
-            details {{ cursor: pointer; }}
-            summary {{ font-weight: 500; color: var(--text-secondary); font-size: 0.85rem; user-select: none; transition: color 0.2s; }}
-            summary:hover {{ color: var(--accent-color); }}
+            /* File List Styles (Expanded) */
+            .file-entry {{ background: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 10px; border-radius: 6px; overflow: hidden; }}
+            .file-header {{ padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); }}
+            .file-path {{ font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #fff; }}
             
-            .file-list {{ 
-                margin-top: 8px; max-height: 200px; overflow-y: auto; 
-                background: rgba(0,0,0,0.2); border-radius: 4px; padding: 5px;
-            }}
-            .file-item {{ display: block; font-size: 0.8rem; color: var(--text-secondary); padding: 2px 5px; border-bottom: 1px solid rgba(255,255,255,0.05); }}
-            .file-item:last-child {{ border-bottom: none; }}
-            .file-sha {{ color: #555; font-size: 0.75rem; margin-left: 5px; }}
+            .change-tag {{ font-size: 0.7rem; font-weight: bold; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; margin-right: 10px; }}
+            .tag-added {{ background: rgba(46, 160, 67, 0.2); color: #3fb950; }}
+            .tag-mod {{ background: rgba(56, 139, 253, 0.2); color: #58a6ff; }}
+            .tag-del {{ background: rgba(248, 81, 73, 0.2); color: #ff7b72; }}
+
+            /* Diff Viewer */
+            .diff-viewer {{ padding: 0; display: none; border-top: 1px solid var(--border-color); background: #0d1117; }}
+            .diff-viewer.open {{ display: block; }}
+            .diff-line {{ font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; white-space: pre; display: block; line-height: 1.4; padding: 0 10px; }}
+            .diff-add {{ background-color: rgba(46, 160, 67, 0.15); color: #3fb950; display: block; }}
+            .diff-del {{ background-color: rgba(248, 81, 73, 0.15); color: #ff7b72; display: block; }}
+            .diff-info {{ color: #8b949e; display: block; }}
+            .no-diff-msg {{ padding: 15px; color: #666; font-style: italic; font-size: 0.85rem; }}
+
+            .btn-toggle-diff {{ background: transparent; border: 1px solid var(--border-color); color: var(--accent-color); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }}
+            .btn-toggle-diff:hover {{ background: var(--accent-color); color: white; }}
             
-            .err-msg {{ color: var(--danger); font-size: 0.8rem; font-style: italic; }}
+            .chevron {{ transition: transform 0.2s; display: inline-block; }}
+            .commit-row.open .chevron {{ transform: rotate(90deg); }}
 
             /* Pagination */
-            .pagination-container {{
-                display: flex; justify-content: space-between; align-items: center;
-                padding: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary);
-            }}
-            .page-btn {{
-                background: var(--bg-card); border: 1px solid var(--border-color);
-                color: var(--text-primary); width: 32px; height: 32px; border-radius: 6px;
-                cursor: pointer; transition: all 0.2s;
-            }}
-            .page-btn:hover:not(:disabled) {{ border-color: var(--accent-color); color: var(--accent-color); }}
+            .pagination-container {{ display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); }}
+            .page-btn {{ background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; }}
             .page-btn.active {{ background: var(--accent-color); border-color: var(--accent-color); color: white; }}
+            
+            @media (max-width: 900px) {{
+                .controls {{ grid-template-columns: 1fr; }}
+            }}
         </style>
     </head>
     <body>
         <div class="container">
             <header class="header">
-                <div class="title">
+                <div>
                     <h1>Reconstrução de Histórico</h1>
                     <p>Target: {site_base}</p>
                 </div>
-                <div class="meta-box">
-                    <div class="stat-badge">HEAD: <span class="highlight mono">{head_sha[:8]}</span></div>
-                    <div class="stat-badge">Total: <span class="highlight" id="total-count">{len(commits)}</span></div>
-                    <div class="stat-badge">Remoto: <span class="highlight">{remote_url or "Local"}</span></div>
+                <div>
+                    <span class="stat-badge">HEAD: <span class="highlight mono">{head_sha[:8]}</span></span>
+                    <span class="stat-badge">Commits: <span class="highlight" id="total-count">{len(commits)}</span></span>
                 </div>
             </header>
 
             <div class="controls">
-                <a href="report.html" class="btn-back">&larr; Voltar para Relatório</a>
+                <a href="report.html" class="btn-back">&larr; Voltar ao Painel</a>
+                
                 <div class="search-box">
                     <span class="search-icon">🔍</span>
-                    <input type="text" id="q" placeholder="Filtrar por hash, autor, email ou mensagem...">
+                    <input type="text" id="q-meta" placeholder="Buscar Commit (Hash, Autor, Mensagem)...">
+                </div>
+
+                <div class="search-box">
+                    <span class="search-icon">📂</span>
+                    <input type="text" id="q-files" placeholder="Filtrar Arquivos (Nome, Motivo, Conteúdo Diff)...">
                 </div>
             </div>
 
             <div class="table-container">
                 <table id="commits-table">
-                    <thead>
-                        <tr>
-                            <th>Commit & Status</th>
-                            <th>Data</th>
-                            <th>Autor</th>
-                            <th>Mensagem & Parents</th>
-                            <th>Arquivos Alterados</th>
-                        </tr>
-                    </thead>
-                    <tbody id="table-body">
-                        </tbody>
+                    <thead><tr><th>Hash</th><th>Data</th><th>Autor</th><th>Mensagem</th><th>Arquivos</th></tr></thead>
+                    <tbody id="table-body"></tbody>
                 </table>
             </div>
 
@@ -3617,35 +3646,55 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
         </div>
 
         <script>
-            // Dados Injetados pelo Python
             const COMMITS = {commits_json};
             const REMOTE_URL = "{remote_url}";
 
-            // Elementos DOM
             const tableBody = document.getElementById('table-body');
-            const searchInput = document.getElementById('q');
+            const searchMeta = document.getElementById('q-meta');
+            const searchFiles = document.getElementById('q-files');
             const entriesInfo = document.getElementById('entries-info');
             const pgControls = document.getElementById('pagination-controls');
-            const totalCountEl = document.getElementById('total-count');
 
-            // Estado
             let filteredCommits = COMMITS;
             let currentPage = 1;
-            const itemsPerPage = 20; // Mais itens por página pois é tabela
+            const itemsPerPage = 20;
+            
+            // Termo atual do filtro de arquivos (para usar no render)
+            let currentFileFilter = "";
 
-            // Helpers
-            function getLink(sha) {{
-                if (!REMOTE_URL) return `<span class="hash-link">${{sha.substring(0,8)}}</span>`;
-                const cleanUrl = REMOTE_URL.replace('.git', '');
-                return `<a href="${{cleanUrl}}/commit/${{sha}}" target="_blank" class="hash-link">${{sha.substring(0,8)}}</a>`;
+            function escapeHtml(text) {{
+                if (!text) return '';
+                return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/`/g, "&#96;").replace(/\\${{/g, "&#36;{{");
             }}
 
-            function safe(str) {{
-                if (!str) return '';
-                return str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            function toggleDetails(idx) {{
+                const row = document.getElementById(`row-${{idx}}`);
+                const details = document.getElementById(`details-${{idx}}`);
+                
+                if (details.classList.contains('active')) {{
+                    details.classList.remove('active');
+                    row.classList.remove('open');
+                }} else {{
+                    details.classList.add('active');
+                    row.classList.add('open');
+                }}
             }}
 
-            // Core Render
+            function toggleDiff(uid) {{
+                const el = document.getElementById(uid);
+                el.classList.toggle('open');
+            }}
+            
+            // Função auxiliar para verificar se um arquivo bate com o filtro
+            function matchFile(ch, query) {{
+                if (!query) return true;
+                const q = query.toLowerCase();
+                // Verifica Nome, Tipo (ADDED/MODIFIED) e Conteúdo do Diff
+                return (ch.path || '').toLowerCase().includes(q) || 
+                       (ch.type || '').toLowerCase().includes(q) || 
+                       (ch.diff || '').toLowerCase().includes(q);
+            }}
+
             function renderTable() {{
                 const totalPages = Math.ceil(filteredCommits.length / itemsPerPage) || 1;
                 if (currentPage > totalPages) currentPage = totalPages;
@@ -3657,122 +3706,154 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
 
                 tableBody.innerHTML = '';
 
-                pageData.forEach((c, index) => {{
-                    const tr = document.createElement('tr');
-                    
-                    const sourceBadge = c.source === 'log' 
-                        ? '<span class="badge badge-log">LOG</span>' 
-                        : '<span class="badge badge-walk">GRAPH</span>';
-                    
-                    const statusBadge = !c.ok 
-                        ? '<span class="badge badge-err">ERR</span>' 
-                        : '';
+                pageData.forEach((c, idx) => {{
+                    // Linha Principal
+                    const trMain = document.createElement('tr');
+                    trMain.className = 'commit-row';
+                    trMain.id = `row-${{idx}}`;
+                    trMain.onclick = () => toggleDetails(idx);
 
-                    const hashHtml = `<div class="mono">${{getLink(c.sha)}}</div><div>${{statusBadge}}${{sourceBadge}}</div>`;
-
-                    const dateHtml = `<div style="color:var(--text-secondary)">${{c.date || '?'}}</div>`;
-
-                    const cleanAuthor = safe(c.author).replace('&lt;', '<br><span class="author-email">').replace('&gt;', '</span>');
+                    const hashDisplay = REMOTE_URL 
+                        ? `<a href="${{REMOTE_URL.replace('.git','')}}/commit/${{c.sha}}" target="_blank" class="hash-link" onclick="event.stopPropagation()">${{c.sha.substring(0,8)}}</a>`
+                        : `<span class="hash-link">${{c.sha.substring(0,8)}}</span>`;
                     
-                    let parentsHtml = '';
-                    if (c.parents && c.parents.length > 0) {{
-                        parentsHtml = c.parents.map(p => `<a href="#" onclick="filterBySha('${{p}}'); return false;">${{p.substring(0,8)}}</a>`).join(', ');
+                    // Contagem de arquivos filtrada visualmente?
+                    // Para o badge principal, mostramos o total real do commit.
+                    const realCount = (c.changes && c.changes.length > 0) ? c.changes.length : (c.files ? c.files.length : 0);
+                    
+                    // Se houver filtro de arquivo ativo, indicamos quantos deram match
+                    let badgeText = `${{realCount}} arquivos`;
+                    if (currentFileFilter && c.changes) {{
+                        const matchCount = c.changes.filter(ch => matchFile(ch, currentFileFilter)).length;
+                        badgeText = `<span style="color:${{matchCount > 0 ? '#fff' : '#666'}}">${{matchCount}} matches</span> / ${{realCount}} total`;
                     }}
-                    const msgHtml = `
-                        <span class="msg-text">${{safe(c.message)}}</span>
-                        ${{parentsHtml ? `<div class="parents-info">Parent(s): ${{parentsHtml}}</div>` : ''}}
-                        ${{!c.ok ? `<div class="err-msg">Erro: ${{c.error || 'Desconhecido'}}</div>` : ''}}
+
+                    const filesSummary = `<span class="badge" style="background:#333; color:#ccc;">${{badgeText}}</span> <span class="chevron">▶</span>`;
+
+                    trMain.innerHTML = `
+                        <td>${{hashDisplay}}</td>
+                        <td style="color:var(--text-secondary); font-size:0.85rem">${{c.date || '-'}}</td>
+                        <td style="font-weight:500; color:#fff">${{escapeHtml(c.author)}}</td>
+                        <td><div class="msg-text">${{escapeHtml(c.message)}}</div></td>
+                        <td>${{filesSummary}}</td>
                     `;
 
-                    let filesHtml = '';
-                    if (c.file_collection_error) {{
-                        filesHtml = `<span class="err-msg">${{c.file_collection_error}}</span>`;
-                    }} else if (c.files && c.files.length > 0) {{
-                        // Limita visualização se tiver muitos arquivos
-                        const fileListItems = c.files.map(f => 
-                            `<div class="file-item mono">${{safe(f.path)}} <span class="file-sha">${{f.sha ? f.sha.substring(0,6) : ''}}</span></div>`
-                        ).join('');
+                    // Linha de Detalhes (Expandida)
+                    const trDetails = document.createElement('tr');
+                    trDetails.className = 'details-row';
+                    trDetails.id = `details-${{idx}}`;
+
+                    let changesHtml = '<div style="padding:20px; color:#666">Nenhum arquivo correspondente ao filtro.</div>';
+                    
+                    if (c.changes && c.changes.length > 0) {{
+                        // FILTRAGEM NA RENDERIZAÇÃO: Só mostra os arquivos que batem com a busca
+                        const filteredChanges = c.changes.filter(ch => matchFile(ch, currentFileFilter));
                         
-                        filesHtml = `
-                            <details>
-                                <summary>${{c.files.length}} arquivo(s)</summary>
-                                <div class="file-list">
-                                    ${{fileListItems}}
-                                </div>
-                            </details>
-                        `;
-                    }} else {{
-                        filesHtml = '<span style="color:#555; font-size:0.8rem">Nenhum/Tree Vazia</span>';
-                    }}
+                        if (filteredChanges.length > 0) {{
+                            const items = filteredChanges.map((ch, fileIdx) => {{
+                                let tagClass = '';
+                                if (ch.type === 'ADDED') tagClass = 'tag-added';
+                                else if (ch.type === 'MODIFIED') tagClass = 'tag-mod';
+                                else if (ch.type === 'DELETED') tagClass = 'tag-del';
 
-                    // Montagem das células
-                    tr.innerHTML = `
-                        <td>${{hashHtml}}</td>
-                        <td>${{dateHtml}}</td>
-                        <td>${{cleanAuthor}}</td>
-                        <td>${{msgHtml}}</td>
-                        <td>${{filesHtml}}</td>
-                    `;
-                    tableBody.appendChild(tr);
+                                const uid = `diff-view-${{idx}}-${{fileIdx}}`;
+                                let diffContent = '';
+                                let btnHtml = '';
+
+                                if (ch.diff) {{
+                                    btnHtml = `<button class="btn-toggle-diff" onclick="event.stopPropagation(); toggleDiff('${{uid}}')">Ver Diff</button>`;
+                                    const safeDiff = escapeHtml(ch.diff);
+                                    
+                                    // Highlight do termo buscado no Diff (opcional, simples)
+                                    // Apenas renderização segura
+                                    const lines = safeDiff.split(/\\r?\\n/).map(l => {{
+                                        let cls = 'diff-info';
+                                        if(l.startsWith('+') && !l.startsWith('+++')) cls = 'diff-add';
+                                        else if(l.startsWith('-') && !l.startsWith('---')) cls = 'diff-del';
+                                        return `<span class="${{cls}}">${{l}}</span>`;
+                                    }}).join('');
+                                    diffContent = `<div id="${{uid}}" class="diff-viewer">${{lines}}</div>`;
+                                }} else {{
+                                    diffContent = `<div class="diff-viewer" id="${{uid}}"><div class="no-diff-msg">Diff não disponível (Use --show-diff para carregar)</div></div>`;
+                                }}
+
+                                return `
+                                <div class="file-entry" onclick="event.stopPropagation()">
+                                    <div class="file-header">
+                                        <div>
+                                            <span class="change-tag ${{tagClass}}">${{ch.type}}</span>
+                                            <span class="file-path">${{escapeHtml(ch.path)}}</span>
+                                        </div>
+                                        ${{btnHtml}}
+                                    </div>
+                                    ${{diffContent}}
+                                </div>`;
+                            }}).join('');
+                            changesHtml = `<div class="details-content"><strong>Arquivos alterados:</strong><br><br>${{items}}</div>`;
+                        }}
+                    }} 
+
+                    trDetails.innerHTML = `<td colspan="5" style="padding:0; border:none;">${{changesHtml}}</td>`;
+
+                    tableBody.appendChild(trMain);
+                    tableBody.appendChild(trDetails);
                 }});
 
-                const startInfo = filteredCommits.length === 0 ? 0 : start + 1;
-                const endInfo = Math.min(end, filteredCommits.length);
-                entriesInfo.innerText = `Mostrando ${{startInfo}} a ${{endInfo}} de ${{filteredCommits.length}} commits`;
-                
+                entriesInfo.innerText = `Página ${{currentPage}} de ${{totalPages}}`;
                 renderPagination(totalPages);
             }}
 
-            // Filter
-            function filterCommits(query) {{
-                const q = query.toLowerCase().trim();
-                filteredCommits = COMMITS.filter(c => {{
-                    return (c.sha || '').toLowerCase().includes(q) ||
-                           (c.author || '').toLowerCase().includes(q) ||
-                           (c.message || '').toLowerCase().includes(q);
-                }});
-                currentPage = 1;
-                renderTable();
-            }}
-            
-            // Helper para links de parents clicáveis
-            window.filterBySha = function(sha) {{
-                searchInput.value = sha;
-                filterCommits(sha);
-            }}
-
-            // Pagination
             function renderPagination(totalPages) {{
                 pgControls.innerHTML = '';
-                
-                const createBtn = (label, page, disabled=false, active=false) => {{
+                const createBtn = (lbl, page) => {{
                     const btn = document.createElement('button');
-                    btn.className = `page-btn ${{active ? 'active' : ''}}`;
-                    btn.innerHTML = label;
-                    btn.disabled = disabled;
+                    btn.className = `page-btn ${{page === currentPage ? 'active' : ''}}`;
+                    btn.innerText = lbl;
                     btn.onclick = () => {{ currentPage = page; renderTable(); }};
                     return btn;
                 }};
-
-                pgControls.appendChild(createBtn('‹', currentPage - 1, currentPage === 1));
-
-                let startPage = Math.max(1, currentPage - 2);
-                let endPage = Math.min(totalPages, startPage + 4);
-                if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
-
-                for (let i = startPage; i <= endPage; i++) {{
-                    pgControls.appendChild(createBtn(i, i, false, i === currentPage));
-                }}
-
-                pgControls.appendChild(createBtn('›', currentPage + 1, currentPage === totalPages));
+                if (currentPage > 1) pgControls.appendChild(createBtn('‹', currentPage - 1));
+                if (currentPage < totalPages) pgControls.appendChild(createBtn('›', currentPage + 1));
             }}
 
-            // Events
-            searchInput.addEventListener('input', (e) => filterCommits(e.target.value));
+            // Lógica de Filtro Unificada
+            function applyFilters() {{
+                const qM = searchMeta.value.toLowerCase();
+                const qF = searchFiles.value.toLowerCase();
+                currentFileFilter = qF; // Atualiza global para o render usar
 
-            // Init
+                filteredCommits = COMMITS.filter(c => {{
+                    // 1. Filtro de Metadados (Hash, Autor, Msg)
+                    const matchMeta = !qM || 
+                        (c.sha||'').includes(qM) || 
+                        (c.author||'').toLowerCase().includes(qM) || 
+                        (c.message||'').toLowerCase().includes(qM);
+
+                    // 2. Filtro de Arquivos (Path, Type, Diff)
+                    // O commit é mostrado se TIVER pelo menos um arquivo que bata com o filtro
+                    let matchFiles = true;
+                    if (qF) {{
+                        if (c.changes && c.changes.length > 0) {{
+                            matchFiles = c.changes.some(ch => matchFile(ch, qF));
+                        }} else if (c.files && c.files.length > 0) {{
+                            // Fallback se não tiver changes estruturado
+                            matchFiles = c.files.some(f => (f.path||'').toLowerCase().includes(qF));
+                        }} else {{
+                            matchFiles = false;
+                        }}
+                    }}
+
+                    return matchMeta && matchFiles;
+                }});
+
+                currentPage = 1;
+                renderTable();
+            }}
+
+            searchMeta.addEventListener('input', applyFilters);
+            searchFiles.addEventListener('input', applyFilters);
+
             renderTable();
-
         </script>
     </body>
     </html>
@@ -3783,7 +3864,6 @@ def generate_history_html(in_json: str, out_html: str, site_base: str, base_git_
             f.write(html_content)
     except Exception as e:
         print(f"Erro ao salvar HTML de histórico: {e}")
-    return
 
 
 def generate_users_report(outdir: str, authors_stats: Dict[str, int]):
@@ -4112,100 +4192,207 @@ def generate_users_report(outdir: str, authors_stats: Dict[str, int]):
 
 def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_commits: int = 200,
                         ignore_missing: bool = True, strict: bool = False, full_history: bool = False,
-                        workers: int = 10, proxies: Optional[Dict] = None):
-    info(f"Reconstruindo histórico (Fast Mode: {not full_history}). max_commits={max_commits}")
+                        show_diff: bool = False, workers: int = 50, proxies: Optional[Dict] = None):
+    
+    info(f"Reconstruindo histórico. Max: {max_commits} | Full: {full_history} | Diffs: {show_diff}")
     os.makedirs(outdir, exist_ok=True)
     site_base = normalize_site_base(base_git_url)
 
+    tree_cache = {}
     intel_path = os.path.join(outdir, "_files", "intelligence.json")
     intel_logs = []
+    
     if os.path.exists(intel_path):
         try:
             with open(intel_path, 'r', encoding='utf-8') as f:
                 intel_logs = json.load(f).get("logs", [])
-            info(f"Carregados {len(intel_logs)} commits a partir de logs/HEAD.")
-        except:
-            pass
+            info(f"Logs carregados: {len(intel_logs)} commits disponíveis.")
+        except: pass
 
     all_commits_out = []
     processed_shas = set()
 
+    def get_tree_files_cached(tree_sha):
+        if not tree_sha: return {}
+        if tree_sha in tree_cache: return tree_cache[tree_sha]
+        try:
+            files = collect_files_from_tree(base_git_url, tree_sha, proxies=proxies, ignore_missing=True)
+            f_map = {f['path']: f['sha'] for f in files}
+            tree_cache[tree_sha] = f_map
+            return f_map
+        except:
+            return {}
+
     def process_log_entry(log_entry, index):
-        sha = log_entry.get("sha");
-        if not sha: return None
-        commit_data = {
-            "sha": sha, "ok": True, "author": log_entry.get("author"), "date": log_entry.get("date"),
-            "message": log_entry.get("message"), "source": "log",
-            "parents": [log_entry.get("old_sha")] if log_entry.get("old_sha") != "0" * 40 else [],
-            "files": [], "file_count": 0
-        }
-        should_scan = full_history or index < 10
-        if not should_scan:
-            commit_data["file_collection_error"] = "Objetos não listados (Fast Mode). Use --full-history para listagem completa (mais lenta)."
+        try:
+            sha = log_entry.get("sha")
+            if not sha: return None
+            
+            commit_data = {
+                "sha": sha, 
+                "ok": True, 
+                "author": log_entry.get("author"), 
+                "date": log_entry.get("date"),
+                "message": log_entry.get("message"), 
+                "source": "log",
+                "parents": [log_entry.get("old_sha")] if log_entry.get("old_sha") and log_entry.get("old_sha") != "0" * 40 else [],
+                "files": [], 
+                "changes": [],
+                "file_count": 0
+            }
+
+            # Lógica de Otimização (Fast Mode)
+            # Se show_diff=True, força 'heavy_analysis' nos primeiros commits ou se full_history for True
+            heavy_analysis = True
+            if not full_history and index >= 20:
+                heavy_analysis = False
+            
+            if not heavy_analysis:
+                commit_data["changes"] = [] 
+                commit_data["message"] += "\n[INFO] Detalhes omitidos (Modo Rápido)."
+                return commit_data
+
+            ok, raw = fetch_object_raw(base_git_url, sha, proxies=proxies)
+            
+            if ok:
+                is_valid, parsed_data = parse_git_object(raw)
+                if is_valid and parsed_data[0] == "commit":
+                    meta = parse_commit_content(parsed_data[1])
+                    commit_data["tree"] = meta.get("tree")
+                    if meta.get("date"): commit_data["date"] = meta.get("date")
+
+                    if meta.get("tree"):
+                        # Pega arquivos atuais
+                        current_files_map = get_tree_files_cached(meta.get("tree"))
+                        
+                        # Pega arquivos do pai
+                        parent_files_map = {}
+                        parents = meta.get("parents", [])
+                        if not parents and log_entry.get("old_sha") and log_entry.get("old_sha") != "0"*40:
+                            parents = [log_entry.get("old_sha")]
+                            
+                        if parents:
+                            p_ok, p_raw = fetch_object_raw(base_git_url, parents[0], proxies=proxies)
+                            if p_ok:
+                                p_valid, p_parsed = parse_git_object(p_raw)
+                                if p_valid:
+                                    p_meta = parse_commit_content(p_parsed[1])
+                                    parent_files_map = get_tree_files_cached(p_meta.get("tree"))
+
+                        commit_data["files"] = [{"path": p, "sha": s} for p, s in current_files_map.items()]
+                        commit_data["file_count"] = len(commit_data["files"])
+
+                        changes = []
+                        
+                        # Lógica de Diff
+                        for path, sha_now in current_files_map.items():
+                            sha_old = parent_files_map.get(path)
+                            
+                            diff_text = None
+                            change_type = "MODIFIED"
+
+                            if not sha_old:
+                                change_type = "ADDED"
+                                if show_diff:
+                                    try: diff_text = compute_diff(base_git_url, None, sha_now, proxies)
+                                    except: diff_text = "[Erro ao baixar diff]"
+                            elif sha_old != sha_now:
+                                change_type = "MODIFIED"
+                                if show_diff:
+                                    try: diff_text = compute_diff(base_git_url, sha_old, sha_now, proxies)
+                                    except: diff_text = "[Erro ao baixar diff]"
+                            else:
+                                continue # Sem mudança
+
+                            changes.append({"path": path, "type": change_type, "diff": diff_text})
+                        
+                        # Detectar Deletados
+                        for path, sha_old in parent_files_map.items():
+                            if path not in current_files_map:
+                                changes.append({"path": path, "type": "DELETED", "diff": None})
+                                
+                        commit_data["changes"] = changes
+            else:
+                commit_data["ok"] = False
+                commit_data["error"] = "Commit object not found"
+
             return commit_data
+        
+        except Exception as e:
+            # Em caso de erro fatal na thread, retorna o erro sem quebrar o processo
+            return {
+                "sha": log_entry.get("sha", "unknown"),
+                "ok": False,
+                "error": f"Worker Crash: {str(e)}",
+                "author": log_entry.get("author", "?"),
+                "date": log_entry.get("date", "?"),
+                "message": "Erro no processamento deste commit."
+            }
 
-        ok, raw = fetch_object_raw(base_git_url, sha, proxies=proxies)
-        if ok:
-            ok2, parsed = parse_git_object(raw)
-            if ok2 and parsed[0] == "commit":
-                meta = parse_commit_content(parsed[1])
-                commit_data["tree"] = meta.get("tree")
-                if meta.get("date"): commit_data["date"] = meta.get("date")
-                if meta.get("tree"):
-                    try:
-                        files = collect_files_from_tree(base_git_url, meta.get("tree"), proxies=proxies, ignore_missing=True)
-                        commit_data["files"] = files;
-                        commit_data["file_count"] = len(files)
-                    except:
-                        pass
-        else:
-            commit_data["ok"] = False;
-            commit_data["error"] = "Objeto não encontrado (visto em logs)"
-        return commit_data
-
+    # --- EXECUÇÃO PARALELA SEGURA ---
     if intel_logs:
-        info(f"Processando {min(len(intel_logs), max_commits)} logs em paralelo...")
-        logs_to_process = intel_logs[:max_commits]
-        # Nota: Threads e Proxies podem ser instáveis em volumes altos, mas requests é thread-safe
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+        current_workers = max(workers, 20)
+        limit = min(len(intel_logs), max_commits)
+        info(f"Processando {limit} logs com {current_workers} threads...")
+        
+        logs_to_process = intel_logs[:limit]
+        
+        with ThreadPoolExecutor(max_workers=current_workers) as executor:
             futures = [executor.submit(process_log_entry, entry, i) for i, entry in enumerate(logs_to_process)]
+            completed_count = 0
+            total_futures = len(futures)
+            
             for future in as_completed(futures):
-                res = future.result()
-                if res: all_commits_out.append(res); processed_shas.add(res['sha'])
+                completed_count += 1
+                if completed_count % 10 == 0:
+                    print(f"[*] Progresso: {completed_count}/{total_futures}...", end="\r")
+                try:
+                    res = future.result()
+                    if res: 
+                        all_commits_out.append(res)
+                        if res.get('sha'): processed_shas.add(res['sha'])
+                except Exception as e:
+                    # Se a thread explodir, logamos e continuamos
+                    print(f"\n[!] Erro fatal em worker: {e}")
+        print("") 
 
     def parse_date_sort(c):
-        try:
-            return datetime.strptime(c.get("date", ""), '%Y-%m-%d %H:%M:%S')
-        except:
-            return datetime.min
+        try: return datetime.strptime(c.get("date", ""), '%Y-%m-%d %H:%M:%S')
+        except: return datetime.min
 
     all_commits_out.sort(key=parse_date_sort, reverse=True)
 
+    # Fallback Crawling (Caso não existam logs)
     if len(all_commits_out) == 0:
+        info("Reconstrução manual (Graph Crawling)...")
         candidate_shas = find_candidate_shas(base_git_url, proxies=proxies)
-        queue = [c['sha'] for c in candidate_shas];
+        queue = [c['sha'] for c in candidate_shas]
         visited = set(queue)
+        
         while queue and len(all_commits_out) < max_commits:
-            cur = queue.pop(0)
-            ok, raw = fetch_object_raw(base_git_url, cur, proxies=proxies)
-            if not ok: continue
-            ok2, parsed = parse_git_object(raw)
-            if not ok2 or parsed[0] != 'commit': continue
-            meta = parse_commit_content(parsed[1])
-            files = []
-            if len(all_commits_out) < 10 and meta.get("tree"):
-                try:
-                    files = collect_files_from_tree(base_git_url, meta.get("tree"), proxies=proxies, ignore_missing=True)
-                except:
-                    pass
-            all_commits_out.append({
-                "sha": cur, "ok": True, "tree": meta.get("tree"), "parents": meta.get("parents", []),
-                "author": meta.get("author"), "date": meta.get("date"), "message": meta.get("message"),
-                "files": files, "file_count": len(files), "source": "graph"
-            })
-            for p in meta.get("parents", []):
-                if p not in visited: queue.append(p); visited.add(p)
+            try:
+                cur = queue.pop(0)
+                ok, raw = fetch_object_raw(base_git_url, cur, proxies=proxies)
+                if not ok: continue
+                is_valid, parsed_data = parse_git_object(raw)
+                if not is_valid or parsed_data[0] != 'commit': continue
+                
+                meta = parse_commit_content(parsed_data[1])
+                files = []
+                if len(all_commits_out) < 20 and meta.get("tree"):
+                    try: files = collect_files_from_tree(base_git_url, meta.get("tree"), proxies=proxies, ignore_missing=True)
+                    except: pass
+                
+                all_commits_out.append({
+                    "sha": cur, "ok": True, "tree": meta.get("tree"), "parents": meta.get("parents", []),
+                    "author": meta.get("author"), "date": meta.get("date"), "message": meta.get("message"),
+                    "files": files, "file_count": len(files), "changes": [], "source": "graph"
+                })
+                for p in meta.get("parents", []):
+                    if p not in visited: queue.append(p); visited.add(p)
+            except: pass
 
+    # Gera estatísticas de usuários
     author_stats = {}
     for c in all_commits_out:
         auth = c.get("author")
@@ -4215,19 +4402,33 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
     
     generate_users_report(outdir, author_stats)
 
-    head_sha = "N/A"
+    # --- SALVAMENTO SEGURO ---
+    # Mesmo que vazio, o arquivo é salvo para que o report.html não quebre
     hist_json = os.path.join(outdir, "_files", "history.json")
     os.makedirs(os.path.dirname(hist_json), exist_ok=True)
     try:
+        head_sha = all_commits_out[0]['sha'] if all_commits_out else "N/A"
         with open(hist_json, "w", encoding="utf-8") as f:
-            json.dump({"base": base_git_url, "site_base": site_base, "head": head_sha, "commits": all_commits_out}, f,
-                      indent=2, ensure_ascii=False)
+            # Uso de default=str para garantir que objetos estranhos não quebrem o JSON
+            json.dump({
+                "base": base_git_url, "site_base": site_base, "head": head_sha, "commits": all_commits_out
+            }, f, indent=2, ensure_ascii=False, default=str)
         success(f"Histórico salvo: {hist_json} ({len(all_commits_out)} commits)")
     except Exception as e:
-        fail(f"Falha ao gravar history.json: {e}"); return
+        fail(f"Falha CRÍTICA ao gravar history.json: {e}")
+        # Tenta salvar versão vazia para não quebrar o report final
+        with open(hist_json, "w", encoding="utf-8") as f:
+            json.dump({"commits": []}, f)
+        return
+        
     hist_html = os.path.join(outdir, "history.html")
-    generate_history_html(hist_json, hist_html, site_base, base_git_url)
-    success(f"HTML do histórico gerado: {hist_html}")
+    try:
+        generate_history_html(hist_json, hist_html, site_base, base_git_url)
+        success(f"HTML do histórico gerado: {hist_html}")
+    except Exception as e:
+        fail(f"Erro ao gerar HTML do histórico: {e}")
+
+    return len(all_commits_out)
 
 
 def scan_urls(file_path: str):
@@ -4294,20 +4495,14 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
     index_json = os.path.join(output_dir, "_files", args.output_index)
 
     # 1. Index / Blind
-    # Tenta baixar o index
-    
     raw_index_path = os.path.join(output_dir, "_files", "raw_index")
     
-    # Se o arquivo já existe, não baixar
     if not os.path.exists(raw_index_path):
         print("[*] Baixando .git/index...")
         ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index", raw_index_path, proxies=proxies)
     else:
         print("[*] Usando .git/index local existente.")
         ok_idx = True
-
-    # Ou se preferir que sempre seja substituído:
-    # ok_idx, _ = http_get_to_file(base_url.rstrip("/") + "/.git/index", raw_index_path, proxies=proxies)
     
     has_index = False
     if ok_idx:
@@ -4316,12 +4511,9 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
             index_to_json(raw_index_path, index_json)
             has_index = True
             print("[+] Índice Git analisado com sucesso.")
-        except ValueError as e:
-            warn(f"Aviso: .git/index inválido ou corrompido ({e}).")
         except Exception as e:
-            fail(f"Erro inesperado no parser: {e}")
+            warn(f"Aviso: .git/index inválido ou corrompido ({e}).")
 
-    # Se falhou o index ou foi solicitado blind, tenta blind mode
     if not has_index:
         info("Index não disponível ou inválido. Ativando modo Blind/Crawling...")
         blind_recovery(base_url, output_dir, args.output_index, proxies=proxies)
@@ -4329,33 +4521,30 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
     # 2. Hardening & Misc
     detect_hardening(base_url, output_dir, proxies=proxies)
     gather_intelligence(base_url, output_dir, proxies=proxies)
+    
     stash_sha = recover_stash_content(base_url, output_dir, proxies=proxies)
     if stash_sha:
         reconstruct_all(os.path.join(output_dir, "_files", "stash.json"), base_url, os.path.join(output_dir, "stash_restored"), workers=args.workers)
-        pass
     
-    # Lógica Condicional de Full Scan (Brute Force + Misc)
     if args.full_scan:
         detect_misc_leaks(base_url, output_dir, proxies=proxies)
 
-    # Brute force
     if args.bruteforce:
         brute_force_scan(base_url, output_dir, wordlist_path=args.wordlist, proxies=proxies)
-    else:
-        if args.wordlist:
-            warn("A flag --wordlist foi ignorada pois --bruteforce não foi ativado.")
-        if not args.full_scan: 
-            pass
 
     # 3. Reports & Reconstruction
     handle_packfiles('list', base_url, output_dir, proxies=proxies)
     make_listing_modern(index_json, base_url, output_dir)
     
-    # Reconstrução de histórico
-    reconstruct_history(index_json, base_url, output_dir, 
-                        max_commits=args.max_commits,
-                        full_history=args.full_history, 
-                        workers=args.workers, proxies=proxies)
+    # --- RECONSTRUÇÃO DE HISTÓRICO ---
+    reconstruct_history(
+        index_json, base_url, output_dir, 
+        max_commits=args.max_commits,
+        full_history=args.full_history,
+        show_diff=args.show_diff,
+        workers=args.workers, 
+        proxies=proxies
+    )
     
     if args.secrets:
         scan_for_secrets(output_dir)
@@ -4399,6 +4588,7 @@ def main():
     p.add_argument("--proxy", help="URL do Proxy (ex: http://127.0.0.1:8080) para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor)")
     p.add_argument("--no-random-agent", action="store_true", help="Desativa a rotação de User-Agents (Usa um fixo)")
     p.add_argument("--secrets", action="store_true", help="Executa scanner de regex/entropia em busca de chaves")
+    p.add_argument("--show-diff", action="store_true", help="Baixa e exibe as diferenças (diffs) de código no histórico (Pode ser MUITO Lento)")
 
     args = p.parse_args()
 
@@ -4486,6 +4676,11 @@ def main():
                 os.makedirs(os.path.dirname(tmp_idx), exist_ok=True)
                 http_get_to_file(target_url + "/.git/index", tmp_idx, proxies=proxies)
                 index_to_json(tmp_idx, os.path.join(target_outdir, "_files", args.output_index))
+            elif args.reconstruct_history:
+                 reconstruct_history(os.path.join(target_outdir, "_files", args.output_index), target_url, target_outdir,
+                                    max_commits=args.max_commits, full_history=args.full_history,
+                                    show_diff=args.show_diff,
+                                    proxies=proxies, workers=args.workers)
             else:
                 # Pipeline Padrão (Full Scan)
                 process_pipeline(target_url, target_outdir, args, proxies=proxies)
