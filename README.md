@@ -83,12 +83,12 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 
 <details>
   <summary># Visão Geral - Multi Scan</summary>
-  <img width="1227" height="2154" alt="image" src="https://github.com/user-attachments/assets/479cfcda-4b74-4523-a331-59954a6b64ce" />
+  <img width="1032" height="554" alt="image" src="https://github.com/user-attachments/assets/9aa6ce38-6806-4d6e-ab57-36d503daa005" />
 </details>
 
 <details>
   <summary># Visão Geral - Alvo</summary>
-  <img width="1349" height="1798" alt="_principal_demo" src="https://github.com/user-attachments/assets/5f032547-9480-4ea6-ad1e-565119a738c9" />
+  <img width="1227" height="2154" alt="image" src="https://github.com/user-attachments/assets/479cfcda-4b74-4523-a331-59954a6b64ce" />
 </details>
 
 <details>
@@ -392,6 +392,7 @@ Err.. ninguém contribuiu ainda :(
 ## :sparkling_heart: Support Me 
 <a href="https://www.buymeacoffee.com/rodrigoo" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-5C3317?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" target="_blank"></a>
 <!-- <a href="https://www.paypal.com/donate/?business=RNSQFDU927P8A&no_recurring=0&item_name=Every+penny+donated+is+an+investment+not+only+in+me+but+also+in+fulfilling+dreams+and+creating+opportunities.&currency_code=BRL" target="_blank"><img src="https://img.shields.io/badge/Paypal%20%28BRL%29-4287f5?style=for-the-badge&logo=paypal&logoColor=white" alt="Paypal" target="_blank"></a> -->
+
 
 
 
