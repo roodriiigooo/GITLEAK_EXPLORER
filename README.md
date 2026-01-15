@@ -7,7 +7,7 @@
 
    **Ferramenta avançada de análise forense, recuperação de repositórios Git e outros artefatos expostos publicamente na web via HTTP com saída visual, perfeita para aquele recon de respeito**
 
-<img width="1111" height="428" alt="_multi_menu" src="https://github.com/user-attachments/assets/c748af6a-3aa8-43a7-9690-8813f0cc16ab" />
+<img width="1111" height="428" alt="_multi_menu" src="https://github.com/user-attachments/assets/b29aea0a-48e4-44fd-9ec6-99e8e541d73e" />
 
 
  [Sobre](#sobre) | [Aviso Legal](#%EF%B8%8F-aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) | [Agradecimentos](#tophat-obrigado-)
@@ -83,7 +83,7 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 
 <details>
   <summary># Visão Geral - Multi Scan</summary>
-  <img width="1111" height="660" alt="_multi_menu" src="https://github.com/user-attachments/assets/ef41828a-980f-4d8c-a72b-40945cb49a20" />
+  <img width="1227" height="2154" alt="image" src="https://github.com/user-attachments/assets/479cfcda-4b74-4523-a331-59954a6b64ce" />
 </details>
 
 <details>
@@ -94,6 +94,11 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 <details>
   <summary># Secrets</summary>
   <img width="1466" height="767" alt="_secrets" src="https://github.com/user-attachments/assets/67241847-3ef3-4e46-81e9-1eb25918418d" />
+</details>
+
+<details>
+  <summary># Stash</summary>
+  <img width="1428" height="2255" alt="image" src="https://github.com/user-attachments/assets/35133ffe-104e-473f-8b4f-1a6fbeb84c3e" />
 </details>
 
 <details>
@@ -108,7 +113,7 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 
 <details>
   <summary># Reconsrução de histórico</summary>
-  <img width="1903" height="1487" alt="_history" src="https://github.com/user-attachments/assets/bb890f7f-e82c-4e8a-b18d-d0a980cecfe4" />
+  <img width="1433" height="897" alt="image" src="https://github.com/user-attachments/assets/487e9c8c-e0e7-454c-9120-9bd8a48fe230" />
 </details>
 
 <details>
@@ -387,6 +392,7 @@ Err.. ninguém contribuiu ainda :(
 ## :sparkling_heart: Support Me 
 <a href="https://www.buymeacoffee.com/rodrigoo" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-5C3317?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" target="_blank"></a>
 <!-- <a href="https://www.paypal.com/donate/?business=RNSQFDU927P8A&no_recurring=0&item_name=Every+penny+donated+is+an+investment+not+only+in+me+but+also+in+fulfilling+dreams+and+creating+opportunities.&currency_code=BRL" target="_blank"><img src="https://img.shields.io/badge/Paypal%20%28BRL%29-4287f5?style=for-the-badge&logo=paypal&logoColor=white" alt="Paypal" target="_blank"></a> -->
+
 
 
 
