@@ -14,7 +14,9 @@
 
 <br>
 
-[Têm uma demonstração do relatório aqui](https://rodrigo.londrina.br/GITLEAK_EXPLORER/)
+
+### <a href="https://rodrigo.londrina.br/GITLEAK_EXPLORER/" target="_blank">Têm uma demonstração do relatório aqui</a>
+
 
 <br>
 <a href="https://github.com/roodriiigooo/GITLEAK_EXPLORER/releases/latest">
@@ -64,12 +66,12 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 
 * **👁️ Blind Mode:** Recuperação inteligente mesmo quando o arquivo `.git/index` está ausente ou bloqueado (403/404), utilizando "Crawling" da árvores e commits.
 * **🔍 Reconstrução de Artefatos:** Baixa e reconstrói arquivos localmente a partir do `.git/index` remoto.
-* **📜 Histórico de Commits:** Reconstrói a árvore de commits (mensagens, autores, timestamps) sem precisar clonar o repositório inteiro via `git clone`.
+* **📜 Histórico de Commits:** Reconstrói a árvore de commits (mensagens, autores, timestamps) sem precisar clonar o repositório inteiro via `git clone`, com suporte a visualização de stash e diffs de arquivos.
 * **🛡️ Análise de Hardening:** Verifica a exposição de arquivos sensíveis (`config`, `HEAD`, `logs`, etc.) e gera um relatório de risco (Crítico/Atenção).
 * **📦 Suporte a Packfiles:** Detecta, baixa e extrai arquivos `.pack` (Git objects comprimidos) automaticamente.
 * **📊 Relatórios Unificados:** Gera um painel HTML interativo (`report.html`) contendo listagem de arquivos, histórico, hardening e status de packfiles.
 * **🎨 Interface Moderna:** Todos os relatórios HTML possuem tema escuro (Dark UI), busca em tempo real e paginação.
-* **🚀 Alta Performance:** Utiliza *multi-threading* para downloads paralelos de objetos.
+* **🚀 Alta Performance:** Utiliza *multi-threading* e session pooling para downloads paralelos de objetos.
 * **🔍 Suporte Adicional:** Efetua buscas por artefatos SVN, HG, Env e DS_Store.
 * **💪 Suporte a Brute Force:** Habilidade de utilizar wordlists contendo artefatos de interesse e seus respectivos paths de busca.
 * **:earth_americas: Suporte a Proxy:** Conecte-se com o Proxy que desejar, incluindo a rede Tor.
@@ -222,6 +224,7 @@ Principais funcionalidades implementadas:
  - --proxy               : URL do Proxy (ex: http://127.0.0.1:8080 para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor) 
  - --no-random-agent     : desativa a rotação de User-Agents (Usa um fixo)
  - --secrets             : Executa scanner de regex/entropia em busca de chaves
+ - --show-dif            : Baixa e exibe as diferenças (diffs) de código no histórico (Pode ser MUITO Lento)
  - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
  
 
@@ -365,6 +368,15 @@ python git_leak.py exemplo.com --output-dir teste_proxy --proxy socks5h://127.0.
 ```sql
 python git_leak.py exemplo.com --output-dir sua_pasta --proxy 127.0.0.1:8080 --no-random-agent --serve
 ```
+
+- Comando tudo em um:
+```sql
+## Efetua scan de alvos em um arquivo de texto, com full scan ativado, saindo para a pasta MEU_SCAN, utilizando Tor como proxy, 
+## ativando 250 workers (threads), ativando scan por secrets (WIP), bruteforce nativo sem wordlist 
+## com reconstrução completa de histórico de commits carregando as diffs e servindo em localhost no final.
+python git_leak.py --scan minha-lista.txt --full-scan --output-dir MEU_SCAN --proxy socks5h://127.0.0.1:9150  --workers 250 --secrets --bruteforce --full-history --show-diff --serve
+```
+
 
 
 

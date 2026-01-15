@@ -31,6 +31,9 @@ Principais funcionalidades implementadas:
  - --bruteforce          : ativa a tentativa de recuperação de arquivos comuns via força bruta
  - --wordlist            : caminho para wordlist (Brute-Force) personalizada
  - --proxy               : URL do Proxy (ex: http://127.0.0.1:8080 para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor) 
+ - --no-random-agent     : desativa a rotação de User-Agents (Usa um fixo)
+ - --secrets             : Executa scanner de regex/entropia em busca de chaves
+ - --show-dif            : Baixa e exibe as diferenças (diffs) de código no histórico (Pode ser MUITO Lento)
  - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
  
 
@@ -371,7 +374,7 @@ def compute_diff(base_url, sha_old, sha_new, proxies=None):
     lines_new = get_content(sha_new)
 
     if lines_old is None or lines_new is None:
-        return "Arquivo binário ou codificação desconhecida."
+        return "(Irrecuperável) Arquivo binário, codificação desconhecida ou dados ausentes/incompletos."
         
     if lines_old == ["<Arquivo muito grande para exibir diff>"] or lines_new == ["<Arquivo muito grande para exibir diff>"]:
         return "Arquivo excede o limite de tamanho para visualização (100KB)."
@@ -541,7 +544,7 @@ def recover_one_sha(base_git_url: str, sha: str, outdir: str, original_path: Opt
         return False
 
 
-def recover_stash_content(base_git_url: str, outdir: str, proxies: Optional[Dict] = None) -> Optional[str]:
+def recover_stash_content(base_git_url: str, outdir: str, workers: int = 10, proxies: Optional[Dict] = None) -> Optional[str]:
     stash_url = base_git_url.rstrip("/") + "/.git/refs/stash"
     
     ok, data = http_get_bytes(stash_url, proxies=proxies)
@@ -574,11 +577,38 @@ def recover_stash_content(base_git_url: str, outdir: str, proxies: Optional[Dict
     if stash_files:
         success(f"Recuperados {len(stash_files)} arquivos do Stash.")
         
+        # --- Baixar conteúdo para visualização ---
+        info(" -> Baixando conteúdo do Stash para visualização...")
+        enriched_stash = []
+        
+        def fetch_stash_content(file_entry):
+            try:
+                # Usa compute_diff com sha_old=None para pegar o conteúdo completo como texto
+                content = compute_diff(base_git_url, None, file_entry['sha'], proxies=proxies)
+                return {
+                    "path": file_entry['path'], 
+                    "sha": file_entry['sha'], 
+                    "type": "STASHED",
+                    "diff": content # Aqui o conteúdo do arquivo
+                }
+            except:
+                return {"path": file_entry['path'], "sha": file_entry['sha'], "type": "STASHED", "diff": "[Erro download]"}
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(fetch_stash_content, f) for f in stash_files]
+            for future in as_completed(futures):
+                enriched_stash.append(future.result())
+
+        # Salva JSON Original (Backup)
         stash_json_path = os.path.join(outdir, "_files", "stash.json")
         output = {"entries": [{"path": f["path"], "sha1": f["sha"]} for f in stash_files]}
-        
         with open(stash_json_path, "w", encoding="utf-8") as f:
             json.dump(output, f, indent=2)
+
+        # Gera HTML Rico
+        stash_html_path = os.path.join(outdir, "stash.html")
+        generate_stash_html(enriched_stash, stash_html_path, normalize_site_base(base_git_url))
+        success(f"Relatório visual de Stash gerado: {stash_html_path}")
             
         return stash_sha
     else:
@@ -788,8 +818,6 @@ SECRET_PATTERNS = {
     "Slack Webhook": r"https://hooks\.slack\.com/services/T[a-zA-Z0-9_]+/B[a-zA-Z0-9_]+/[a-zA-Z0-9_]+",
     "Discord Webhook": r"https://discord\.com/api/webhooks/[0-9]{18,19}/[a-zA-Z0-9\-_]+",
     "Telegram Bot Token": r"[0-9]{9,10}:[a-zA-Z0-9_-]{35}",
-    "Twilio Account SID": r"AC[a-zA-Z0-9]{32}",
-    "Twilio API Key": r"SK[0-9a-fA-F]{32}",
     "Facebook Access Token": r"EAACEdEose0cBA[0-9A-Za-z]+",
 
     # ---------------------------------------------------------
@@ -908,46 +936,87 @@ COMMON_FILES = [
 ]
 
 def scan_for_secrets(outdir: str):
-    info("Iniciando Scanner de Segredos (Regex Analysis)...")
+    info("Iniciando Scanner de Segredos (Regex Analysis, alta entropia)...")
     
     scan_root = outdir
     findings = []
-    ignored_exts = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".gz", ".tar", ".exe", ".pack", ".idx"}
+    
+    # Lista de arquivos gerados pelo próprio script para IGNORAR
+    IGNORED_FILES = {
+        "report.html", "listing.html", "users.html", 
+        "secrets.html", "index.html", "hardening_report.html", "bruteforce_report.html",
+        "packfiles.json", "misc_leaks.json", "hardening_report.json", 
+        "history.json", "users.json", "dump.json", "stash.json", "secrets.json",
+        "intelligence.json"
+    }
+
+    # Extensões irrelevantes para busca de segredos
+    IGNORED_EXTS = {
+        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".pdf", ".zip", ".gz", ".tar", 
+        ".exe", ".pack", ".idx", ".css", ".svg", ".woff", ".woff2", ".eot", 
+        ".ttf", ".mp4", ".mp3", ".lock"
+    }
     
     scanned_count = 0
     
     for root, dirs, files in os.walk(scan_root):
-        if "metadata" in root: continue 
-        
+        # Ignora diretório de metadados internos do script
+        if "_files" in root and "misc" not in root and "bruteforce" not in root and "stash" not in root:
+            continue
+            
         for filename in files:
-            ext = os.path.splitext(filename)[1].lower()
-            if ext in ignored_exts:
+            # 1. Filtro de Arquivos Ignorados (Relatórios)
+            if filename in IGNORED_FILES:
                 continue
                 
+            # 2. Filtro de Extensão
+            ext = os.path.splitext(filename)[1].lower()
+            if ext in IGNORED_EXTS:
+                continue
+                
+            # 3. Filtro de Arquivos Minificados (Muitos falsos positivos)
+            if filename.endswith(".min.js") or filename.endswith(".min.css"):
+                continue
+
             filepath = os.path.join(root, filename)
             scanned_count += 1
             
             try:
+                # Limite de tamanho (5MB) para não travar em dumps grandes
+                if os.path.getsize(filepath) > 5 * 1024 * 1024:
+                    continue
+
                 with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
-                    if len(content) > 5 * 1024 * 1024:
-                        continue
-
+                    
                     for name, pattern in SECRET_PATTERNS.items():
                         matches = re.finditer(pattern, content)
                         for match in matches:
                             secret_val = match.group(0)
-                            masked_val = secret_val[:4] + "*" * (len(secret_val)-8) + secret_val[-4:] if len(secret_val) > 10 else "***"
                             
+                            # Validação Extra para "Generic API Key"
+                            # Se o valor for muito curto ou parecer código HTML/CSS, ignora
+                            if "Generic" in name:
+                                if " " in match.group(2) or "<" in match.group(2) or ">" in match.group(2):
+                                    continue
+
+                            # Mascarar para o log (mas salvar completo no JSON)
+                            masked_val = secret_val[:4] + "..." + secret_val[-4:] if len(secret_val) > 10 else "***"
+                            
+                            # Contexto (pequeno trecho ao redor)
+                            start = max(0, match.start() - 30)
+                            end = min(len(content), match.end() + 30)
+                            context = content[start:end].replace("\n", " ").strip()
+
                             findings.append({
                                 "type": name,
                                 "file": os.path.relpath(filepath, outdir),
                                 "match": secret_val,
-                                "context": content[max(0, match.start()-20):min(len(content), match.end()+20)].strip()
+                                "context": context
                             })
-                            print(f"[!] SEGREDO ENCONTRADO: {name}")
-                            print(f"    -> Arquivo: {filename}")
-                            print(f"    -> Match: {masked_val}")
+                            
+                            # Log visual apenas para coisas realmente novas
+                            print(f"[!] SEGREDO: {name} em {filename}")
 
             except Exception:
                 pass
@@ -956,17 +1025,19 @@ def scan_for_secrets(outdir: str):
     
     if findings:
         success(f"TOTAL DE SEGREDOS ENCONTRADOS: {len(findings)}")
+        
+        # Salva o JSON
         report_path = os.path.join(outdir, "_files", "secrets.json")
         try:
             with open(report_path, "w", encoding="utf-8") as f:
                 json.dump(findings, f, indent=2)
-        except Exception as e:
-            warn(f"Erro ao salvar secrets.json: {e}")
+        except: pass
             
+        # Gera o HTML
         html_path = os.path.join(outdir, "secrets.html")
         generate_secrets_html(findings, html_path)
     else:
-        info("Nenhum segredo óbvio encontrado nos arquivos baixados.")
+        info("Nenhum segredo de alta confiança encontrado.")
 
 def get_safe_folder_name(target_url):
     from urllib.parse import urlparse
@@ -2743,7 +2814,7 @@ def generate_unified_report(outdir: str, base_url: str):
                     {stash_rows}
                 </table>
                 <p class="text-center mt-2 small muted">... e mais {max(0, len(stash_entries) - 5)} arquivos.</p>
-                <a href="_files/stash.json" target="_blank" class="btn btn-outline w-100">Ver JSON Completo</a>
+                <a href="stash.html" class="btn btn-outline w-100" style="color: #f59e0b; border-color: #f59e0b;">Visualizar Modificações em Stash</a>
             </div>
         </div>
         """
@@ -3866,6 +3937,158 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
         print(f"Erro ao salvar HTML de histórico: {e}")
 
 
+def generate_stash_html(stash_data: List[Dict[str, Any]], out_html: str, site_base: str):
+    import json
+    
+    fake_commit = [{
+        "sha": "STASH",
+        "author": "Git Stash Recovery",
+        "date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "message": "Conteúdo recuperado do Stash (WIP)",
+        "changes": stash_data # Lista de arquivos com 'diff' (conteúdo)
+    }]
+    
+    commits_json = json.dumps(fake_commit, ensure_ascii=True)\
+        .replace('<', '\\u003c')\
+        .replace('>', '\\u003e')
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Stash View - {site_base}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            :root {{ --bg-body: #0f111a; --bg-card: #1a1d2d; --bg-hover: #23273a; --bg-details: #151824; --text-primary: #e2e8f0; --text-secondary: #94a3b8; --accent-color: #f59e0b; --border-color: #2d3748; --success: #10b981; --danger: #ef4444; --warning: #f59e0b; --hash-color: #ec4899; }}
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ background-color: var(--bg-body); color: var(--text-primary); font-family: 'Inter', sans-serif; min-height: 100vh; padding: 2rem; }}
+            .container {{ max-width: 1400px; margin: 0 auto; }}
+            
+            .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }}
+            .title h1 {{ font-size: 1.5rem; font-weight: 600; color: var(--warning); }}
+            .controls {{ display: flex; gap: 1rem; margin-bottom: 1.5rem; }}
+            .btn-back {{ display: inline-flex; align-items: center; padding: 0.7rem 1.2rem; background-color: var(--bg-card); color: var(--text-primary); text-decoration: none; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; transition: all 0.2s; }}
+            .btn-back:hover {{ border-color: var(--warning); color: var(--warning); }}
+            .search-box {{ flex: 1; position: relative; }}
+            .search-box input {{ width: 100%; padding: 0.7rem 1rem 0.7rem 2.5rem; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); }}
+            .search-icon {{ position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); }}
+
+            /* Stash Styles */
+            .file-entry {{ background: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 15px; border-radius: 8px; overflow: hidden; }}
+            .file-header {{ padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(245, 158, 11, 0.05); cursor: pointer; }}
+            .file-path {{ font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; color: #fff; font-weight: 500; }}
+            .tag-stash {{ background: rgba(245, 158, 11, 0.2); color: var(--warning); padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-right: 10px; }}
+            
+            .diff-viewer {{ display: none; background: #0d1117; border-top: 1px solid var(--border-color); padding: 10px; overflow-x: auto; }}
+            .diff-viewer.open {{ display: block; }}
+            .diff-line {{ font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; white-space: pre; line-height: 1.5; color: #e2e8f0; }}
+            
+            .chevron {{ transition: transform 0.2s; }}
+            .file-entry.open .chevron {{ transform: rotate(90deg); }}
+            .file-entry.open .file-header {{ background: rgba(245, 158, 11, 0.1); border-bottom: 1px solid var(--border-color); }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header class="header">
+                <div class="title">
+                    <h1>💾 Git Stash Recuperado</h1>
+                    <p>Target: {site_base}</p>
+                </div>
+                <div><span class="tag-stash" style="font-size:1rem">{len(stash_data)} Arquivos</span></div>
+            </header>
+
+            <div class="controls">
+                <a href="report.html" class="btn-back">&larr; Voltar ao Painel</a>
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="q" placeholder="Filtrar arquivos em Stash por nome ou conteúdo...">
+                </div>
+            </div>
+
+            <div id="stash-container"></div>
+        </div>
+
+        <script>
+            const DATA = {commits_json}[0].changes; // Pegamos apenas a lista de arquivos do fake commit
+
+            const container = document.getElementById('stash-container');
+            const searchInput = document.getElementById('q');
+
+            function escapeHtml(text) {{
+                if (!text) return '';
+                return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/`/g, "&#96;").replace(/\\${{/g, "&#36;{{");
+            }}
+
+            function toggleFile(idx) {{
+                const el = document.getElementById(`file-${{idx}}`);
+                const viewer = document.getElementById(`viewer-${{idx}}`);
+                
+                if (viewer.classList.contains('open')) {{
+                    viewer.classList.remove('open');
+                    el.classList.remove('open');
+                }} else {{
+                    viewer.classList.add('open');
+                    el.classList.add('open');
+                }}
+            }}
+
+            function render(filterText = '') {{
+                container.innerHTML = '';
+                const q = filterText.toLowerCase();
+
+                DATA.forEach((file, idx) => {{
+                    // Filtro
+                    if (q) {{
+                        const matchPath = (file.path || '').toLowerCase().includes(q);
+                        const matchContent = (file.diff || '').toLowerCase().includes(q);
+                        if (!matchPath && !matchContent) return;
+                    }}
+
+                    const el = document.createElement('div');
+                    el.className = 'file-entry';
+                    el.id = `file-${{idx}}`;
+
+                    const safeContent = escapeHtml(file.diff || 'Conteúdo binário ou vazio.');
+                    // Renderiza conteúdo como linhas simples (sem diff coloring complexo, apenas display)
+                    const lines = safeContent.split(/\\r?\\n/).map(l => `<div class="diff-line">${{l}}</div>`).join('');
+
+                    el.innerHTML = `
+                        <div class="file-header" onclick="toggleFile(${{idx}})">
+                            <div>
+                                <span class="tag-stash">STASHED</span>
+                                <span class="file-path">${{escapeHtml(file.path)}}</span>
+                            </div>
+                            <span class="chevron">▶</span>
+                        </div>
+                        <div id="viewer-${{idx}}" class="diff-viewer">
+                            ${{lines}}
+                        </div>
+                    `;
+                    container.appendChild(el);
+                }});
+                
+                if (container.innerHTML === '') {{
+                    container.innerHTML = '<div style="text-align:center; color:#666; padding:20px">Nenhum arquivo encontrado com esse filtro.</div>';
+                }}
+            }}
+
+            searchInput.addEventListener('input', (e) => render(e.target.value));
+            render();
+        </script>
+    </body>
+    </html>
+    """
+    
+    try:
+        with open(out_html, "w", encoding="utf-8") as f: 
+            f.write(html_content)
+    except Exception as e:
+        print(f"Erro ao salvar HTML de Stash: {e}")
+
+
 def generate_users_report(outdir: str, authors_stats: Dict[str, int]):
     info("Gerando relatório de usuários (OSINT)...")
     
@@ -4249,7 +4472,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
             
             if not heavy_analysis:
                 commit_data["changes"] = [] 
-                commit_data["message"] += "\n[INFO] Detalhes omitidos (Modo Rápido)."
+                commit_data["message"] += "\n - [INFO] Detalhes omitidos (Modo Rápido: utilize --full-history para obter todos os resultados)."
                 return commit_data
 
             ok, raw = fetch_object_raw(base_git_url, sha, proxies=proxies)
@@ -4333,7 +4556,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
     if intel_logs:
         current_workers = max(workers, 20)
         limit = min(len(intel_logs), max_commits)
-        info(f"Processando {limit} logs com {current_workers} threads...")
+        info(f"Processando {limit} logs com {current_workers} threads (pode demorar)...")
         
         logs_to_process = intel_logs[:limit]
         
@@ -4522,7 +4745,7 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
     detect_hardening(base_url, output_dir, proxies=proxies)
     gather_intelligence(base_url, output_dir, proxies=proxies)
     
-    stash_sha = recover_stash_content(base_url, output_dir, proxies=proxies)
+    stash_sha = recover_stash_content(base_url, output_dir, workers=args.workers, proxies=proxies)
     if stash_sha:
         reconstruct_all(os.path.join(output_dir, "_files", "stash.json"), base_url, os.path.join(output_dir, "stash_restored"), workers=args.workers)
     
