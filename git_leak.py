@@ -374,7 +374,7 @@ def compute_diff(base_url, sha_old, sha_new, proxies=None):
     lines_new = get_content(sha_new)
 
     if lines_old is None or lines_new is None:
-        return "(Irrecuperável) Arquivo binário, codificação desconhecida ou dados ausentes/incompletos."
+        return "    (Irrecuperável) Arquivo binário, codificação desconhecida ou dados ausentes/incompletos."
         
     if lines_old == ["<Arquivo muito grande para exibir diff>"] or lines_new == ["<Arquivo muito grande para exibir diff>"]:
         return "    Arquivo excede o limite de tamanho para visualização (100KB)."
