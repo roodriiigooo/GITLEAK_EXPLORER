@@ -377,7 +377,7 @@ def compute_diff(base_url, sha_old, sha_new, proxies=None):
         return "(Irrecuperável) Arquivo binário, codificação desconhecida ou dados ausentes/incompletos."
         
     if lines_old == ["<Arquivo muito grande para exibir diff>"] or lines_new == ["<Arquivo muito grande para exibir diff>"]:
-        return "Arquivo excede o limite de tamanho para visualização (100KB)."
+        return "    Arquivo excede o limite de tamanho para visualização (100KB)."
 
     try:
         diff = difflib.unified_diff(
@@ -788,68 +788,29 @@ def check_ds_store_exposure(base_url, output_dir, proxies=None):
 
 # --- ASSINATURAS DE SEGREDOS (REGEX) ---
 SECRET_PATTERNS = {
-    # ---------------------------------------------------------
-    # 1. INFRAESTRUTURA CLOUD & SERVIDORES
-    # ---------------------------------------------------------
-    "AWS Access Key": r"(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}",
-    "AWS Secret Key": r"(?i)aws_secret_access_key\s*=\s*([a-zA-Z0-9/+]{40})",
+    # Cloud & Infra (Alta Confiança com Prefixos)
+    "AWS Access Key ID": r"(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}",
     "Google API Key": r"AIza[0-9A-Za-z\\-_]{35}",
     "Google OAuth": r"[0-9]+-[0-9a-zA-Z_]{32}\.apps\.googleusercontent\.com",
-    "GCP Service Account": r"\"type\":\s*\"service_account\"", # Detecta JSON de credencial do Google
-    "Azure Storage Key": r"DefaultEndpointsProtocol=[^;\s]+;AccountName=[^;\s]+;AccountKey=[^;\s]+",
     "Heroku API Key": r"(?i)HEROKU_API_KEY\s*=\s*[0-9a-fA-F-]{36}",
     "DigitalOcean Token": r"dop_v1_[a-f0-9]{64}",
     
-    # ---------------------------------------------------------
-    # 2. SAAS & DEVOPS
-    # ---------------------------------------------------------
+    # DevOps & SaaS (Prefixos Específicos)
     "GitHub Token": r"(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36}",
     "GitLab Token": r"glpat-[0-9a-zA-Z\-\_]{20}",
     "NPM Access Token": r"npm_[a-zA-Z0-9]{36}",
-    "PyPI Upload Token": r"pypi-[a-zA-Z0-9\-\_]+",
-    "Docker Hub Token": r"dckr_pat_[a-zA-Z0-9\-\_]{27}",
-    "Sentry DSN": r"https://[a-f0-9]+@o[0-9]+\.ingest\.sentry\.io/[0-9]+",
-    "Datadog API Key": r"(?i)DD_API_KEY\s*=\s*[a-f0-9]{32}",
-
-    # ---------------------------------------------------------
-    # 3. COMUNICAÇÃO & SOCIAL
-    # ---------------------------------------------------------
     "Slack Token": r"xox[baprs]-([0-9a-zA-Z]{10,48})?",
-    "Slack Webhook": r"https://hooks\.slack\.com/services/T[a-zA-Z0-9_]+/B[a-zA-Z0-9_]+/[a-zA-Z0-9_]+",
-    "Discord Webhook": r"https://discord\.com/api/webhooks/[0-9]{18,19}/[a-zA-Z0-9\-_]+",
+    "Stripe Live Key": r"(sk_live|rk_live)_[0-9a-zA-Z]{24,}",
+    "Twilio Account SID": r"AC[a-zA-Z0-9]{32}",
     "Telegram Bot Token": r"[0-9]{9,10}:[a-zA-Z0-9_-]{35}",
-    "Facebook Access Token": r"EAACEdEose0cBA[0-9A-Za-z]+",
 
-    # ---------------------------------------------------------
-    # 4. PAGAMENTOS & FINANCEIRO
-    # ---------------------------------------------------------
-    "Stripe API Key": r"(sk_live|rk_live)_[0-9a-zA-Z]{24,}",
-    "PayPal Access Token": r"access_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}",
-    "Square Access Token": r"sq0atp-[0-9A-Za-z\-_]{22}",
-    "Braintree Access Token": r"access_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}",
-
-    # ---------------------------------------------------------
-    # 5. BANCOS DE DADOS & ARQUITETURA
-    # ---------------------------------------------------------
-    "Laravel APP_KEY": r"APP_KEY=base64:[a-zA-Z0-9/\+=]{30,}",
-    "Connection String (URI)": r"(postgres|mysql|mongodb|redis|amqp)://[^:\s]+:[^@\s]+@[a-zA-Z0-9\.-]+",
-    "Redis Connection": r"(?i)REDIS_URL\s*=\s*redis://:[^@]+@",
-
-    # ---------------------------------------------------------
-    # 6. CRIPTOGRAFIA & AUTENTICAÇÃO
-    # ---------------------------------------------------------
+    # Chaves Privadas (Muito confiável)
     "Private Key (RSA/DSA/EC)": r"-----BEGIN (RSA|DSA|EC|OPENSSH|PGP)? ?PRIVATE KEY-----",
-    "JWT Token": r"eyJh[a-zA-Z0-9\-_]+\.eyJh[a-zA-Z0-9\-_]+\.[a-zA-Z0-9\-_]+", # JSON Web Token
+    "Putty PPK": r"PuTTY-User-Key-File-2",
 
-    # ---------------------------------------------------------
-    # 7. GENÉRICOS (Para .env e config files)
-    # ---------------------------------------------------------
-    # Procura por: (DB|MAIL|REDIS...)_(PASSWORD|SECRET|KEY) = valor
-    # Ignora valores comuns seguros: null, true, false, file, sync, local, debug, 0, 1, localhost
-    "DotEnv Sensitive Assignment": r"(?im)^[A-Z0-9_]*(?:PASSWORD|SECRET|KEY|TOKEN)[A-Z0-9_]*\s*=\s*(?!(?:null|true|false|0|1|file|sync|local|debug|empty|root|admin|localhost))([^\s#]+)",
-
-    # Genérico para código (High Entropy): pega strings longas atribuídas a variáveis suspeitas
-    "Generic High Entropy Secret": r"(?i)(api_key|access_token|client_secret)[\s=:\"'>]{1,5}([0-9a-zA-Z\-_=]{20,})"
+    # Configurações Críticas (Atribuições Diretas e Explícitas)
+    "DB Connection String": r"(postgres|mysql|mongodb|redis)://[^:\s]+:[^@\s]+@[a-zA-Z0-9\.-]+",
+    "Generic API Key (High Prob)": r"(?i)(api_key|access_token|secret_key)\s*[:=]\s*['\"]([a-zA-Z0-9\-_]{32,})['\"]"
 }
 
 MISC_SIGNATURES = {
@@ -3563,19 +3524,20 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
     
     commits = data.get('commits', [])
     head_sha = data.get('head', 'N/A')
+    remote_url = data.get('remote_url', '') 
     
-    # Sanitização para JS
     commits_json = json.dumps(commits, ensure_ascii=True)\
         .replace('<', '\\u003c')\
         .replace('>', '\\u003e')
 
-    intel_path = os.path.join(os.path.dirname(in_json), "intelligence.json")
-    remote_url = ""
-    if os.path.exists(intel_path):
-        try:
-            with open(intel_path, 'r', encoding='utf-8') as f: 
-                remote_url = json.load(f).get("remote_url", "")
-        except: pass
+    remote_html_block = ""
+    if remote_url:
+        remote_html_block = f'''
+        <div class="remote-badge">
+            <span style="opacity:0.7">Remoto Detectado:</span> 
+            <a href="{remote_url}" target="_blank" style="color:var(--accent-color); font-weight:bold; margin-left:5px;">{remote_url}</a>
+        </div>
+        '''
 
     html_content = f"""
     <!DOCTYPE html>
@@ -3589,60 +3551,48 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
             :root {{ --bg-body: #0f111a; --bg-card: #1a1d2d; --bg-hover: #23273a; --bg-details: #151824; --text-primary: #e2e8f0; --text-secondary: #94a3b8; --accent-color: #6366f1; --border-color: #2d3748; --success: #10b981; --danger: #ef4444; --warning: #f59e0b; --hash-color: #ec4899; }}
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{ background-color: var(--bg-body); color: var(--text-primary); font-family: 'Inter', sans-serif; min-height: 100vh; padding: 2rem; }}
-            .container {{ max-width: 1400px; margin: 0 auto; }}
+            .container {{ max-width: 98%; margin: 0 auto; }}
             
-            /* Header */
-            .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }}
+            /* Header Style */
+            .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px; }}
             .title h1 {{ font-size: 1.5rem; font-weight: 600; color: var(--text-primary); }}
+            
+            /* Stats & Badges */
             .stat-badge {{ background: var(--bg-card); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary); margin-left: 10px; display: inline-block; }}
             .highlight {{ color: var(--accent-color); font-weight: 600; }}
-            
-            /* Controls Grid */
-            .controls {{ 
-                display: grid; 
-                grid-template-columns: auto 1fr 1fr; 
-                gap: 1rem; 
-                margin-bottom: 1.5rem; 
-                align-items: center;
-            }}
-            .btn-back {{ display: inline-flex; align-items: center; padding: 0.7rem 1.2rem; background-color: var(--bg-card); color: var(--text-primary); text-decoration: none; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; transition: all 0.2s; height: 42px; }}
-            .btn-back:hover {{ border-color: var(--accent-color); color: var(--accent-color); }}
-            
-            .search-box {{ position: relative; }}
-            .search-box input {{ width: 100%; padding: 0.7rem 1rem 0.7rem 2.5rem; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; height: 42px; }}
-            .search-box input:focus {{ outline: none; border-color: var(--accent-color); }}
-            .search-icon {{ position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; }}
+            .remote-badge {{ background: rgba(99, 102, 241, 0.1); padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid rgba(99, 102, 241, 0.3); font-size: 0.9rem; color: #fff; }}
 
-            /* Master-Detail Table */
-            .table-container {{ background-color: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }}
+            /* Controls Layout */
+            .controls {{ display: grid; grid-template-columns: auto 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; align-items: center; }}
+            .btn-back {{ display: inline-flex; align-items: center; padding: 0.7rem 1.2rem; background-color: var(--bg-card); color: var(--text-primary); text-decoration: none; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.9rem; height: 42px; }}
+            .btn-back:hover {{ border-color: var(--accent-color); color: var(--accent-color); }}
+            .search-box input {{ width: 100%; padding: 0.7rem 1rem; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); height: 42px; }}
+            
+            /* Table Styling */
+            .table-container {{ background-color: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; }}
             table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; table-layout: fixed; }}
             th {{ background-color: rgba(255,255,255,0.03); padding: 1rem; text-align: left; font-weight: 500; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); }}
             
-            /* Main Row */
-            .commit-row {{ cursor: pointer; transition: background 0.2s; }}
+            .commit-row {{ cursor: pointer; transition: background 0.1s; }}
             .commit-row:hover {{ background-color: var(--bg-hover); }}
             .commit-row td {{ padding: 1rem; border-bottom: 1px solid var(--border-color); vertical-align: top; }}
             
-            /* Expanded Details Row */
             .details-row {{ background-color: var(--bg-details); display: none; }}
             .details-row.active {{ display: table-row; }}
-            .details-content {{ padding: 20px; border-bottom: 1px solid var(--border-color); box-shadow: inset 0 0 15px rgba(0,0,0,0.3); }}
+            .details-content {{ padding: 10px 0; border-bottom: 1px solid var(--border-color); box-shadow: inset 0 0 10px rgba(0,0,0,0.2); }}
 
-            /* Columns Width */
-            th:nth-child(1) {{ width: 10%; }} /* Hash */
-            th:nth-child(2) {{ width: 12%; }} /* Date */
-            th:nth-child(3) {{ width: 18%; }} /* Author */
-            th:nth-child(4) {{ width: 45%; }} /* Message */
-            th:nth-child(5) {{ width: 15%; }} /* Files Summary */
+            th:nth-child(1) {{ width: 10%; }} 
+            th:nth-child(2) {{ width: 12%; }} 
+            th:nth-child(3) {{ width: 15%; }} 
+            th:nth-child(4) {{ width: 40%; }} 
+            th:nth-child(5) {{ width: 23%; }}
 
-            /* Typography */
             .mono {{ font-family: 'JetBrains Mono', monospace; }}
             .hash-link {{ color: var(--hash-color); text-decoration: none; font-weight: bold; }}
-            .badge {{ font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-left: 5px; }}
             .msg-text {{ color: #d1d5db; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }}
-
-            /* File List Styles (Expanded) */
-            .file-entry {{ background: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 10px; border-radius: 6px; overflow: hidden; }}
+            
+            /* File Entry Style */
+            .file-entry {{ background: var(--bg-card); border: 1px solid var(--border-color); margin-bottom: 15px; border-radius: 6px; overflow: hidden; margin: 10px 20px; }}
             .file-header {{ padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); }}
             .file-path {{ font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #fff; }}
             
@@ -3651,20 +3601,39 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
             .tag-mod {{ background: rgba(56, 139, 253, 0.2); color: #58a6ff; }}
             .tag-del {{ background: rgba(248, 81, 73, 0.2); color: #ff7b72; }}
 
-            /* Diff Viewer */
-            .diff-viewer {{ padding: 0; display: none; border-top: 1px solid var(--border-color); background: #0d1117; }}
-            .diff-viewer.open {{ display: block; }}
-            .diff-line {{ font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; white-space: pre; display: block; line-height: 1.4; padding: 0 10px; }}
-            .diff-add {{ background-color: rgba(46, 160, 67, 0.15); color: #3fb950; display: block; }}
-            .diff-del {{ background-color: rgba(248, 81, 73, 0.15); color: #ff7b72; display: block; }}
-            .diff-info {{ color: #8b949e; display: block; }}
-            .no-diff-msg {{ padding: 15px; color: #666; font-style: italic; font-size: 0.85rem; }}
+            /* === SIDE BY SIDE DIFF === */
+            .diff-container {{ display: none; border-top: 1px solid #30363d; background: #0d1117; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; overflow-x: auto; width: 100%; }}
+            .diff-container.open {{ display: block; }}
+            
+            /* Importante: table-layout: fixed para respeitar as larguras do colgroup */
+            .diff-table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
+            .diff-table td {{ padding: 2px 4px; vertical-align: top; white-space: pre-wrap; word-break: break-all; border-bottom: none; line-height: 1.4; }}
+            
+            /* Coluna de números (Alvo da correção) */
+            /* Largura controlada pelo <col>, aqui apenas alinhamento */
+            .diff-num {{
+                text-align: right; 
+                color: #6e7681; 
+                user-select: none; 
+                border-right: 1px solid #30363d; 
+                background: #0d1117; 
+                opacity: 0.6;
+                padding-right: 5px;
+            }}
 
-            .btn-toggle-diff {{ background: transparent; border: 1px solid var(--border-color); color: var(--accent-color); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }}
+            .search-box {{ position: relative; }}
+            .search-box input {{ width: 100%; padding: 0.7rem 1rem 0.7rem 2.5rem; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; height: 42px; }}
+            .search-box input:focus {{ outline: none; border-color: var(--accent-color); }}
+            .search-icon {{ position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); pointer-events: none; }}
+            
+            .deletion {{ background-color: rgba(248, 81, 73, 0.15); color: #ff7b72; }}
+            .addition {{ background-color: rgba(46, 160, 67, 0.15); color: #3fb950; }}
+            .empty-cell {{ background-color: #0d1117; }} 
+
+            .btn-toggle-diff {{ background: transparent; border: 1px solid var(--border-color); color: var(--accent-color); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: 0.2s; }}
             .btn-toggle-diff:hover {{ background: var(--accent-color); color: white; }}
             
-            .chevron {{ transition: transform 0.2s; display: inline-block; }}
-            .commit-row.open .chevron {{ transform: rotate(90deg); }}
+            .alert-fast-mode {{ color: #ef4444; font-weight: bold; background: rgba(239, 68, 68, 0.1); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 5px; }}
 
             /* Pagination */
             .pagination-container {{ display: flex; justify-content: space-between; align-items: center; padding: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); }}
@@ -3673,6 +3642,7 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
             
             @media (max-width: 900px) {{
                 .controls {{ grid-template-columns: 1fr; }}
+                .diff-table td {{ white-space: pre; }} 
             }}
         </style>
     </head>
@@ -3680,18 +3650,18 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
         <div class="container">
             <header class="header">
                 <div>
-                    <h1>Reconstrução de Histórico</h1>
+                    <h1>Timeline Git</h1>
                     <p>Target: {site_base}</p>
                 </div>
-                <div>
+                <div style="display:flex; align-items:center;">
+                    {remote_html_block}
                     <span class="stat-badge">HEAD: <span class="highlight mono">{head_sha[:8]}</span></span>
-                    <span class="stat-badge">Commits: <span class="highlight" id="total-count">{len(commits)}</span></span>
+                    <span class="stat-badge">Commits: <span class="highlight">{len(commits)}</span></span>
                 </div>
             </header>
 
             <div class="controls">
                 <a href="report.html" class="btn-back">&larr; Voltar ao Painel</a>
-                
                 <div class="search-box">
                     <span class="search-icon">🔍</span>
                     <input type="text" id="q-meta" placeholder="Buscar Commit (Hash, Autor, Mensagem)...">
@@ -3718,8 +3688,6 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
 
         <script>
             const COMMITS = {commits_json};
-            const REMOTE_URL = "{remote_url}";
-
             const tableBody = document.getElementById('table-body');
             const searchMeta = document.getElementById('q-meta');
             const searchFiles = document.getElementById('q-files');
@@ -3729,25 +3697,22 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
             let filteredCommits = COMMITS;
             let currentPage = 1;
             const itemsPerPage = 20;
-            
-            // Termo atual do filtro de arquivos (para usar no render)
             let currentFileFilter = "";
 
             function escapeHtml(text) {{
                 if (!text) return '';
-                return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/`/g, "&#96;").replace(/\\${{/g, "&#36;{{");
+                return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
             }}
 
             function toggleDetails(idx) {{
                 const row = document.getElementById(`row-${{idx}}`);
                 const details = document.getElementById(`details-${{idx}}`);
-                
-                if (details.classList.contains('active')) {{
-                    details.classList.remove('active');
-                    row.classList.remove('open');
+                if (details.style.display === 'table-row') {{
+                    details.style.display = 'none';
+                    row.style.background = '';
                 }} else {{
-                    details.classList.add('active');
-                    row.classList.add('open');
+                    details.style.display = 'table-row';
+                    row.style.background = 'var(--bg-hover)';
                 }}
             }}
 
@@ -3756,167 +3721,194 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
                 el.classList.toggle('open');
             }}
             
-            // Função auxiliar para verificar se um arquivo bate com o filtro
-            function matchFile(ch, query) {{
-                if (!query) return true;
-                const q = query.toLowerCase();
-                // Verifica Nome, Tipo (ADDED/MODIFIED) e Conteúdo do Diff
-                return (ch.path || '').toLowerCase().includes(q) || 
-                       (ch.type || '').toLowerCase().includes(q) || 
-                       (ch.diff || '').toLowerCase().includes(q);
+            function renderSideBySide(diffText) {{
+                if (!diffText || diffText.startsWith('[')) return `<div style="padding:10px; color:#666">${{escapeHtml(diffText)}}</div>`;
+
+                const lines = diffText.split(/\\r?\\n/);
+                let rows = '';
+                
+                let oldLineNum = 1;
+                let newLineNum = 1;
+
+                for (let i = 0; i < lines.length; i++) {{
+                    const line = lines[i];
+                    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('index ')) continue;
+                    
+                    if (line.startsWith('@@')) {{
+                        rows += `<tr style="background:#1c2128; color:#8b949e"><td colspan="4" style="padding:4px 10px; text-align:center; font-size:0.7rem">${{escapeHtml(line)}}</td></tr>`;
+                        continue;
+                    }}
+
+                    let leftContent = '&nbsp;';
+                    let rightContent = '&nbsp;';
+                    let leftClass = 'empty-cell';
+                    let rightClass = 'empty-cell';
+                    let lNum = '';
+                    let rNum = '';
+
+                    if (line.startsWith('-')) {{
+                        leftContent = escapeHtml(line.substring(1)) || ' ';
+                        leftClass = 'deletion';
+                        lNum = oldLineNum++;
+                        if (i + 1 < lines.length && lines[i+1].startsWith('+')) {{
+                            const nextLine = lines[++i];
+                            rightContent = escapeHtml(nextLine.substring(1)) || ' ';
+                            rightClass = 'addition';
+                            rNum = newLineNum++;
+                        }}
+                    }} else if (line.startsWith('+')) {{
+                        rightContent = escapeHtml(line.substring(1)) || ' ';
+                        rightClass = 'addition';
+                        rNum = newLineNum++;
+                    }} else {{
+                        const content = escapeHtml(line.substring(1)) || ' ';
+                        leftContent = content;
+                        rightContent = content;
+                        lNum = oldLineNum++;
+                        rNum = newLineNum++;
+                    }}
+
+                    rows += `
+                        <tr>
+                            <td class="diff-num">${{lNum}}</td>
+                            <td class="${{leftClass}}">${{leftContent}}</td>
+                            <td class="diff-num">${{rNum}}</td>
+                            <td class="${{rightClass}}">${{rightContent}}</td>
+                        </tr>
+                    `;
+                }}
+
+                // --- CORREÇÃO DO ESPAÇAMENTO ---
+                // Inserimos COLGROUP para forçar as larguras independentemente do colspan
+                // col 1 e 3: 35px (espaço suficiente para 3-4 dígitos sem quebrar, mas compacto)
+                // col 2 e 4: auto (dividindo o restante meio a meio)
+                return `
+                <table class="diff-table">
+                    <colgroup>
+                        <col style="width: 35px; min-width: 35px;">
+                        <col style="width: auto;">
+                        <col style="width: 35px; min-width: 35px;">
+                        <col style="width: auto;">
+                    </colgroup>
+                    ${{rows}}
+                </table>`;
             }}
 
             function renderTable() {{
                 const totalPages = Math.ceil(filteredCommits.length / itemsPerPage) || 1;
                 if (currentPage > totalPages) currentPage = totalPages;
                 if (currentPage < 1) currentPage = 1;
-
                 const start = (currentPage - 1) * itemsPerPage;
                 const end = start + itemsPerPage;
-                const pageData = filteredCommits.slice(start, end);
-
+                
                 tableBody.innerHTML = '';
 
-                pageData.forEach((c, idx) => {{
-                    // Linha Principal
+                filteredCommits.slice(start, end).forEach((c, idx) => {{
                     const trMain = document.createElement('tr');
                     trMain.className = 'commit-row';
                     trMain.id = `row-${{idx}}`;
                     trMain.onclick = () => toggleDetails(idx);
 
-                    const hashDisplay = REMOTE_URL 
-                        ? `<a href="${{REMOTE_URL.replace('.git','')}}/commit/${{c.sha}}" target="_blank" class="hash-link" onclick="event.stopPropagation()">${{c.sha.substring(0,8)}}</a>`
-                        : `<span class="hash-link">${{c.sha.substring(0,8)}}</span>`;
-                    
-                    // Contagem de arquivos filtrada visualmente?
-                    // Para o badge principal, mostramos o total real do commit.
                     const realCount = (c.changes && c.changes.length > 0) ? c.changes.length : (c.files ? c.files.length : 0);
                     
-                    // Se houver filtro de arquivo ativo, indicamos quantos deram match
-                    let badgeText = `${{realCount}} arquivos`;
-                    if (currentFileFilter && c.changes) {{
-                        const matchCount = c.changes.filter(ch => matchFile(ch, currentFileFilter)).length;
-                        badgeText = `<span style="color:${{matchCount > 0 ? '#fff' : '#666'}}">${{matchCount}} matches</span> / ${{realCount}} total`;
+                    let filesSummary = '';
+                    if (c.fast_mode_skipped) {{
+                         filesSummary = `<span class="alert-fast-mode">⚠️ Objetos não listados (Fast Mode). Use --full-history.</span>`;
+                    }} else {{
+                         filesSummary = `<span class="stat-badge" style="margin:0">${{realCount}} arquivos</span> <span style="font-size:0.8rem">▶</span>`;
                     }}
 
-                    const filesSummary = `<span class="badge" style="background:#333; color:#ccc;">${{badgeText}}</span> <span class="chevron">▶</span>`;
-
                     trMain.innerHTML = `
-                        <td>${{hashDisplay}}</td>
-                        <td style="color:var(--text-secondary); font-size:0.85rem">${{c.date || '-'}}</td>
-                        <td style="font-weight:500; color:#fff">${{escapeHtml(c.author)}}</td>
+                        <td><span class="hash-link">${{c.sha.substring(0,8)}}</span></td>
+                        <td style="color:var(--text-secondary)">${{c.date || '-'}}</td>
+                        <td style="color:#fff">${{escapeHtml(c.author)}}</td>
                         <td><div class="msg-text">${{escapeHtml(c.message)}}</div></td>
                         <td>${{filesSummary}}</td>
                     `;
 
-                    // Linha de Detalhes (Expandida)
                     const trDetails = document.createElement('tr');
                     trDetails.className = 'details-row';
                     trDetails.id = `details-${{idx}}`;
 
-                    let changesHtml = '<div style="padding:20px; color:#666">Nenhum arquivo correspondente ao filtro.</div>';
+                    let contentHtml = '';
                     
-                    if (c.changes && c.changes.length > 0) {{
-                        // FILTRAGEM NA RENDERIZAÇÃO: Só mostra os arquivos que batem com a busca
-                        const filteredChanges = c.changes.filter(ch => matchFile(ch, currentFileFilter));
+                    if (c.fast_mode_skipped) {{
+                        contentHtml = '<div style="padding:20px; color:#ef4444; font-weight:bold;">⚠️ Detalhes omitidos para otimizar a performance (Fast Mode).<br><span style="font-weight:normal; color:#ccc; margin-top:5px; display:block;">Este commit não foi analisado profundamente. Execute novamente com <code style="background:#333; padding:2px; color:#fff">--full-history</code> para baixar e analisar todos os objetos históricos (processo mais lento).</span></div>';
+                    }} else if (c.changes && c.changes.length > 0) {{
+                        const filteredChanges = c.changes.filter(ch => !currentFileFilter || (ch.path.toLowerCase().includes(currentFileFilter) || (ch.diff||'').toLowerCase().includes(currentFileFilter)));
                         
                         if (filteredChanges.length > 0) {{
-                            const items = filteredChanges.map((ch, fileIdx) => {{
+                            const items = filteredChanges.map((ch, fIdx) => {{
                                 let tagClass = '';
                                 if (ch.type === 'ADDED') tagClass = 'tag-added';
                                 else if (ch.type === 'MODIFIED') tagClass = 'tag-mod';
                                 else if (ch.type === 'DELETED') tagClass = 'tag-del';
 
-                                const uid = `diff-view-${{idx}}-${{fileIdx}}`;
-                                let diffContent = '';
+                                const uid = `diff-${{idx}}-${{fIdx}}`;
+                                let diffHtml = '';
                                 let btnHtml = '';
 
                                 if (ch.diff) {{
                                     btnHtml = `<button class="btn-toggle-diff" onclick="event.stopPropagation(); toggleDiff('${{uid}}')">Ver Diff</button>`;
-                                    const safeDiff = escapeHtml(ch.diff);
-                                    
-                                    // Highlight do termo buscado no Diff (opcional, simples)
-                                    // Apenas renderização segura
-                                    const lines = safeDiff.split(/\\r?\\n/).map(l => {{
-                                        let cls = 'diff-info';
-                                        if(l.startsWith('+') && !l.startsWith('+++')) cls = 'diff-add';
-                                        else if(l.startsWith('-') && !l.startsWith('---')) cls = 'diff-del';
-                                        return `<span class="${{cls}}">${{l}}</span>`;
-                                    }}).join('');
-                                    diffContent = `<div id="${{uid}}" class="diff-viewer">${{lines}}</div>`;
-                                }} else {{
-                                    diffContent = `<div class="diff-viewer" id="${{uid}}"><div class="no-diff-msg">Diff não disponível (Use --show-diff para carregar)</div></div>`;
+                                    const sideBySide = renderSideBySide(ch.diff);
+                                    diffHtml = `<div id="${{uid}}" class="diff-container" onclick="event.stopPropagation()">${{sideBySide}}</div>`;
                                 }}
 
                                 return `
-                                <div class="file-entry" onclick="event.stopPropagation()">
-                                    <div class="file-header">
-                                        <div>
-                                            <span class="change-tag ${{tagClass}}">${{ch.type}}</span>
-                                            <span class="file-path">${{escapeHtml(ch.path)}}</span>
-                                        </div>
+                                <div class="file-entry">
+                                    <div class="file-header" onclick="event.stopPropagation()">
+                                        <div><span class="change-tag ${{tagClass}}">${{ch.type}}</span> <span class="file-path">${{escapeHtml(ch.path)}}</span></div>
                                         ${{btnHtml}}
                                     </div>
-                                    ${{diffContent}}
+                                    ${{diffHtml}}
                                 </div>`;
                             }}).join('');
-                            changesHtml = `<div class="details-content"><strong>Arquivos alterados:</strong><br><br>${{items}}</div>`;
+                            contentHtml = `<div class="details-content">${{items}}</div>`;
+                        }} else {{
+                            contentHtml = '<div class="details-content" style="color:#666; padding-left:20px;">Nenhum arquivo corresponde ao filtro.</div>';
                         }}
-                    }} 
+                    }} else {{
+                        contentHtml = '<div class="details-content" style="color:#666; padding-left:20px;">Nenhuma alteração registrada ou arquivos vazios.</div>';
+                    }}
 
-                    trDetails.innerHTML = `<td colspan="5" style="padding:0; border:none;">${{changesHtml}}</td>`;
-
-                    tableBody.appendChild(trMain);
-                    tableBody.appendChild(trDetails);
+                    trDetails.innerHTML = `<td colspan="5" style="padding:0; border:none;">${{contentHtml}}</td>`;
+                    tableBody.append(trMain, trDetails);
                 }});
 
-                entriesInfo.innerText = `Página ${{currentPage}} de ${{totalPages}}`;
-                renderPagination(totalPages);
+                entriesInfo.innerText = `Página ${{currentPage}} de ${{Math.ceil(filteredCommits.length/itemsPerPage) || 1}}`;
+                renderPagination(Math.ceil(filteredCommits.length/itemsPerPage) || 1);
             }}
 
             function renderPagination(totalPages) {{
                 pgControls.innerHTML = '';
-                const createBtn = (lbl, page) => {{
-                    const btn = document.createElement('button');
-                    btn.className = `page-btn ${{page === currentPage ? 'active' : ''}}`;
-                    btn.innerText = lbl;
-                    btn.onclick = () => {{ currentPage = page; renderTable(); }};
-                    return btn;
-                }};
-                if (currentPage > 1) pgControls.appendChild(createBtn('‹', currentPage - 1));
-                if (currentPage < totalPages) pgControls.appendChild(createBtn('›', currentPage + 1));
+                const btnPrev = document.createElement('button');
+                btnPrev.className = 'page-btn'; btnPrev.innerText = '‹';
+                btnPrev.onclick = () => {{ currentPage--; renderTable(); }};
+                if(currentPage===1) btnPrev.disabled = true;
+                
+                const btnNext = document.createElement('button');
+                btnNext.className = 'page-btn'; btnNext.innerText = '›';
+                btnNext.onclick = () => {{ currentPage++; renderTable(); }};
+                if(currentPage===totalPages) btnNext.disabled = true;
+
+                pgControls.append(btnPrev, btnNext);
             }}
 
-            // Lógica de Filtro Unificada
             function applyFilters() {{
                 const qM = searchMeta.value.toLowerCase();
                 const qF = searchFiles.value.toLowerCase();
-                currentFileFilter = qF; // Atualiza global para o render usar
+                currentFileFilter = qF;
 
                 filteredCommits = COMMITS.filter(c => {{
-                    // 1. Filtro de Metadados (Hash, Autor, Msg)
-                    const matchMeta = !qM || 
-                        (c.sha||'').includes(qM) || 
-                        (c.author||'').toLowerCase().includes(qM) || 
-                        (c.message||'').toLowerCase().includes(qM);
-
-                    // 2. Filtro de Arquivos (Path, Type, Diff)
-                    // O commit é mostrado se TIVER pelo menos um arquivo que bata com o filtro
+                    const matchMeta = !qM || (c.sha||'').includes(qM) || (c.author||'').toLowerCase().includes(qM) || (c.message||'').toLowerCase().includes(qM);
+                    if (c.fast_mode_skipped) return matchMeta;
+                    
                     let matchFiles = true;
                     if (qF) {{
-                        if (c.changes && c.changes.length > 0) {{
-                            matchFiles = c.changes.some(ch => matchFile(ch, qF));
-                        }} else if (c.files && c.files.length > 0) {{
-                            // Fallback se não tiver changes estruturado
-                            matchFiles = c.files.some(f => (f.path||'').toLowerCase().includes(qF));
-                        }} else {{
-                            matchFiles = false;
-                        }}
+                        matchFiles = c.changes ? c.changes.some(ch => ch.path.toLowerCase().includes(qF)) : false;
                     }}
-
                     return matchMeta && matchFiles;
                 }});
-
                 currentPage = 1;
                 renderTable();
             }}
@@ -4425,10 +4417,14 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
     intel_path = os.path.join(outdir, "_files", "intelligence.json")
     intel_logs = []
     
+    # Tenta carregar URL remota para passar ao HTML posteriormente
+    remote_url_found = ""
     if os.path.exists(intel_path):
         try:
             with open(intel_path, 'r', encoding='utf-8') as f:
-                intel_logs = json.load(f).get("logs", [])
+                data_intel = json.load(f)
+                intel_logs = data_intel.get("logs", [])
+                remote_url_found = data_intel.get("remote_url", "")
             info(f"Logs carregados: {len(intel_logs)} commits disponíveis.")
         except: pass
 
@@ -4461,20 +4457,23 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                 "parents": [log_entry.get("old_sha")] if log_entry.get("old_sha") and log_entry.get("old_sha") != "0" * 40 else [],
                 "files": [], 
                 "changes": [],
-                "file_count": 0
+                "file_count": 0,
+                "fast_mode_skipped": False # Flag padrão para o frontend
             }
 
-            # Lógica de Otimização (Fast Mode)
-            # Se show_diff=True, força 'heavy_analysis' nos primeiros commits ou se full_history for True
+            # --- Lógica de Otimização (Fast Mode) ---
+            # Se full_history for False E passados dos 20 primeiros commits, ativa o Fast Mode.
+            # Isso evita baixar milhares de objetos para commits antigos.
             heavy_analysis = True
             if not full_history and index >= 20:
                 heavy_analysis = False
             
             if not heavy_analysis:
-                commit_data["changes"] = [] 
-                commit_data["message"] += "\n - [INFO] Detalhes omitidos (Modo Rápido: utilize --full-history para obter todos os resultados)."
+                commit_data["fast_mode_skipped"] = True
+                commit_data["message"] += " [FAST MODE: Detalhes omitidos]"
                 return commit_data
 
+            # Se for heavy analysis, prossegue com download e diff
             ok, raw = fetch_object_raw(base_git_url, sha, proxies=proxies)
             
             if ok:
@@ -4488,7 +4487,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                         # Pega arquivos atuais
                         current_files_map = get_tree_files_cached(meta.get("tree"))
                         
-                        # Pega arquivos do pai
+                        # Pega arquivos do pai para calcular diff
                         parent_files_map = {}
                         parents = meta.get("parents", [])
                         if not parents and log_entry.get("old_sha") and log_entry.get("old_sha") != "0"*40:
@@ -4507,7 +4506,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
 
                         changes = []
                         
-                        # Lógica de Diff
+                        # Detectar Modificados e Adicionados
                         for path, sha_now in current_files_map.items():
                             sha_old = parent_files_map.get(path)
                             
@@ -4549,7 +4548,8 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                 "error": f"Worker Crash: {str(e)}",
                 "author": log_entry.get("author", "?"),
                 "date": log_entry.get("date", "?"),
-                "message": "Erro no processamento deste commit."
+                "message": "Erro no processamento deste commit.",
+                "fast_mode_skipped": False
             }
 
     # --- EXECUÇÃO PARALELA SEGURA ---
@@ -4575,8 +4575,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                         all_commits_out.append(res)
                         if res.get('sha'): processed_shas.add(res['sha'])
                 except Exception as e:
-                    # Se a thread explodir, logamos e continuamos
-                    print(f"\n[!] Erro fatal em worker: {e}")
+                    pass # Erros de thread já tratados internamente
         print("") 
 
     def parse_date_sort(c):
@@ -4585,7 +4584,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
 
     all_commits_out.sort(key=parse_date_sort, reverse=True)
 
-    # Fallback Crawling (Caso não existam logs)
+    # Fallback Crawling (Caso não existam logs ou sejam insuficientes)
     if len(all_commits_out) == 0:
         info("Reconstrução manual (Graph Crawling)...")
         candidate_shas = find_candidate_shas(base_git_url, proxies=proxies)
@@ -4602,6 +4601,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                 
                 meta = parse_commit_content(parsed_data[1])
                 files = []
+                # No modo crawling, pegamos arquivos apenas dos primeiros 20 para performance
                 if len(all_commits_out) < 20 and meta.get("tree"):
                     try: files = collect_files_from_tree(base_git_url, meta.get("tree"), proxies=proxies, ignore_missing=True)
                     except: pass
@@ -4609,7 +4609,8 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                 all_commits_out.append({
                     "sha": cur, "ok": True, "tree": meta.get("tree"), "parents": meta.get("parents", []),
                     "author": meta.get("author"), "date": meta.get("date"), "message": meta.get("message"),
-                    "files": files, "file_count": len(files), "changes": [], "source": "graph"
+                    "files": files, "file_count": len(files), "changes": [], "source": "graph",
+                    "fast_mode_skipped": False
                 })
                 for p in meta.get("parents", []):
                     if p not in visited: queue.append(p); visited.add(p)
@@ -4626,15 +4627,18 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
     generate_users_report(outdir, author_stats)
 
     # --- SALVAMENTO SEGURO ---
-    # Mesmo que vazio, o arquivo é salvo para que o report.html não quebre
     hist_json = os.path.join(outdir, "_files", "history.json")
     os.makedirs(os.path.dirname(hist_json), exist_ok=True)
     try:
         head_sha = all_commits_out[0]['sha'] if all_commits_out else "N/A"
         with open(hist_json, "w", encoding="utf-8") as f:
-            # Uso de default=str para garantir que objetos estranhos não quebrem o JSON
+            # Inclui remote_url no JSON para o HTML ler
             json.dump({
-                "base": base_git_url, "site_base": site_base, "head": head_sha, "commits": all_commits_out
+                "base": base_git_url, 
+                "site_base": site_base, 
+                "head": head_sha, 
+                "remote_url": remote_url_found,
+                "commits": all_commits_out
             }, f, indent=2, ensure_ascii=False, default=str)
         success(f"Histórico salvo: {hist_json} ({len(all_commits_out)} commits)")
     except Exception as e:
