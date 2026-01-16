@@ -15,7 +15,7 @@
 <br>
 
 
-### <a href="https://rodrigo.londrina.br/GITLEAK_EXPLORER/" target="_blank">Têm uma demonstração do relatório aqui</a>
+### <a href="http://demo-gitleak-explorer.rodrigo.londrina.br/" target="_blank">Têm uma demonstração do relatório aqui</a>
 
 
 <br>
@@ -401,6 +401,7 @@ Err.. ninguém contribuiu ainda :(
 ## :sparkling_heart: Support Me 
 <a href="https://www.buymeacoffee.com/rodrigoo" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-5C3317?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" target="_blank"></a>
 <!-- <a href="https://www.paypal.com/donate/?business=RNSQFDU927P8A&no_recurring=0&item_name=Every+penny+donated+is+an+investment+not+only+in+me+but+also+in+fulfilling+dreams+and+creating+opportunities.&currency_code=BRL" target="_blank"><img src="https://img.shields.io/badge/Paypal%20%28BRL%29-4287f5?style=for-the-badge&logo=paypal&logoColor=white" alt="Paypal" target="_blank"></a> -->
+
 
 
 
