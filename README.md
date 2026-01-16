@@ -113,7 +113,8 @@ Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e
 
 <details>
   <summary># Reconsrução de histórico</summary>
-  <img width="1433" height="897" alt="image" src="https://github.com/user-attachments/assets/487e9c8c-e0e7-454c-9120-9bd8a48fe230" />
+  <img width="1903" height="2486" alt="image" src="https://github.com/user-attachments/assets/e15d6ce6-8340-45e8-a230-8c15dc3058f9" />
+
 </details>
 
 <details>
@@ -281,6 +282,7 @@ python git_leak.py --serve --output-dir temp/arquivos/
 
 - Recuperar um objeto diretamente pelo SHA `--sha1`
 ```sql
+## Útil quando encontrado um arquivo de interesse na listagem de arquivos e o link para o objeto está acessível, --sha1 faz o download do arquivo e reconstrói seu conteúdo
 python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16
 # Pode ser usado em conjunto com --output-dir
 python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16 --output-dir temp/arquivos/
@@ -392,6 +394,7 @@ Err.. ninguém contribuiu ainda :(
 ## :sparkling_heart: Support Me 
 <a href="https://www.buymeacoffee.com/rodrigoo" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-5C3317?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" target="_blank"></a>
 <!-- <a href="https://www.paypal.com/donate/?business=RNSQFDU927P8A&no_recurring=0&item_name=Every+penny+donated+is+an+investment+not+only+in+me+but+also+in+fulfilling+dreams+and+creating+opportunities.&currency_code=BRL" target="_blank"><img src="https://img.shields.io/badge/Paypal%20%28BRL%29-4287f5?style=for-the-badge&logo=paypal&logoColor=white" alt="Paypal" target="_blank"></a> -->
+
 
 
 
