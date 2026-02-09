@@ -388,7 +388,7 @@ python git_leak.py exemplo.com --output-dir sua_pasta --proxy 127.0.0.1:8080 --n
 ## Efetua scan de alvos em um arquivo de texto, com full scan ativado, saindo para a pasta MEU_SCAN, utilizando Tor como proxy, 
 ## ativando 250 workers (threads), ativando scan por secrets (WIP), bruteforce nativo sem wordlist 
 ## com reconstrução completa de histórico de commits carregando as diffs e servindo em localhost no final.
-python git_leak.py --scan minha-lista.txt --full-scan --output-dir MEU_SCAN --proxy socks5h://127.0.0.1:9150  --workers 250 --secrets --bruteforce --full-history --show-diff --serve
+python git_leak.py --scan minha-lista.txt --full-scan --output-dir MEU_SCAN --proxy socks5h://127.0.0.1:9150 --workers 250 --secrets --bruteforce --full-history --show-diff --packfile download-unpack --serve
 ```
 
 
@@ -401,6 +401,7 @@ Err.. ninguém contribuiu ainda :(
 ## :sparkling_heart: Support Me 
 <a href="https://www.buymeacoffee.com/rodrigoo" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-5C3317?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" target="_blank"></a>
 <!-- <a href="https://www.paypal.com/donate/?business=RNSQFDU927P8A&no_recurring=0&item_name=Every+penny+donated+is+an+investment+not+only+in+me+but+also+in+fulfilling+dreams+and+creating+opportunities.&currency_code=BRL" target="_blank"><img src="https://img.shields.io/badge/Paypal%20%28BRL%29-4287f5?style=for-the-badge&logo=paypal&logoColor=white" alt="Paypal" target="_blank"></a> -->
+
 
 
 
