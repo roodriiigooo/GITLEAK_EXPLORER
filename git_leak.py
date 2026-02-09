@@ -56,6 +56,7 @@ import re
 import hashlib
 import random
 import difflib
+import glob
 
 try:
     from ds_store import DSStore
@@ -345,7 +346,7 @@ def parse_git_index(index_path):
 
 
 def compute_diff(base_url, sha_old, sha_new, proxies=None):
-    MAX_SIZE = 100 * 1024  # Limite de 100KB para processar diff
+    MAX_SIZE = 100 * 10240  # Limite de 1000KB para processar diff
     
     def get_content(sha):
         if not sha: return []
@@ -2278,56 +2279,103 @@ def handle_packfiles(mode: str, base_git_url: str, outdir: str, proxies: Optiona
     info(f"Iniciando manuseio de Packfiles em modo: {mode}")
     base = base_git_url.rstrip("/")
     if not base.endswith("/.git"): base += "/.git"
-    info_packs_url = base + "/objects/info/packs"
-    ok, data = http_get_bytes(info_packs_url, proxies=proxies)
+    
+    ok, data = http_get_bytes(base + "/objects/info/packs", proxies=proxies)
     found_packs = []
     if ok:
         try:
-            content = data.decode(errors='ignore')
-            for line in content.splitlines():
-                line = line.strip()
-                if not line: continue
-                parts = line.split()
-                for p in parts:
-                    if p.endswith(".pack"): found_packs.append(p)
-        except Exception as e:
-            warn(f"Erro info/packs: {e}")
+            content_text = data.decode(errors='ignore')
+            found_packs = [p for p in content_text.split() if p.endswith(".pack")]
+        except: pass
+            
     found_packs = list(set(found_packs))
-    info(f"Packfiles encontrados: {len(found_packs)}")
     results = []
+    
+    # Mapa de nomes via árvores do pack (Forense)
+    extended_map = {}
     pack_dir = os.path.join(outdir, ".git", "objects", "pack")
-    if mode in ["download", "download-unpack"]:
-        ensure_git_repo_dir(outdir);
-        os.makedirs(pack_dir, exist_ok=True)
+    
     for pname in found_packs:
-        url_pack = f"{base}/objects/pack/{pname}";
-        url_idx = url_pack.replace(".pack", ".idx")
-        status = "Listado";
-        local_pack_path = os.path.join(pack_dir, pname);
-        local_idx_path = local_pack_path.replace(".pack", ".idx")
+        url_pack = f"{base}/objects/pack/{pname}"
+        local_p = os.path.join(pack_dir, pname)
+        local_idx = local_p.replace(".pack", ".idx")
+        status = "Listado"; count = 0
+        
         if mode in ["download", "download-unpack"]:
-            info(f"Baixando {pname}...")
-            ok_p, _ = http_get_to_file(url_pack, local_pack_path, proxies=proxies)
-            ok_i, _ = http_get_to_file(url_idx, local_idx_path, proxies=proxies)
-            if ok_p:
-                status = "Baixado"
-                if mode == "download-unpack":
-                    info(f"Tentando descompactar {pname}...")
-                    try:
-                        with open(local_pack_path, "rb") as f_in:
-                            proc = subprocess.run(["git", "unpack-objects"], cwd=outdir, stdin=f_in,
-                                                  capture_output=True)
-                            if proc.returncode == 0:
-                                success(f"Descompactado: {pname}"); status = "Extraído (Unpacked)"
+            ensure_git_repo_dir(outdir)
+            os.makedirs(pack_dir, exist_ok=True)
+            
+            ok_p, err = http_get_to_file(url_pack, local_p, proxies=proxies)
+            if not ok_p:
+                fail(f"[!] ERRO DOWNLOAD: {pname} -> {err}")
+                status = "Falha Download"
+                continue
+            
+            http_get_to_file(url_pack.replace(".pack", ".idx"), local_idx, proxies=proxies)
+            status = "Baixado"
+            
+            if mode == "download-unpack":
+                with open(local_p, "rb") as f_in:
+                    subprocess.run(["git", "unpack-objects"], cwd=outdir, stdin=f_in, capture_output=True)
+
+                try:
+                    v_proc = subprocess.run(["git", "verify-pack", "-v", local_idx], capture_output=True, text=True)
+                    trees = re.findall(r"([0-9a-f]{40}) tree", v_proc.stdout)
+                    for t_sha in trees:
+                        ls = subprocess.run(["git", "ls-tree", "-r", t_sha], cwd=outdir, capture_output=True, text=True)
+                        for line in ls.stdout.splitlines():
+                            p = line.split(None, 3)
+                            if len(p) >= 4: extended_map[p[2]] = p[3]
+                except: pass
+
+                extract_root = os.path.join(outdir, "_files", "extracted_packs", pname.replace(".pack", ""))
+                blobs = re.findall(r"([0-9a-f]{40}) blob", v_proc.stdout)
+                
+                for s in blobs:
+                    c_proc = subprocess.run(["git", "cat-file", "-p", s], cwd=outdir, capture_output=True)
+                    if c_proc.returncode == 0:
+                        try:
+                            if s in extended_map:
+                                fpath = os.path.join(extract_root, "named_restore", extended_map[s])
                             else:
-                                fail(f"Falha unpack {pname}"); status = "Falha na Extração"
-                    except Exception as e:
-                        fail(f"Erro exec: {e}"); status = "Erro (Execução)"
-            else:
-                fail(f"Falha ao baixar pack: {pname}"); status = "Falha Download"
-        results.append({"name": pname, "url_pack": url_pack, "status": status})
+                                fpath = os.path.join(extract_root, "no_name_restore", f"recovered_{s[:8]}")
+                            
+                            os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                            
+                            with open(fpath, "wb") as bf:
+                                bf.write(c_proc.stdout)
+                            count += 1
+                        except OSError as e:
+                            warn(f"PULADO: Erro de escrita no arquivo {s[:8]} ({e}). Verifique caracteres inválidos.")
+                            continue
+                        except Exception as e:
+                            warn(f"PULADO: Erro inesperado ao restaurar {s[:8]}: {e}")
+                            continue
+                
+                if count > 0:
+                    success(f"Pack {pname}: {count} arquivos restaurados fisicamente.")
+                    status = "Extraído e Restaurado"
+                else:
+                    fail(f"[!] ALERTA: Pack {pname} processado, mas nenhum arquivo extraído.")
+                    status = "Falha na Extração"
+        
+        if "unpack" in mode and count > 0:
+            folder_to_copy = os.path.abspath(os.path.join(outdir, "_files", "extracted_packs", pname.replace(".pack", "")))
+        else:
+            folder_to_copy = os.path.abspath(pack_dir)
+
+        results.append({
+            "name": pname, 
+            "url_pack": url_pack, 
+            "status": status, 
+            "count": count,
+            "mode": mode,
+            "local_folder": folder_to_copy.replace("\\", "/"),
+            "local_url": f"file://{os.path.abspath(local_p)}" if os.path.exists(local_p) else None
+        })
+
     os.makedirs(os.path.join(outdir, "_files"), exist_ok=True)
-    with open(os.path.join(outdir, "_files", "packfiles.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(outdir, "_files", "packfiles.json"), "w") as f:
         json.dump(results, f, indent=2)
     return results
 
@@ -2962,22 +3010,34 @@ def generate_unified_report(outdir: str, base_url: str):
     if packs:
         pack_list_items = ""
         for p in packs:
-            local_href = f"_files/packs/{p['name']}"
-            
             st = p.get('status', '')
-            st_style = "color: var(--text-secondary);"
-            if "Baixado" in st or "Extraído" in st:
-                st_style = "color: var(--success);"
-            elif "Falha" in st:
-                st_style = "color: var(--danger);"
+            name = p.get('name', 'pack')
+            mode_used = p.get('mode', '')
+            remote_url = p.get('url_pack', '')
+            folder_path = p.get('local_folder', '')
+
+            if "Listado" in st or mode_used == "list":
+                action_html = f"""
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 5px;">
+                    Apenas listado, link direto: 
+                    <a href="{remote_url}" target="_blank" class="btn" style="padding: 2px 8px; background: var(--bg-hover); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 4px; text-decoration: none; font-size: 0.7rem; margin-left: 5px;">Baixar .pack ↗</a>
+                </div>"""
+            
+            else:
+                action_html = f"""
+                <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+                    <button onclick="copyPath('{folder_path}', this)" class="btn" style="padding: 4px 10px; font-size: 0.7rem; background: var(--accent-color); color: #fff; border: none; border-radius: 4px; cursor: pointer; transition: 0.2s;">
+                        Copiar Caminho da Pasta
+                    </button>
+                    <span class="copy-badge" style="font-size: 0.65rem; color: var(--success); display: none; font-weight: bold;">✓ COPIADO!</span>
+                </div>"""
 
             pack_list_items += f"""
-            <li style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
-                <a href="{local_href}" download class="mono" style="text-decoration:none; color: var(--accent-color); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 75%;" title="Baixar {p['name']}">{p['name']}</a>
-                <span style="{st_style} font-size: 0.75rem;">{st}</span>
-            </li>
-            """
-        pack_content = f"<ul style='list-style:none; padding:0; margin:0; max-height: 180px; overflow-y: auto;'>{pack_list_items}</ul>"
+            <li style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #fff; opacity: 0.9;">{name}</div>
+                {action_html}
+            </li>"""
+        pack_content = f"<ul style='list-style:none; padding:0; margin:0;'>{pack_list_items}</ul>"
 
     html = f"""
     <!DOCTYPE html>
@@ -3122,6 +3182,29 @@ def generate_unified_report(outdir: str, base_url: str):
                 <p>Git Leak Explorer • Pentest & Forensic Tool</p>
             </footer>
         </div>
+        <script>
+            function copyPath(text, btn) {{
+                navigator.clipboard.writeText(text).then(() => {{
+                    const badge = btn.nextElementSibling;
+                    const originalBg = btn.style.background;
+                    const originalText = btn.innerText;
+                    
+                    // Feedback Visual
+                    btn.innerText = "Caminho Copiado!";
+                    btn.style.background = "var(--success)";
+                    badge.style.display = "inline";
+                    
+                    setTimeout(() => {{
+                        btn.innerText = originalText;
+                        btn.style.background = originalBg;
+                        badge.style.display = "none";
+                    }}, 2000);
+                }}).catch(err => {{
+                    console.error('Erro ao copiar: ', err);
+                    alert('Caminho: ' + text); 
+                }});
+            }}
+        </script>
     </body>
     </html>
     """
@@ -3141,8 +3224,9 @@ def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
         warn(f"Não foi possível carregar index ({e}). Gerando HTML vazio."); entries = []
     
     site_base = normalize_site_base(base_git_url)
+    import glob
     rows = []
-    
+
     for e in entries:
         path = e.get("path", "")
         sha = e.get("sha1", "")
@@ -3150,17 +3234,27 @@ def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
         
         local_path_rel = path.lstrip("/")
         local_full_path = os.path.join(outdir, local_path_rel)
-        local_exists = os.path.exists(local_full_path)
         
-        local_url = f"file://{os.path.abspath(local_full_path)}"
+        pack_pattern = os.path.join(outdir, "_files", "extracted_packs", "*", "named_restore", local_path_rel)
+        pack_matches = glob.glob(pack_pattern)
         
+        local_exists = False
+        final_url = ""
+
+        if os.path.exists(local_full_path) and os.path.isfile(local_full_path):
+            local_exists = True
+            final_url = local_path_rel
+        elif pack_matches:
+            local_exists = True
+            final_url = os.path.relpath(pack_matches[0], outdir).replace("\\", "/")
+
         rows.append({
             "path": path,
             "remote_url": join_remote_file(site_base, path),
             "blob_url": make_blob_url_from_git(base_git_url, sha),
             "sha": sha,
             "local_exists": local_exists,
-            "local_url": local_url
+            "local_url": final_url
         })
 
     data_json = json.dumps(rows, ensure_ascii=False)
@@ -3301,6 +3395,23 @@ def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
             .page-btn.active {{ background: var(--accent-color); border-color: var(--accent-color); color: white; }}
             .page-btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
 
+            /* Estilos do Viewer */
+            #fileViewer {{
+                display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.9); z-index: 9999; padding: 2rem;
+            }}
+            .viewer-content {{
+                background: #0d1117; border: 1px solid #30363d; height: 100%;
+                border-radius: 8px; display: flex; flex-direction: column;
+            }}
+            .viewer-header {{
+                padding: 1rem; border-bottom: 1px solid #30363d; display: flex;
+                justify-content: space-between; align-items: center;
+            }}
+            .viewer-body {{ flex: 1; overflow: auto; padding: 1rem; background: #0d1117; }}
+            #viewerImage {{ display: none; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid #30363d; }}
+            #viewerCodeContainer {{ display: block; }}
+            
         </style>
     </head>
     <body>
@@ -3408,9 +3519,10 @@ def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
                     let localHtml = '';
                     if (r.local_exists) {{
                         // Tenta link local (pode ser bloqueado pelo browser), mas visualmente indica sucesso
-                        localHtml = `<a href="${{r.local_url}}" target="_blank" style="text-decoration:none"><span class="badge badge-success">✓ RESTORED</span></a>`;
+                        localHtml = `<button onclick="viewFile('${{r.local_url}}', '${{r.path}}')" class="badge badge-success" style="padding: 3px 8px; font-size: 0.7rem; background: var(--success); color: #000; font-weight: bold; border: none; border-radius: 4px; cursor: pointer;">Restaurado Local</button>`;
+                        // localHtml = `<a href="${{r.local_url}}" target="_blank" style="text-decoration:none"><span class="badge badge-success">Restaurado Local</span></a>`;
                     }} else {{
-                        localHtml = `<span class="badge badge-missing">✖ MISSING</span>`;
+                        localHtml = `<span class="badge badge-missing" style="opacity: 0.5; font-size: 0.7rem;">Apenas remoto</span>`;
                     }}
 
                     // Coluna 3: Remote
@@ -3501,9 +3613,76 @@ def make_listing_modern(json_file: str, base_git_url: str, outdir: str):
                 }});
             }});
 
+            async function viewFile(url, filename) {{
+                const viewer = document.getElementById('fileViewer');
+                const codeArea = document.getElementById('viewerCode');
+                const codeContainer = document.getElementById('viewerCodeContainer');
+                const imgArea = document.getElementById('viewerImage');
+                const title = document.getElementById('viewerTitle');
+                
+                title.innerText = filename;
+                viewer.style.display = 'block';
+                
+                // Reset visual
+                imgArea.style.display = 'none';
+                codeContainer.style.display = 'none';
+                codeArea.textContent = 'Carregando...';
+
+                const ext = filename.split('.').pop().toLowerCase();
+                const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico'].includes(ext);
+
+                if (isImage) {{
+                    imgArea.src = url;
+                    imgArea.style.display = 'block';
+                }} else {{
+                    codeContainer.style.display = 'block';
+                    try {{
+                        const response = await fetch(url);
+                        if (!response.ok) throw new Error('Falha ao ler arquivo.');
+                        const text = await response.text();
+                        
+                        codeArea.textContent = text;
+                        
+                        // Tenta aplicar o highlight, se falhar, mantém texto plano
+                        try {{
+                            const langMap = {{ 'cs': 'csharp', 'php': 'php', 'py': 'python', 'js': 'javascript', 'json': 'json', 'env': 'bash' }};
+                            codeArea.className = `language-${{langMap[ext] || 'none'}}`;
+                            if (window.Prism) Prism.highlightElement(codeArea);
+                        }} catch (pErr) {{
+                            console.warn("Prism falhou, exibindo texto plano:", pErr);
+                            codeArea.className = 'language-none';
+                        }}
+                    }} catch (err) {{
+                        codeArea.textContent = 'Erro ao carregar conteúdo: ' + err.message;
+                    }}
+                 }}
+            }}
+
+            function closeViewer() {{
+                document.getElementById('fileViewer').style.display = 'none';
+            }}
+
             // Init
             render();
         </script>
+        <div id="fileViewer">
+            <div class="viewer-content">
+                <div class="viewer-header">
+                    <span id="viewerTitle" class="mono"></span>
+                    <span class="btn-close" onclick="closeViewer()">&times;</span>
+                </div>
+                <div class="viewer-body">
+                    <img id="viewerImage" src="" alt="Preview">
+                    <div id="viewerCodeContainer">
+                        <pre><code id="viewerCode" class="language-none"></code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-csharp.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-php.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
     </body>
     </html>
     """
@@ -4760,7 +4939,9 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
         brute_force_scan(base_url, output_dir, wordlist_path=args.wordlist, proxies=proxies)
 
     # 3. Reports & Reconstruction
-    handle_packfiles('list', base_url, output_dir, proxies=proxies)
+    if args.packfile:
+        handle_packfiles(args.packfile, base_url, output_dir, proxies=proxies)
+    
     make_listing_modern(index_json, base_url, output_dir)
     
     # --- RECONSTRUÇÃO DE HISTÓRICO ---
@@ -4892,8 +5073,6 @@ def main():
             # 2. Roteamento de Ações
             if args.detect_hardening:
                 detect_hardening(target_url, target_outdir, proxies=proxies)
-            elif args.packfile:
-                handle_packfiles(args.packfile, target_url, target_outdir, proxies=proxies)
             elif args.blind:
                 blind_recovery(target_url, target_outdir, args.output_index, proxies=proxies)
             elif args.sha1:
