@@ -2364,13 +2364,19 @@ def handle_packfiles(mode: str, base_git_url: str, outdir: str, proxies: Optiona
         else:
             folder_to_copy = os.path.abspath(pack_dir)
 
+        pname_clean = pname.replace(".pack", "")
+        if "unpack" in mode and count > 0:
+            rel_folder = f"_files/extracted_packs/{pname_clean}"
+        else:
+            rel_folder = ".git/objects/pack"
+
         results.append({
             "name": pname, 
             "url_pack": url_pack, 
             "status": status, 
             "count": count,
             "mode": mode,
-            "local_folder": folder_to_copy.replace("\\", "/"),
+            "local_folder_rel": rel_folder,
             "local_url": f"file://{os.path.abspath(local_p)}" if os.path.exists(local_p) else None
         })
 
@@ -2754,7 +2760,7 @@ def generate_bruteforce_report(findings, outpath):
 def generate_unified_report(outdir: str, base_url: str):
     info("Gerando Dashboard Unificado (report.html)...")
     files_dir = os.path.join(outdir, "_files")
-    
+    abs_base_path = os.path.abspath(outdir).replace("\\", "/")
     # Helper para carregar JSON com segurança e UTF-8 explícito
     def safe_load_json(filename, default_val):
         path = os.path.join(files_dir, filename)
@@ -3012,29 +3018,36 @@ def generate_unified_report(outdir: str, base_url: str):
         for p in packs:
             st = p.get('status', '')
             name = p.get('name', 'pack')
-            mode_used = p.get('mode', '')
             remote_url = p.get('url_pack', '')
-            folder_path = p.get('local_folder', '')
+            mode_used = p.get('mode', '')
+            rel_path = p.get('local_folder_rel', '')
+            cnt = p.get('count', 0)
+
+            if mode_used == "download-unpack":
+                cnt_color = "var(--success)" if cnt > 0 else "#f87171"
+                cnt_info = f"<b>{cnt}</b> arquivos extraídos" if cnt > 0 else "Nenhum arquivo restaurado (Verificar integridade)"
+            else:
+                cnt_color = "var(--warning)"
+                cnt_info = "Execução em modo list, para extrair os arquivos use: download-unpack"
 
             if "Listado" in st or mode_used == "list":
                 action_html = f"""
                 <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 5px;">
-                    Apenas listado, link direto: 
-                    <a href="{remote_url}" target="_blank" class="btn" style="padding: 2px 8px; background: var(--bg-hover); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 4px; text-decoration: none; font-size: 0.7rem; margin-left: 5px;">Baixar .pack ↗</a>
+                    Apenas listado (para restaurar use download ou donload-unpack), link direto: 
+                    <a href="{p.get('url_pack')}" target="_blank" class="btn" style="padding: 2px 8px; background: var(--bg-hover); color: var(--accent-color); border: 1px solid var(--border-color); border-radius: 4px; text-decoration: none; font-size: 0.7rem; margin-left: 5px;">Baixar .pack ↗</a>
                 </div>"""
-            
             else:
                 action_html = f"""
                 <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
-                    <button onclick="copyPath('{folder_path}', this)" class="btn" style="padding: 4px 10px; font-size: 0.7rem; background: var(--accent-color); color: #fff; border: none; border-radius: 4px; cursor: pointer; transition: 0.2s;">
-                        Copiar Caminho da Pasta
+                    <button onclick="handlePackAction('{rel_path}', this)" class="btn btn-pack-action" style="padding: 4px 10px; font-size: 0.7rem; background: var(--accent-color); color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                        Carregando...
                     </button>
-                    <span class="copy-badge" style="font-size: 0.65rem; color: var(--success); display: none; font-weight: bold;">✓ COPIADO!</span>
                 </div>"""
 
             pack_list_items += f"""
-            <li style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
-                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #fff; opacity: 0.9;">{name}</div>
+            <li style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #fff; opacity: 0.9; margin-bottom: 4px;">{name}</div>
+                <div style="font-size: 0.75rem; color: {cnt_color}; margin-bottom: 6px;">{cnt_info}</div>
                 {action_html}
             </li>"""
         pack_content = f"<ul style='list-style:none; padding:0; margin:0;'>{pack_list_items}</ul>"
@@ -3204,6 +3217,58 @@ def generate_unified_report(outdir: str, base_url: str):
                     alert('Caminho: ' + text); 
                 }});
             }}
+            function copyDynamicPath(relPath, btn) {{
+                let currentPath = window.location.pathname;
+                let dirPath = currentPath.substring(0, currentPath.lastIndexOf('/'));
+                if (dirPath.startsWith('/') && dirPath.includes(':')) {{
+                    dirPath = dirPath.substring(1);
+                }}
+                dirPath = decodeURIComponent(dirPath);
+                
+                let fullPath = dirPath + '/' + relPath;
+                let finalSystemPath = fullPath.split('/').join('\\\\');
+
+                navigator.clipboard.writeText(finalSystemPath).then(() => {{
+                    const originalText = btn.innerText;
+                    btn.innerText = "Caminho Copiado!";
+                    btn.style.background = "#10b981";
+                    
+                    setTimeout(() => {{
+                        btn.innerText = originalText;
+                        btn.style.background = "";
+                    }}, 2000);
+                }});
+            }}
+            const ABS_BASE_PATH = "{abs_base_path}";
+            const isServed = window.location.protocol.startsWith('http');
+            function handlePackAction(relPath, btn) {{
+                if (isServed) {{
+                    window.open(relPath + '/', '_blank');
+                }} else {{
+                    let fullPath = ABS_BASE_PATH + '/' + relPath;
+                    let finalSystemPath = fullPath.split('/').join('\\\\');
+
+                    navigator.clipboard.writeText(finalSystemPath).then(() => {{
+                        const originalText = btn.innerText;
+                        
+                        btn.innerText = "Caminho Copiado!";
+                        btn.style.backgroundColor = "var(--success)";
+                        
+                        setTimeout(() => {{
+                            btn.innerText = originalText;
+                            btn.style.backgroundColor = "var(--accent-color)";
+                        }}, 2000);
+                    }}).catch(err => {{
+                        console.error('Erro ao copiar:', err);
+                        alert('Caminho: ' + finalSystemPath);
+                    }});
+                }}
+            }}
+            document.addEventListener('DOMContentLoaded', () => {{
+                document.querySelectorAll('.btn-pack-action').forEach(btn => {{
+                    btn.innerText = isServed ? "Abrir Pasta ↗" : "Copiar Caminho Local";
+                }});
+            }});
         </script>
     </body>
     </html>
@@ -4858,39 +4923,31 @@ def scan_urls(file_path: str):
             print(f"[X] Erro: {u}")
 
 
-def serve_dir(path: str, port: int = 8000, open_file="index.html"):
+def serve_dir(directory, port=8000, open_file="index.html"):
     import http.server
     import socketserver
     import webbrowser
 
-    if not path or not os.path.isdir(path):
-        fail(f"Diretório inválido: {path}")
-        return
-
-    os.chdir(path)
+    os.chdir(directory)
     
-    Handler = http.server.SimpleHTTPRequestHandler
-    socketserver.TCPServer.allow_reuse_address = True
-    
-    bind_address = "127.0.0.1"
-    url = f"http://{bind_address}:{port}/{open_file}"
+    class SmartIndexHandler(http.server.SimpleHTTPRequestHandler):
+        def send_head(self):
+            if self.path == '/' or self.path.startswith('/index.html'):
+                self.index_pages = ['index.html']
+            else:
+                self.index_pages = [] 
+            return super().send_head()
 
     try:
-        with socketserver.TCPServer((bind_address, port), Handler) as httpd:
-            print(f"\n[*] Dashboard Ativo!")
-            print(f"    -> Raiz: {path}")
-            print(f"    -> URL:  {url}")
-            print(f"[*] Pressione CTRL+C para encerrar.")
-            
-            try:
-                webbrowser.open(url)
-            except: pass
-
+        socketserver.TCPServer.allow_reuse_address = True
+        with socketserver.TCPServer(("", port), SmartIndexHandler) as httpd:
+            url = f"http://localhost:{port}/{open_file}"
+            success(f"Servidor ativo em: http://localhost:{port}")
+            info("Pressione Ctrl+C para encerrar.")
+            webbrowser.open(url)
             httpd.serve_forever()
-    except OSError as e:
-        fail(f"Erro ao abrir porta {port}: {e}")
-    except KeyboardInterrupt:
-        print("\nServidor encerrado.")
+    except Exception as e:
+        fail(f"Erro ao iniciar servidor: {e}")
 
 
 def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dict] = None):
