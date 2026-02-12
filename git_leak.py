@@ -545,76 +545,70 @@ def recover_one_sha(base_git_url: str, sha: str, outdir: str, original_path: Opt
         return False
 
 
-def recover_stash_content(base_git_url: str, outdir: str, workers: int = 10, proxies: Optional[Dict] = None) -> Optional[str]:
+def recover_stash_content(base_git_url: str, outdir: str, workers: int = 10, proxies: Optional[Dict] = None, show_diff: bool = False) -> Optional[str]:
     stash_url = base_git_url.rstrip("/") + "/.git/refs/stash"
-    
     ok, data = http_get_bytes(stash_url, proxies=proxies)
-    if not ok:
-        return None
+    if not ok: return None
     
     stash_sha = data.decode(errors='ignore').strip()
-    if len(stash_sha) != 40:
-        return None
+    if len(stash_sha) != 40: return None
 
-    info(f"[!] STASH ENCONTRADO! SHA: {stash_sha}")
+    info(f"[!] STASH DETECTADO: {stash_sha}")
     
     ok_obj, raw_obj = fetch_object_raw(base_git_url, stash_sha, proxies=proxies)
-    if not ok_obj:
-        warn(f"Falha ao baixar objeto do Stash {stash_sha}")
-        return None
+    meta = {}
+    if ok_obj:
+        _, parsed = parse_git_object(raw_obj)
+        meta = parse_commit_content(parsed[1])
 
-    _, parsed = parse_git_object(raw_obj)
-    meta = parse_commit_content(parsed[1])
     tree_sha = meta.get("tree")
-    
-    if not tree_sha:
-        warn("Commit do Stash não possui Tree.")
-        return None
+    if not tree_sha: return None
 
-    info(f" -> Extraindo arquivos do Stash (Tree: {tree_sha})...")
-    
     stash_files = collect_files_from_tree(base_git_url, tree_sha, proxies=proxies, ignore_missing=True)
     
     if stash_files:
-        success(f"Recuperados {len(stash_files)} arquivos do Stash.")
-        
-        # --- Baixar conteúdo para visualização ---
-        info(" -> Baixando conteúdo do Stash para visualização...")
         enriched_stash = []
         
-        def fetch_stash_content(file_entry):
-            try:
-                # Usa compute_diff com sha_old=None para pegar o conteúdo completo como texto
-                content = compute_diff(base_git_url, None, file_entry['sha'], proxies=proxies)
-                return {
-                    "path": file_entry['path'], 
-                    "sha": file_entry['sha'], 
-                    "type": "STASHED",
-                    "diff": content # Aqui o conteúdo do arquivo
-                }
-            except:
-                return {"path": file_entry['path'], "sha": file_entry['sha'], "type": "STASHED", "diff": "[Erro download]"}
+        def fetch_stash_item(f_entry):
+            diff_content = None
+            if show_diff:
+                try:
+                    diff_content = compute_diff(base_git_url, None, f_entry['sha'], proxies=proxies)
+                except:
+                    diff_content = "[!] Erro ao processar conteúdo do Stash."
+            else:
+                diff_content = "[--show-diff não utilizado: Conteúdo omitido]"
 
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = [executor.submit(fetch_stash_content, f) for f in stash_files]
-            for future in as_completed(futures):
-                enriched_stash.append(future.result())
+            return {
+                "path": f_entry['path'], 
+                "sha1": f_entry['sha'], 
+                "type": "STASHED",
+                "diff": diff_content 
+            }
 
-        # Salva JSON Original (Backup)
+        if show_diff:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [executor.submit(fetch_stash_item, f) for f in stash_files]
+                for future in as_completed(futures): enriched_stash.append(future.result())
+        else:
+            for f in stash_files: enriched_stash.append(fetch_stash_item(f))
+
         stash_json_path = os.path.join(outdir, "_files", "stash.json")
-        output = {"entries": [{"path": f["path"], "sha1": f["sha"]} for f in stash_files]}
+        output = {
+            "metadata": {
+                "sha": stash_sha,
+                "author": meta.get("author", "Unknown"),
+                "date": meta.get("date", datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
+                "message": meta.get("message", "Git Stash Recovery"),
+            },
+            "entries": enriched_stash
+        }
+        
         with open(stash_json_path, "w", encoding="utf-8") as f:
-            json.dump(output, f, indent=2)
-
-        # Gera HTML Rico
-        stash_html_path = os.path.join(outdir, "stash.html")
-        generate_stash_html(enriched_stash, stash_html_path, normalize_site_base(base_git_url))
-        success(f"Relatório visual de Stash gerado: {stash_html_path}")
+            json.dump(output, f, indent=2, ensure_ascii=False)
             
         return stash_sha
-    else:
-        warn("Stash encontrado, mas a árvore de arquivos estava vazia ou inacessível.")
-        return stash_sha
+    return None
 
 
 def reconstruct_all(input_json: str, base_git_url: str, outdir: str, workers: int = 10):
@@ -2804,32 +2798,23 @@ def generate_unified_report(outdir: str, base_url: str):
 
     stash_section = ""
     if stash_entries:
-        stash_rows = ""
-        for e in stash_entries[:5]:
-            path = e.get('path', '')
-            sha = e.get('sha1', '')[:7]
-            stash_rows += f"""
-            <tr>
-                <td class="mono">{path}</td>
-                <td class="text-right"><a href="{make_blob_url_from_git(base_url, e.get('sha1', ''))}" target="_blank" class="link-icon">Ver Blob</a></td>
-            </tr>
-            """
-        
         stash_section = f"""
         <div class="card mb-4" style="border: 1px solid #f59e0b;">
             <div class="card-header d-flex justify-content-between" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
-                <span>💾 Git Stash Recuperado</span>
-                <span class="badge bg-warning text-dark">{len(stash_entries)} Arquivos</span>
+                <span>💾 Git Stash Detectado</span>
+                <span class="badge bg-warning text-dark">Prioridade Alta</span>
             </div>
             <div class="card-body">
-                <div class="alert-box" style="margin-bottom:15px; font-size:0.85rem; color:#ccc;">
-                    O Stash contém modificações que não foram commitadas. Examine estes arquivos com prioridade.
+                <p class="small" style="color:#e2e8f0; margin-bottom: 12px;">
+                    <strong>Atenção:</strong> Foram encontradas modificações pendentes no Stash. 
+                    Este conteúdo foi <strong>reconstruído e injetado no topo do Histórico Recente</strong> para facilitar a análise de alterações não commitadas.
+                </p>
+                <div class="alert-box" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom:15px;">
+                    <span class="small muted">Arquivos afetados: {len(stash_entries)}</span>
                 </div>
-                <table class="table-simple">
-                    {stash_rows}
-                </table>
-                <p class="text-center mt-2 small muted">... e mais {max(0, len(stash_entries) - 5)} arquivos.</p>
-                <a href="stash.html" class="btn btn-outline w-100" style="color: #f59e0b; border-color: #f59e0b;">Visualizar Modificações em Stash</a>
+                <a href="history.html" class="btn btn-warning w-100" style="background:#f59e0b; color:#000; font-weight:bold; border:none;">
+                    Investigar Alterações na Timeline
+                </a>
             </div>
         </div>
         """
@@ -2875,25 +2860,28 @@ def generate_unified_report(outdir: str, base_url: str):
     # --- SEÇÃO DE HISTÓRICO ---
     hist_rows = ""
     if commits:
-        for c in commits[:5]:
-            # Proteção extra contra mensagens que quebram HTML
+        for c in commits[:6]:
+            is_s = c.get('is_stash', False)
+            
+            sha_color = "#f59e0b" if is_s else "var(--hash-color)"
+            sha_display = "STASH" if is_s else c.get('sha', '')[:7]
+            
             raw_msg = c.get('message', '')
             if not raw_msg: raw_msg = "Sem mensagem"
             msg = raw_msg.splitlines()[0][:50]
             msg = msg.replace("<", "&lt;").replace(">", "&gt;")
             
-            sha = c.get('sha', '')[:7]
             date_str = str(c.get('date', '')).split(' ')[0]
             
+            badge_html = '<span class="badge bg-warning text-dark">STASH</span>' if is_s else f'<span class="badge bg-secondary">{date_str}</span>'
+            
             hist_rows += f"""
-            <tr>
-                <td class="mono"><span style="color:var(--hash-color)">{sha}</span></td>
-                <td>{msg}...</td>
-                <td class="text-right"><span class="badge bg-secondary">{date_str}</span></td>
+            <tr style="{'background: rgba(245, 158, 11, 0.05);' if is_s else ''}">
+                <td class="mono"><span style="color:{sha_color}; font-weight:bold;">{sha_display}</span></td>
+                <td style="{'color:#f59e0b; font-weight:500;' if is_s else ''}">{msg}...</td>
+                <td class="text-right">{badge_html}</td>
             </tr>
             """
-    else:
-        hist_rows = "<tr><td colspan='3' class='text-center muted'>Nenhum histórico recuperado ou erro ao carregar JSON.</td></tr>"
     
     history_card = f"""
     <div class="card">
@@ -3884,6 +3872,19 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
             .page-btn {{ background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; }}
             .page-btn.active {{ background: var(--accent-color); border-color: var(--accent-color); color: white; }}
             
+            /* Estilo para Linha de Stash */
+            .commit-row.is-stash {{ 
+                border-left: 4px solid var(--warning) !important;
+                background: rgba(245, 158, 11, 0.05);
+            }}
+            .is-stash .hash-link {{ color: var(--warning) !important; }}
+            .is-stash .msg-text {{ color: var(--warning) !important; font-weight: bold; }}
+            
+            .tag-stashed {{
+                background: rgba(245, 158, 11, 0.2); 
+                color: var(--warning); 
+            }}
+
             @media (max-width: 900px) {{
                 .controls {{ grid-template-columns: 1fr; }}
                 .diff-table td {{ white-space: pre; }} 
@@ -3966,7 +3967,13 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
             }}
             
             function renderSideBySide(diffText) {{
-                if (!diffText || diffText.startsWith('[')) return `<div style="padding:10px; color:#666">${{escapeHtml(diffText)}}</div>`;
+                if (!diffText || diffText.startsWith('[') || diffText.includes('Irrecuperável')) {{
+                    return `
+                        <div style="padding: 20px; color: #f87171; background: rgba(239, 68, 68, 0.05); border: 1px dashed rgba(239, 68, 68, 0.3); margin: 10px; border-radius: 6px; font-family: sans-serif;">
+                            <strong style="display:block; margin-bottom:5px;">⚠️ Conteúdo Indisponível</strong>
+                            <span style="font-size: 0.85rem; opacity: 0.8;">${{escapeHtml(diffText)}}</span>
+                        </div>`;
+                }}
 
                 const lines = diffText.split(/\\r?\\n/);
                 let rows = '';
@@ -4022,10 +4029,6 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
                     `;
                 }}
 
-                // --- CORREÇÃO DO ESPAÇAMENTO ---
-                // Inserimos COLGROUP para forçar as larguras independentemente do colspan
-                // col 1 e 3: 35px (espaço suficiente para 3-4 dígitos sem quebrar, mas compacto)
-                // col 2 e 4: auto (dividindo o restante meio a meio)
                 return `
                 <table class="diff-table">
                     <colgroup>
@@ -4049,7 +4052,7 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
 
                 filteredCommits.slice(start, end).forEach((c, idx) => {{
                     const trMain = document.createElement('tr');
-                    trMain.className = 'commit-row';
+                    trMain.className = 'commit-row' + (c.is_stash ? ' is-stash' : '');
                     trMain.id = `row-${{idx}}`;
                     trMain.onclick = () => toggleDetails(idx);
 
@@ -4087,6 +4090,7 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
                                 if (ch.type === 'ADDED') tagClass = 'tag-added';
                                 else if (ch.type === 'MODIFIED') tagClass = 'tag-mod';
                                 else if (ch.type === 'DELETED') tagClass = 'tag-del';
+                                else if (ch.type === 'STASHED') tagClass = 'tag-stashed';
 
                                 const uid = `diff-${{idx}}-${{fIdx}}`;
                                 let diffHtml = '';
@@ -4660,9 +4664,8 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
     tree_cache = {}
     intel_path = os.path.join(outdir, "_files", "intelligence.json")
     intel_logs = []
-    
-    # Tenta carregar URL remota para passar ao HTML posteriormente
     remote_url_found = ""
+
     if os.path.exists(intel_path):
         try:
             with open(intel_path, 'r', encoding='utf-8') as f:
@@ -4683,8 +4686,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
             f_map = {f['path']: f['sha'] for f in files}
             tree_cache[tree_sha] = f_map
             return f_map
-        except:
-            return {}
+        except: return {}
 
     def process_log_entry(log_entry, index):
         try:
@@ -4692,34 +4694,18 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
             if not sha: return None
             
             commit_data = {
-                "sha": sha, 
-                "ok": True, 
-                "author": log_entry.get("author"), 
-                "date": log_entry.get("date"),
-                "message": log_entry.get("message"), 
-                "source": "log",
-                "parents": [log_entry.get("old_sha")] if log_entry.get("old_sha") and log_entry.get("old_sha") != "0" * 40 else [],
-                "files": [], 
-                "changes": [],
-                "file_count": 0,
-                "fast_mode_skipped": False # Flag padrão para o frontend
+                "sha": sha, "ok": True, "author": log_entry.get("author"), "date": log_entry.get("date"),
+                "message": log_entry.get("message"), "source": "log",
+                "parents": [log_entry.get("old_sha")] if log_entry.get("old_sha") and log_entry.get("old_sha") != "0"*40 else [],
+                "files": [], "changes": [], "file_count": 0, "fast_mode_skipped": False
             }
 
-            # --- Lógica de Otimização (Fast Mode) ---
-            # Se full_history for False E passados dos 20 primeiros commits, ativa o Fast Mode.
-            # Isso evita baixar milhares de objetos para commits antigos.
-            heavy_analysis = True
-            if not full_history and index >= 20:
-                heavy_analysis = False
-            
+            heavy_analysis = True if (full_history or index < 20) else False
             if not heavy_analysis:
                 commit_data["fast_mode_skipped"] = True
-                commit_data["message"] += " [FAST MODE: Detalhes omitidos]"
                 return commit_data
 
-            # Se for heavy analysis, prossegue com download e diff
             ok, raw = fetch_object_raw(base_git_url, sha, proxies=proxies)
-            
             if ok:
                 is_valid, parsed_data = parse_git_object(raw)
                 if is_valid and parsed_data[0] == "commit":
@@ -4728,14 +4714,9 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                     if meta.get("date"): commit_data["date"] = meta.get("date")
 
                     if meta.get("tree"):
-                        # Pega arquivos atuais
                         current_files_map = get_tree_files_cached(meta.get("tree"))
-                        
-                        # Pega arquivos do pai para calcular diff
                         parent_files_map = {}
-                        parents = meta.get("parents", [])
-                        if not parents and log_entry.get("old_sha") and log_entry.get("old_sha") != "0"*40:
-                            parents = [log_entry.get("old_sha")]
+                        parents = meta.get("parents", []) or ([log_entry.get("old_sha")] if log_entry.get("old_sha") != "0"*40 else [])
                             
                         if parents:
                             p_ok, p_raw = fetch_object_raw(base_git_url, parents[0], proxies=proxies)
@@ -4748,157 +4729,95 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                         commit_data["files"] = [{"path": p, "sha": s} for p, s in current_files_map.items()]
                         commit_data["file_count"] = len(commit_data["files"])
 
-                        changes = []
-                        
-                        # Detectar Modificados e Adicionados
+                        # Lógica de detecção de alterações (Diff)
                         for path, sha_now in current_files_map.items():
                             sha_old = parent_files_map.get(path)
-                            
                             diff_text = None
-                            change_type = "MODIFIED"
-
                             if not sha_old:
                                 change_type = "ADDED"
-                                if show_diff:
-                                    try: diff_text = compute_diff(base_git_url, None, sha_now, proxies)
-                                    except: diff_text = "[Erro ao baixar diff]"
+                                if show_diff: diff_text = compute_diff(base_git_url, None, sha_now, proxies)
                             elif sha_old != sha_now:
                                 change_type = "MODIFIED"
-                                if show_diff:
-                                    try: diff_text = compute_diff(base_git_url, sha_old, sha_now, proxies)
-                                    except: diff_text = "[Erro ao baixar diff]"
-                            else:
-                                continue # Sem mudança
-
-                            changes.append({"path": path, "type": change_type, "diff": diff_text})
+                                if show_diff: diff_text = compute_diff(base_git_url, sha_old, sha_now, proxies)
+                            else: continue
+                            commit_data["changes"].append({"path": path, "type": change_type, "diff": diff_text})
                         
-                        # Detectar Deletados
-                        for path, sha_old in parent_files_map.items():
+                        for path in parent_files_map:
                             if path not in current_files_map:
-                                changes.append({"path": path, "type": "DELETED", "diff": None})
-                                
-                        commit_data["changes"] = changes
-            else:
-                commit_data["ok"] = False
-                commit_data["error"] = "Commit object not found"
-
+                                commit_data["changes"].append({"path": path, "type": "DELETED", "diff": None})
             return commit_data
-        
-        except Exception as e:
-            # Em caso de erro fatal na thread, retorna o erro sem quebrar o processo
-            return {
-                "sha": log_entry.get("sha", "unknown"),
-                "ok": False,
-                "error": f"Worker Crash: {str(e)}",
-                "author": log_entry.get("author", "?"),
-                "date": log_entry.get("date", "?"),
-                "message": "Erro no processamento deste commit.",
-                "fast_mode_skipped": False
-            }
+        except: return None
 
-    # --- EXECUÇÃO PARALELA SEGURA ---
+    # 2. Processamento dos logs de histórico comum
     if intel_logs:
-        current_workers = max(workers, 20)
         limit = min(len(intel_logs), max_commits)
-        info(f"Processando {limit} logs com {current_workers} threads (pode demorar)...")
-        
-        logs_to_process = intel_logs[:limit]
-        
-        with ThreadPoolExecutor(max_workers=current_workers) as executor:
-            futures = [executor.submit(process_log_entry, entry, i) for i, entry in enumerate(logs_to_process)]
-            completed_count = 0
-            total_futures = len(futures)
-            
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(process_log_entry, entry, i) for i, entry in enumerate(intel_logs[:limit])]
             for future in as_completed(futures):
-                completed_count += 1
-                if completed_count % 10 == 0:
-                    print(f"[*] Progresso: {completed_count}/{total_futures}...", end="\r")
-                try:
-                    res = future.result()
-                    if res: 
-                        all_commits_out.append(res)
-                        if res.get('sha'): processed_shas.add(res['sha'])
-                except Exception as e:
-                    pass # Erros de thread já tratados internamente
-        print("") 
+                res = future.result()
+                if res: 
+                    all_commits_out.append(res)
+                    processed_shas.add(res['sha'])
 
+    # 3. Ordenação Cronológica (Mais recentes primeiro)
     def parse_date_sort(c):
         try: return datetime.strptime(c.get("date", ""), '%Y-%m-%d %H:%M:%S')
         except: return datetime.min
 
     all_commits_out.sort(key=parse_date_sort, reverse=True)
 
-    # Fallback Crawling (Caso não existam logs ou sejam insuficientes)
-    if len(all_commits_out) == 0:
-        info("Reconstrução manual (Graph Crawling)...")
-        candidate_shas = find_candidate_shas(base_git_url, proxies=proxies)
-        queue = [c['sha'] for c in candidate_shas]
-        visited = set(queue)
-        
-        while queue and len(all_commits_out) < max_commits:
-            try:
-                cur = queue.pop(0)
-                ok, raw = fetch_object_raw(base_git_url, cur, proxies=proxies)
-                if not ok: continue
-                is_valid, parsed_data = parse_git_object(raw)
-                if not is_valid or parsed_data[0] != 'commit': continue
+    # 4. Injeção Prioritária do STASH no topo da listagem
+    stash_json_path = os.path.join(outdir, "_files", "stash.json")
+    if os.path.exists(stash_json_path):
+        try:
+            with open(stash_json_path, 'r', encoding='utf-8') as f:
+                s_data = json.load(f)
+                s_meta = s_data.get("metadata", {})
+                s_entries = s_data.get("entries", [])
                 
-                meta = parse_commit_content(parsed_data[1])
-                files = []
-                # No modo crawling, pegamos arquivos apenas dos primeiros 20 para performance
-                if len(all_commits_out) < 20 and meta.get("tree"):
-                    try: files = collect_files_from_tree(base_git_url, meta.get("tree"), proxies=proxies, ignore_missing=True)
-                    except: pass
-                
-                all_commits_out.append({
-                    "sha": cur, "ok": True, "tree": meta.get("tree"), "parents": meta.get("parents", []),
-                    "author": meta.get("author"), "date": meta.get("date"), "message": meta.get("message"),
-                    "files": files, "file_count": len(files), "changes": [], "source": "graph",
-                    "fast_mode_skipped": False
-                })
-                for p in meta.get("parents", []):
-                    if p not in visited: queue.append(p); visited.add(p)
-            except: pass
+                if s_entries:
+                    real_msg = s_meta.get("message", "").strip()
+                    display_msg = real_msg if real_msg else "Trabalho em Progresso (Sem descrição no Stash)"
+                    
+                    stash_commit = {
+                        "sha": s_meta.get("sha", "STASH_REF"),
+                        "ok": True,
+                        "is_stash": True,
+                        "author": s_meta.get("author", "Git Stash"),
+                        "date": s_meta.get("date", ""),
+                        "message": f"STASH: {display_msg}",
+                        "changes": s_entries,
+                        "source": "stash",
+                        "fast_mode_skipped": False
+                    }
+                    
+                    all_commits_out.insert(0, stash_commit)
+                    info(f"Stash injetado com sucesso no topo da timeline.")
+        except Exception as e:
+            warn(f"Erro ao injetar stash no histórico: {e}")
 
-    # Gera estatísticas de usuários
+    # 5. Geração de relatórios e exportação
     author_stats = {}
     for c in all_commits_out:
         auth = c.get("author")
-        if auth:
-            auth = auth.strip()
-            author_stats[auth] = author_stats.get(auth, 0) + 1
-    
+        if auth: author_stats[auth.strip()] = author_stats.get(auth.strip(), 0) + 1
     generate_users_report(outdir, author_stats)
 
-    # --- SALVAMENTO SEGURO ---
     hist_json = os.path.join(outdir, "_files", "history.json")
-    os.makedirs(os.path.dirname(hist_json), exist_ok=True)
     try:
         head_sha = all_commits_out[0]['sha'] if all_commits_out else "N/A"
         with open(hist_json, "w", encoding="utf-8") as f:
-            # Inclui remote_url no JSON para o HTML ler
             json.dump({
-                "base": base_git_url, 
-                "site_base": site_base, 
-                "head": head_sha, 
-                "remote_url": remote_url_found,
-                "commits": all_commits_out
+                "base": base_git_url, "site_base": site_base, "head": head_sha, 
+                "remote_url": remote_url_found, "commits": all_commits_out
             }, f, indent=2, ensure_ascii=False, default=str)
-        success(f"Histórico salvo: {hist_json} ({len(all_commits_out)} commits)")
-    except Exception as e:
-        fail(f"Falha CRÍTICA ao gravar history.json: {e}")
-        # Tenta salvar versão vazia para não quebrar o report final
-        with open(hist_json, "w", encoding="utf-8") as f:
-            json.dump({"commits": []}, f)
-        return
         
-    hist_html = os.path.join(outdir, "history.html")
-    try:
-        generate_history_html(hist_json, hist_html, site_base, base_git_url)
-        success(f"HTML do histórico gerado: {hist_html}")
+        generate_history_html(hist_json, os.path.join(outdir, "history.html"), site_base, base_git_url)
+        success(f"Timeline histórica gerada com {len(all_commits_out)} entradas.")
     except Exception as e:
-        fail(f"Erro ao gerar HTML do histórico: {e}")
+        fail(f"Erro ao persistir history.json: {e}")
 
+    # Retorno obrigatório do número total de commits processados
     return len(all_commits_out)
 
 
@@ -4985,7 +4904,13 @@ def process_pipeline(base_url: str, output_dir: str, args, proxies: Optional[Dic
     detect_hardening(base_url, output_dir, proxies=proxies)
     gather_intelligence(base_url, output_dir, proxies=proxies)
     
-    stash_sha = recover_stash_content(base_url, output_dir, workers=args.workers, proxies=proxies)
+    stash_sha = recover_stash_content(
+        base_url, 
+        output_dir, 
+        workers=args.workers, 
+        proxies=proxies, 
+        show_diff=args.show_diff
+    )
     if stash_sha:
         reconstruct_all(os.path.join(output_dir, "_files", "stash.json"), base_url, os.path.join(output_dir, "stash_restored"), workers=args.workers)
     
