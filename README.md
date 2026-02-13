@@ -231,6 +231,7 @@ Principais funcionalidades implementadas:
  - --no-random-agent     : desativa a rotação de User-Agents (Usa um fixo)
  - --secrets             : Executa scanner de regex/entropia em busca de chaves
  - --show-dif            : Baixa e exibe as diferenças (diffs) de código no histórico (Pode ser MUITO Lento)
+ - --local,              : Caminho completo da pasta do projeto local (ex: /home/user/app ou C:\Projeto\)
  - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
  
 
@@ -248,6 +249,14 @@ Executa todo o pipeline: baixa índice, verifica segurança, procura packfiles, 
 python git_leak.py http://exemplo.com
 # ou
 python git_leak.py http://exemplo.com/.git --default
+```
+
+Efetuar uma análise em uma pasta .git localmente: `--local`:
+```sql
+# Não é o propósito deste script, mas pode ser útil em caso de extração de arquivos expostos ou somente um teste local
+python git_leak.py --local c:\Projeto\Meu_Projeto
+# ou em conjunto com --output-dir para servir a saída em um diretório especifico
+python git_leak.py --local c:\Projeto\Meu_Projeto --serve --output-dir temp/arquivos/
 ```
 
 Modo Adicional `--full-scan`
@@ -391,6 +400,9 @@ python git_leak.py exemplo.com --output-dir sua_pasta --proxy 127.0.0.1:8080 --n
 python git_leak.py --scan minha-lista.txt --full-scan --output-dir MEU_SCAN --proxy socks5h://127.0.0.1:9150 --workers 250 --secrets --bruteforce --full-history --show-diff --packfile download-unpack --serve
 ```
 
+
+> [!TIP]
+> >  Ao analisar arquivos, principalemnte de pack files extraídas eu recomendo abrir a pasta dentro de uma IDE de sua preferencia, como o Visual Studio Code.
 
 
 
