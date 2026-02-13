@@ -1791,24 +1791,35 @@ def parse_git_log_file(file_path: str) -> List[Dict[str, Any]]:
     try:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             for line in f:
-                parts = line.strip().split("\t");
-                if len(parts) < 1: continue
-                meta = parts[0].split(" ");
-                message = parts[1] if len(parts) > 1 else ""
-                if len(meta) >= 4:
-                    old_sha = meta[0];
-                    new_sha = meta[1];
-                    ts = meta[-2];
-                    author_raw = " ".join(meta[2:-2])
+                if not line.strip(): continue
+                parts = line.strip().split("\t")
+                if len(parts) < 2: continue
+                
+                meta_info = parts[0].split(" ")
+                action_info = parts[1] 
+
+                if len(meta_info) >= 4:
+                    old_sha = meta_info[0]
+                    new_sha = meta_info[1]
+                    ts = meta_info[-2]
+                    author_raw = " ".join(meta_info[2:-2])
+                    
                     try:
                         dt = datetime.fromtimestamp(int(ts)).strftime('%Y-%m-%d %H:%M:%S')
                     except:
                         dt = ts
-                    entries.append(
-                        {"sha": new_sha, "old_sha": old_sha, "author": author_raw, "date": dt, "message": message,
-                         "source": "log"})
-    except:
-        pass
+                    
+                    entries.append({
+                        "sha": new_sha, 
+                        "old_sha": old_sha, 
+                        "author": author_raw, 
+                        "date": dt, 
+                        "message": action_info,
+                        "source": "reflog"
+                    })
+    except Exception as e:
+        print(f"[!] Erro ao analisar Reflog: {e}")
+        
     return entries[::-1]
 
 
@@ -2799,21 +2810,18 @@ def generate_unified_report(outdir: str, base_url: str):
     stash_section = ""
     if stash_entries:
         stash_section = f"""
-        <div class="card mb-4" style="border: 1px solid #f59e0b;">
-            <div class="card-header d-flex justify-content-between" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
-                <span>💾 Git Stash Detectado</span>
+        <div class="card mb-4" style="border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.02);">
+            <div class="card-header d-flex justify-content-between" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-bottom: 1px solid #f59e0b;">
+                <span>💾 Git Stash Recuperado</span>
                 <span class="badge bg-warning text-dark">Prioridade Alta</span>
             </div>
             <div class="card-body">
-                <p class="small" style="color:#e2e8f0; margin-bottom: 12px;">
-                    <strong>Atenção:</strong> Foram encontradas modificações pendentes no Stash. 
-                    Este conteúdo foi <strong>reconstruído e injetado no topo do Histórico Recente</strong> para facilitar a análise de alterações não commitadas.
+                <p class="small" style="margin-bottom: 15px;">
+                    <strong>{len(stash_entries)} arquivos</strong> com modificações pendentes foram detectados. 
+                    O conteúdo foi injetado no topo do histórico para análise de Diffs.
                 </p>
-                <div class="alert-box" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom:15px;">
-                    <span class="small muted">Arquivos afetados: {len(stash_entries)}</span>
-                </div>
-                <a href="history.html" class="btn btn-warning w-100" style="background:#f59e0b; color:#000; font-weight:bold; border:none;">
-                    Investigar Alterações na Timeline
+                <a href="history.html" class="btn btn-warning w-100" style="background:#f59e0b; color:#000; font-weight:bold; border:none; text-transform:uppercase;">
+                    Investigar Alterações no Histórico
                 </a>
             </div>
         </div>
@@ -2862,24 +2870,29 @@ def generate_unified_report(outdir: str, base_url: str):
     if commits:
         for c in commits[:6]:
             is_s = c.get('is_stash', False)
+            is_o = c.get('is_orphan', False)
             
-            sha_color = "#f59e0b" if is_s else "var(--hash-color)"
-            sha_display = "STASH" if is_s else c.get('sha', '')[:7]
+            sha_color = "#f59e0b" if is_s else ("#ef4444" if is_o else "var(--hash-color)")
+            sha_text = "STASH" if is_s else (c.get('sha', '')[:7] if not is_o else "REFLOG")
             
             raw_msg = c.get('message', '')
-            if not raw_msg: raw_msg = "Sem mensagem"
-            msg = raw_msg.splitlines()[0][:50]
-            msg = msg.replace("<", "&lt;").replace(">", "&gt;")
+            msg = (raw_msg.splitlines()[0][:50] if raw_msg else "Sem mensagem").replace("<", "&lt;")
             
-            date_str = str(c.get('date', '')).split(' ')[0]
+            # Badge de Status
+            if is_s:
+                badge = '<span class="badge bg-warning text-dark">STASH</span>'
+            elif is_o:
+                badge = '<span class="badge bg-danger">ORPHAN</span>'
+            else:
+                badge = f'<span class="badge bg-secondary">{str(c.get("date", "")).split(" ")[0]}</span>'
             
-            badge_html = '<span class="badge bg-warning text-dark">STASH</span>' if is_s else f'<span class="badge bg-secondary">{date_str}</span>'
-            
+            style = 'background: rgba(245, 158, 11, 0.05);' if is_s else ('background: rgba(239, 68, 68, 0.03);' if is_o else '')
+
             hist_rows += f"""
-            <tr style="{'background: rgba(245, 158, 11, 0.05);' if is_s else ''}">
-                <td class="mono"><span style="color:{sha_color}; font-weight:bold;">{sha_display}</span></td>
-                <td style="{'color:#f59e0b; font-weight:500;' if is_s else ''}">{msg}...</td>
-                <td class="text-right">{badge_html}</td>
+            <tr style="{style}">
+                <td class="mono"><span style="color:{sha_color}; font-weight:bold;">{sha_text}</span></td>
+                <td style="{'color:#f59e0b;' if is_s else ''}">{msg}...</td>
+                <td class="text-right">{badge}</td>
             </tr>
             """
     
@@ -3885,6 +3898,17 @@ def generate_history_html(in_json, out_html, site_base, base_git_url):
                 color: var(--warning); 
             }}
 
+            .commit-row.is-orphan {{ 
+                border-left: 4px solid var(--danger) !important;
+                background: rgba(239, 68, 68, 0.04); 
+            }}
+
+            .tag-orphan {{ 
+                background: rgba(239, 68, 68, 0.2); 
+                color: var(--danger); 
+                border: 1px solid rgba(239, 68, 68, 0.3);
+            }}
+
             @media (max-width: 900px) {{
                 .controls {{ grid-template-columns: 1fr; }}
                 .diff-table td {{ white-space: pre; }} 
@@ -4766,6 +4790,35 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
 
     all_commits_out.sort(key=parse_date_sort, reverse=True)
 
+    # Injeção de REFLOGS
+    if intel_logs:
+        orphan_count = 0
+        info("Analisando Reflog em busca de evidências suprimidas...")
+        
+        for entry in intel_logs:
+            sha = entry.get("sha")
+            if sha and sha not in processed_shas:
+                try:
+                    orphan_data = process_log_entry(entry, 0) 
+                    if orphan_data and orphan_data.get("ok"):
+                        orphan_data["is_orphan"] = True
+                        orphan_data["message"] = f"🕵️ REFLOG: {orphan_data['message']}"
+                        
+                        all_commits_out.append(orphan_data)
+                        processed_shas.add(sha)
+                        orphan_count += 1
+                except:
+                    pass
+        
+        if orphan_count > 0:
+            success(f"Recuperados {orphan_count} commits órfãos/suprimidos.")
+            all_commits_out.sort(key=parse_date_sort, reverse=True)
+            
+            stash_idx = next((i for i, c in enumerate(all_commits_out) if c.get('is_stash')), None)
+            if stash_idx is not None:
+                s_obj = all_commits_out.pop(stash_idx)
+                all_commits_out.insert(0, s_obj)
+
     # 4. Injeção Prioritária do STASH no topo da listagem
     stash_json_path = os.path.join(outdir, "_files", "stash.json")
     if os.path.exists(stash_json_path):
@@ -4795,7 +4848,7 @@ def reconstruct_history(input_json: str, base_git_url: str, outdir: str, max_com
                     info(f"Stash injetado com sucesso no topo da timeline.")
         except Exception as e:
             warn(f"Erro ao injetar stash no histórico: {e}")
-
+    
     # 5. Geração de relatórios e exportação
     author_stats = {}
     for c in all_commits_out:
