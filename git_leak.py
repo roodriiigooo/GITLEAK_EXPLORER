@@ -189,8 +189,9 @@ def normalize_url(url, proxies: Optional[Dict] = None):
         return url
     
     if os.path.isdir(url):
-        return f"local://{os.path.abspath(url).replace('\\', '/')}"
-
+        abs_path_clean = os.path.abspath(url).replace('\\', '/')
+        return f"local://{abs_path_clean}"
+    
     url = re.sub(r'/\.git(/.*)?$', '', url, flags=re.IGNORECASE).rstrip('/')
     if url.startswith(('http://', 'https://')):
         return url
