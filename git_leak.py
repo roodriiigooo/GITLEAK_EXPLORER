@@ -153,6 +153,18 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/88.0.4324.96 Chrome/88.0.4324.96 Safari/537.36"
 ]
 
+class LocalResponse:
+    """Simula um objeto requests.Response para leitura de arquivos locais."""
+    def __init__(self, content, status_code):
+        self.content = content
+        self.status_code = status_code
+    def raise_for_status(self):
+        if self.status_code != 200:
+            raise Exception(f"Erro Local: {self.status_code}")
+    @property
+    def text(self):
+        return self.content.decode(errors='ignore') if self.content else ""
+
 def get_random_headers() -> Dict[str, str]:
     if USE_RANDOM_AGENT:
         ua = random.choice(USER_AGENTS)
@@ -173,22 +185,34 @@ def get_random_headers() -> Dict[str, str]:
 
 def normalize_url(url, proxies: Optional[Dict] = None):
     url = url.strip()
-    url = re.sub(r'/\.git(/.*)?$', '', url, flags=re.IGNORECASE).rstrip('/')
+    if url.startswith("local://"):
+        return url
+    
+    if os.path.isdir(url):
+        return f"local://{os.path.abspath(url).replace('\\', '/')}"
 
+    url = re.sub(r'/\.git(/.*)?$', '', url, flags=re.IGNORECASE).rstrip('/')
     if url.startswith(('http://', 'https://')):
         return url
 
     print(f"[*] Detectando protocolo para {url}...")
     try:
         resp = requests.get(f"https://{url}", headers=get_random_headers(), timeout=5, verify=False, proxies=proxies)
-        print("    -> HTTPS detectado.")
         return f"https://{url}"
     except requests.RequestException:
-        print("    -> Falha no HTTPS. Usando HTTP.")
         return f"http://{url}"
 
-
 def http_get_bytes(url: str, timeout: int = 15, proxies: Optional[Dict] = None) -> Tuple[bool, bytes | str]:
+    if url.startswith("local://"):
+        path = url.replace("local://", "")
+        if os.path.exists(path) and os.path.isfile(path):
+            try:
+                with open(path, "rb") as f:
+                    return True, f.read()
+            except Exception as e:
+                return False, str(e)
+        return False, "404 Not Found"
+
     try:
         r = SESSION.get(url, timeout=timeout, stream=True, verify=False, headers=get_random_headers(), proxies=proxies)
         if r.status_code != 200:
@@ -199,6 +223,17 @@ def http_get_bytes(url: str, timeout: int = 15, proxies: Optional[Dict] = None) 
 
 
 def http_get_to_file(url: str, outpath: str, timeout: int = 15, proxies: Optional[Dict] = None) -> Tuple[bool, str]:
+    if url.startswith("local://"):
+        path = url.replace("local://", "")
+        if os.path.exists(path) and os.path.isfile(path):
+            try:
+                os.makedirs(os.path.dirname(outpath), exist_ok=True)
+                shutil.copy2(path, outpath)
+                return True, "ok"
+            except Exception as e:
+                return False, str(e)
+        return False, "404 Not Found"
+
     try:
         print(f"[!] Baixando {url} ...")
         r = SESSION.get(url, timeout=timeout, stream=True, verify=False, headers=get_random_headers(), proxies=proxies)
@@ -215,6 +250,12 @@ def http_get_to_file(url: str, outpath: str, timeout: int = 15, proxies: Optiona
 
 
 def http_head_status(url: str, timeout: int = 6, proxies: Optional[Dict] = None) -> Tuple[bool, Optional[int], str]:
+    if url.startswith("local://"):
+        path = url.replace("local://", "")
+        if os.path.exists(path):
+            return True, 200, "OK"
+        return False, 404, "Not Found"
+
     try:
         r = SESSION.head(url, timeout=timeout, allow_redirects=True, verify=False, headers=get_random_headers(), proxies=proxies)
         code = getattr(r, "status_code", None)
@@ -996,6 +1037,11 @@ def scan_for_secrets(outdir: str):
         info("Nenhum segredo de alta confiança encontrado.")
 
 def get_safe_folder_name(target_url):
+    if target_url.startswith("local://"):
+        path = target_url.replace("local://", "").rstrip("/")
+        name = os.path.basename(path)
+        return f"local_{name}"
+    
     from urllib.parse import urlparse
     parsed = urlparse(target_url)
     name = parsed.netloc or parsed.path
@@ -5032,25 +5078,23 @@ def main():
     p.add_argument("--no-random-agent", action="store_true", help="Desativa a rotação de User-Agents (Usa um fixo)")
     p.add_argument("--secrets", action="store_true", help="Executa scanner de regex/entropia em busca de chaves")
     p.add_argument("--show-diff", action="store_true", help="Baixa e exibe as diferenças (diffs) de código no histórico (Pode ser MUITO Lento)")
+    p.add_argument('--local', type=str, help='Caminho completo da pasta do projeto local (ex: /home/user/app)')
 
     args = p.parse_args()
-
+    
     # --- CONFIGURAÇÕES GLOBAIS ---
     global USE_RANDOM_AGENT
     proxies = {"http": args.proxy, "https": args.proxy} if args.proxy else None
-    if args.proxy: info(f"Usando Proxy: {args.proxy}")
-    
     USE_RANDOM_AGENT = not args.no_random_agent
+    
     if USE_RANDOM_AGENT: info("Rotação de User-Agents: ATIVADA")
 
     # --- MODO 1: APENAS SERVIR (Sem scan) ---
-    if args.serve and not args.base and not args.scan:
+    if args.serve and not args.base and not args.scan and not args.local:
         target_path = args.serve_dir if args.serve_dir else args.output_dir
         if not os.path.exists(target_path):
             fail(f"Diretório não encontrado para servir: {target_path}")
             return
-            
-        # Verifica se é um Master Dashboard (index.html) ou Single Report
         if os.path.exists(os.path.join(target_path, "index.html")):
             serve_dir(target_path, open_file="index.html")
         else:
@@ -5060,52 +5104,47 @@ def main():
     # --- MODO 2: PREPARAÇÃO DE ALVOS (Unificada) ---
     targets = []
 
-    if args.scan:
-        # Carrega lista do arquivo
+    if args.local:
+        targets = [normalize_url(args.local)]
+        info(f"Modo Local-Scan: {targets[0]}")
+    elif args.scan:
         if not os.path.exists(args.scan):
             fail(f"Arquivo de lista não encontrado: {args.scan}")
             return
         try:
             with open(args.scan, "r", encoding="utf-8", errors="ignore") as f:
                 for line in f:
-                    clean = line.strip().replace('\ufeff', '').replace('\x00', '')
+                    clean = line.strip()
                     if clean and not clean.startswith("#"):
                         targets.append(normalize_url(clean))
-            if not targets:
-                fail("A lista de alvos está vazia.")
-                return
-            info(f"Modo Multi-Scan: {len(targets)} alvos carregados.")
+                        if not targets:
+                            fail("A lista de alvos está vazia.")
+                        return
+                info(f"Modo Multi-Scan: {len(targets)} alvos carregados.")
         except Exception as e:
             fail(f"Erro ao ler lista: {e}")
             return
-
     elif args.base:
-        # Adiciona alvo único na lista
         targets = [normalize_url(args.base)]
         info(f"Modo Single-Target: {targets[0]}")
     
     else:
-        # Se não tem nem lista nem base, aí sim mostra erro
         p.print_help()
         print("\n[!] Erro: É necessário fornecer uma URL ou usar --scan <arquivo>.")
         return
 
     # --- LOOP DE PROCESSAMENTO (Ocorre para 1 ou N alvos) ---
     master_results = []
-
     for i, target_url in enumerate(targets, 1):
         if len(targets) > 1:
             print(f"\n{'='*60}")
             print(f"[*] PROCESSANDO ALVO [{i}/{len(targets)}]: {target_url}")
             print(f"{'='*60}")
-
-        # 1. Define Pasta Segura
         folder_name = get_safe_folder_name(target_url)
         target_outdir = os.path.join(args.output_dir, folder_name)
         os.makedirs(target_outdir, exist_ok=True)
 
         try:
-            # 2. Roteamento de Ações
             if args.detect_hardening:
                 detect_hardening(target_url, target_outdir, proxies=proxies)
             elif args.blind:
@@ -5123,16 +5162,10 @@ def main():
                                     show_diff=args.show_diff,
                                     proxies=proxies, workers=args.workers)
             else:
-                # Pipeline Padrão (Full Scan)
                 process_pipeline(target_url, target_outdir, args, proxies=proxies)
 
-            # 3. Coleta de Stats para o Dashboard Geral
-            stats = {
-                "target": target_url,
-                "folder_name": folder_name,
-                "secrets_count": 0, "files_count": 0, "vuln_count": 0
-            }
-            # Leitura resiliente dos JSONs gerados
+            # Coleta de Stats
+            stats = {"target": target_url, "folder_name": folder_name, "secrets_count": 0, "files_count": 0, "vuln_count": 0}
             try:
                 s = json.load(open(os.path.join(target_outdir, "_files", "secrets.json")))
                 stats["secrets_count"] = len(s)
