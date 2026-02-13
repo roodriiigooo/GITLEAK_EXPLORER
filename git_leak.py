@@ -5112,15 +5112,12 @@ def main():
             fail(f"Arquivo de lista não encontrado: {args.scan}")
             return
         try:
-            with open(args.scan, "r", encoding="utf-8", errors="ignore") as f:
-                for line in f:
-                    clean = line.strip()
-                    if clean and not clean.startswith("#"):
-                        targets.append(normalize_url(clean))
-                        if not targets:
-                            fail("A lista de alvos está vazia.")
-                        return
-                info(f"Modo Multi-Scan: {len(targets)} alvos carregados.")
+            if os.path.exists(args.scan):
+                with open(args.scan, "r", encoding="utf-8") as f:
+                    targets = [normalize_url(l.strip()) for l in f if l.strip() and not l.startswith("#")]
+            else:
+                fail("A lista de alvos não foi encontrada."); return
+            info(f"Modo Multi-Scan: {len(targets)} alvos carregados.")
         except Exception as e:
             fail(f"Erro ao ler lista: {e}")
             return
