@@ -1,0 +1,38 @@
+# Custom wordlist for artifact brute-forcing in git_leak.py
+# Lines starting with # are ignored by the script
+
+# --- Environment Files ---
+.env
+.env.prod
+.env.local
+.env.backup
+
+# --- CMS Configurations ---
+wp-config.php
+wp-config.php.bak
+configuration.php
+sites/default/settings.php
+
+# --- Infrastructure and Docker ---
+docker-compose.yml
+Dockerfile
+.gitlab-ci.yml
+k8s.yaml
+
+# --- Common Backups ---
+backup.zip
+backup.sql
+dump.sql
+database.sql
+
+# --- Secrets and Keys ---
+id_rsa
+id_rsa.pub
+auth.json
+secrets.yaml
+
+# --- OTHERS ---
+index.php
+robots.txt
+/config/compile.php
+app/Policies/.gitkeep

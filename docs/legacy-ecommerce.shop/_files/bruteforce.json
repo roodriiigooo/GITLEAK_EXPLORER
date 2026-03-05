@@ -1,0 +1,42 @@
+[
+  {
+    "filename": ".env",
+    "url": "http://legacy-ecommerce.shop/.env",
+    "git_sha": "308d0e833be51cb27a72e2678e067878bdb9cbd3",
+    "in_git": true,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  },
+  {
+    "filename": "config.php",
+    "url": "http://legacy-ecommerce.shop/config.php",
+    "git_sha": "fbcea0bf4c0c5dc0fadf48bc76914693ffc07889",
+    "in_git": false,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  },
+  {
+    "filename": "wp-config.php",
+    "url": "http://legacy-ecommerce.shop/wp-config.php",
+    "git_sha": "",
+    "in_git": false,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  },
+  {
+    "filename": "backup.sql",
+    "url": "http://legacy-ecommerce.shop/backup.sql",
+    "git_sha": "d1b0637f46410a354bffbb7d48114ef2c2dc745e",
+    "in_git": false,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  },
+  {
+    "filename": "../../etc/passwd",
+    "url": "http://legacy-ecommerce.shop/../../etc/passwd",
+    "git_sha": "",
+    "in_git": false,
+    "type": "traversal",
+    "local_path": ""
+  }
+]

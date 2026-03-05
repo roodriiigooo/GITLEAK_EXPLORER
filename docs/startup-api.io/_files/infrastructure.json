@@ -1,0 +1,32 @@
+[
+  {
+    "category": "API_ENDPOINT",
+    "value": "/api/v1/auth/login",
+    "file": "src/routes/auth.ts",
+    "context": "cm91dGVyLnBvc3QoJy9hcGkvdjEvYXV0aC9sb2dpbicsIGF1dGhDb250cm9sbGVyLmxvZ2luKTs="
+  },
+  {
+    "category": "API_ENDPOINT",
+    "value": "/api/v1/users",
+    "file": "src/routes/users.ts",
+    "context": "YXBpVXJsID0gJy9hcGkvdjEvdXNlcnMn"
+  },
+  {
+    "category": "EXTERNAL_HOST",
+    "value": "api.startup-api.io",
+    "file": "src/app.ts",
+    "context": "Y29uc3QgQkFTRV9VUkwgPSAnaHR0cHM6Ly9hcGkuc3RhcnR1cC1hcGkuaW8nOw=="
+  },
+  {
+    "category": "EXTERNAL_HOST",
+    "value": "hooks.slack.com",
+    "file": "src/middleware/rateLimit.ts",
+    "context": "Y29uc3Qgc2xhY2tVcmwgPSAnaHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvLi4uJw=="
+  },
+  {
+    "category": "IP_ADDRESS",
+    "value": "10.0.1.42",
+    "file": ".env.production",
+    "context": "SU5URVJOQUxfREJfSE9TVD0xMC4wLjEuNDIgICMgc3RhZ2luZw=="
+  }
+]

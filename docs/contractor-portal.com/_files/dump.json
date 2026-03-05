@@ -1,0 +1,38 @@
+[
+  {
+    "path": "main.go",
+    "sha1": "898ac744479ce9aad9cd152d51d5358b600d9ea4",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "go.mod",
+    "sha1": "7d4821577d4decf99a5b6a3543615c518c23754c",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "go.sum",
+    "sha1": "08775f1879727041deca1536c08780a6a44a35d5",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "handlers/auth.go",
+    "sha1": "ac3cc703a8870425575512ca7d57b7305b8c2231",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "handlers/invoice.go",
+    "sha1": "37a699c2b0f1d0a2fc279ab9d704a4be8ee3ddd1",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "README.md",
+    "sha1": "7b6fe5dca926715b6984e918ce755d47ef030201",
+    "mode": "100644",
+    "flags": 0
+  }
+]

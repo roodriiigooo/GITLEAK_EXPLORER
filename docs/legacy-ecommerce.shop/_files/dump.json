@@ -1,0 +1,92 @@
+[
+  {
+    "path": "src/checkout/payment.php",
+    "sha1": "5233e9d176271b9eb5a039525dca79a6a2a0d7f9",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "src/recommendations.php",
+    "sha1": "c72971e4807612ef7b3a047ec4586e9ac1652056",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "src/catalog.php",
+    "sha1": "bd011306afd26eaa5a9cc7ce61d57deffa23c441",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "src/search.php",
+    "sha1": "bfd357a8b5286e4776eec2d108e4d3818f954f7a",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "src/cart.php",
+    "sha1": "3a3395be297eaffcdb2fe0832025553a20fa8716",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "src/user/auth.php",
+    "sha1": "6998ef7d24126acd5b52bd489ba06d665dfa9a63",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "src/admin/dashboard.php",
+    "sha1": "9cf3aed3a5f662899ec8ecfb66a3a7f785c4eb08",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "config/database.php",
+    "sha1": "28eed038c914fb43c10f4e8af1c013c2c86ad323",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "config/app.php",
+    "sha1": "9a05483556e329529b9d9e71ef57a61beb8f330e",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "config/mail.php",
+    "sha1": "2040ca0a6a1e851647be3ecc6e077347484266d0",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "public/index.php",
+    "sha1": "8ed4eedcac0a919841828cb8108ff044682125ab",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "public/.htaccess",
+    "sha1": "3bbf0e85a16003bea8e76d4c41593057b6829bf2",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "composer.json",
+    "sha1": "1b3c4dacfa5e5af7c8dac9ee10180e8af6a19019",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "composer.lock",
+    "sha1": "8e7147fec367ce45b3059cd57dc116da522caf9d",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": ".env",
+    "sha1": "d3d862054f1adac0ab8f06ba0520a58aebd0403b",
+    "mode": "100644",
+    "flags": 0
+  }
+]

@@ -1,0 +1,135 @@
+{
+  "head": "bd045e5f3482f9db303cadd26221bcceb3510db7",
+  "remote_url": "git@github.com:legacy-ecom/shop-backend.git",
+  "commits": [
+    {
+      "sha": "bd045e5f3482f9db303cadd26221bcceb3510db7",
+      "author": "Lucas Ferreira",
+      "email": "lucas@legacy-ecommerce.shop",
+      "date": "2025-01-15 09:12:44",
+      "message": "fix: remove debug prints from checkout",
+      "changes": [
+        {
+          "path": "src/checkout/payment.php",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,2 +1,1 @@\n-$debug = true;\n-error_log($card_data);\n+$debug = false;"
+        }
+      ],
+      "tree": "bd045e5f3482f9db303cadd26221bcceb3510db7",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "1e28659a0e37b705b41787ba4d06a0f523b0008f",
+      "author": "Ana Souza",
+      "email": "ana@legacy-ecommerce.shop",
+      "date": "2025-01-10 14:55:00",
+      "message": "feat: add product recommendations engine",
+      "changes": [
+        {
+          "path": "src/recommendations.php",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+<?php\n+// ML-based engine\n+class Recommender {}"
+        },
+        {
+          "path": "src/catalog.php",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,1 @@\n-// old catalog\n+// updated catalog"
+        }
+      ],
+      "tree": "1e28659a0e37b705b41787ba4d06a0f523b0008f",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "35ef9ca828692939c6a1576d40d7572288dd0c9a",
+      "author": "Lucas Ferreira",
+      "email": "lucas@legacy-ecommerce.shop",
+      "date": "2025-01-08 11:30:00",
+      "message": "chore: update DB credentials for prod migration",
+      "changes": [
+        {
+          "path": "config/database.php",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,1 @@\n-$db_pass = 'dev_pass_123';\n+$db_pass = 'Pr0d!Secure#2025';"
+        }
+      ],
+      "tree": "35ef9ca828692939c6a1576d40d7572288dd0c9a",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "3aec7a8af65f53489309946fc9675a6d277dc71d",
+      "author": "Maria Oliveira",
+      "email": "m.oliveira@legacy-ecommerce.shop",
+      "date": "2025-01-05 16:00:00",
+      "message": "fix: patch SQL injection in search endpoint",
+      "changes": [
+        {
+          "path": "src/search.php",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,2 +1,3 @@\n-$q = $_GET['q'];\n-\"SELECT * FROM products WHERE name LIKE '%$q%'\"\n+$q = $pdo->quote($_GET['q']);\n+\"SELECT * FROM products WHERE name LIKE ?\"\n+// parameterized query"
+        }
+      ],
+      "tree": "3aec7a8af65f53489309946fc9675a6d277dc71d",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "0efd250237832f709a0f589a62bca00d2af354a0",
+      "author": "Ana Souza",
+      "email": "ana@legacy-ecommerce.shop",
+      "date": "2024-12-20 09:00:00",
+      "message": "init: initial project structure",
+      "changes": [
+        {
+          "path": "config/app.php",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+<?php\n+define('APP_ENV','production');"
+        },
+        {
+          "path": "config/database.php",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+<?php\n+$db_host='db.internal.shop';"
+        },
+        {
+          "path": "public/index.php",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+<?php\n+require '../config/app.php';"
+        }
+      ],
+      "tree": "0efd250237832f709a0f589a62bca00d2af354a0",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "deacbabbf8d8d76dd393ac6e64746f06a586d22c",
+      "author": "Lucas Ferreira",
+      "email": "lucas@legacy-ecommerce.shop",
+      "date": "2025-01-16 08:00:00",
+      "message": "WIP: migrating payment gateway to Stripe",
+      "changes": [
+        {
+          "path": "src/checkout/stripe_integration.php",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+$stripe_key = 'sk_live_4eC39HqLyjWDarjtT1zdp7dc';\n+// TODO: move to env"
+        }
+      ],
+      "tree": "deacbabbf8d8d76dd393ac6e64746f06a586d22c",
+      "parent": null,
+      "is_stash": true,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    }
+  ]
+}

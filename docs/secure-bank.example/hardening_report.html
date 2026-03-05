@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Master Dashboard — Git Leak Explorer</title>
+<title>Hardening Report — Git Leak Explorer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 
@@ -206,6 +206,9 @@ hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 .w-full{width:100%}.text-right{text-align:right}
 
 
+    .hd-score{text-align:center;padding:1rem 1.5rem;border-left:1px solid var(--border)}
+    .hd-score .num{font-size:1.8rem;font-weight:800}
+    
 </style>
 <script>
 (function(){
@@ -225,70 +228,74 @@ hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 </head>
 <body>
 
-<style>body{padding:2rem}</style>
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--text-dim);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--text-dim);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--text-dim);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--accent);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--text-dim);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--text-dim);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
 <div class="container">
-  <div class="flex items-center gap-2 mb-3" style="justify-content:space-between">
-    <div>
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
-        <div style="width:28px;height:28px;background:var(--accent);color:#000;border-radius:5px;
-          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.85rem">GL</div>
-        <span style="font-weight:700;font-size:1.1rem">Git Leak Explorer</span>
+  <div class="card mb-3">
+    <div class="card-header">
+      <div>
+        <div style="font-size:1.2rem;font-weight:700">🛡 Hardening Audit</div>
+        <div class="muted" style="font-size:.82rem">Git directory and configuration file exposure check</div>
       </div>
-      <h2 style="font-weight:700">Master Dashboard</h2>
-      <p class="muted" style="font-size:.82rem">5 targets scanned</p>
+      <div class="hd-score">
+        <div class="num"><span class="badge badge-green">SECURE</span></div>
+        <div class="stat-lbl">Risk score: 0</div>
+      </div>
     </div>
-    <div class="flex gap-2">
-      <span class="badge badge-muted">5 targets</span>
-      <span class="badge badge-red">9 secrets</span>
+  </div>
+  <div class="flex gap-2 mb-3">
+    <a href="report.html" class="btn btn-ghost">← Back to Dashboard</a>
+    <div class="search-wrap" style="flex:1;max-width:500px">
+      <span class="search-icon">⌕</span>
+      <input id="q" type="text" placeholder="Filter by category, status or evidence…">
     </div>
   </div>
   <div class="tbl-wrap">
     <table>
       <thead><tr>
-        <th>Target</th><th>Status</th>
-        <th class="text-right">Secrets</th>
-        <th class="text-right">Files</th>
-        <th class="text-right">Action</th>
+        <th style="width:22%">Category</th>
+        <th style="width:15%">Status</th>
+        <th style="width:30%">Technical Evidence</th>
+        <th>Recommended Action</th>
       </tr></thead>
-      <tbody><tr>
-          <td><a href="legacy-ecommerce.shop/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://legacy-ecommerce.shop</a>
-            <div class="dim" style="font-size:.75rem">legacy-ecommerce.shop</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 6</span></td>
-          <td class="text-right"><span style="color:var(--accent)">15</span></td>
-          <td class="text-right"><a href="legacy-ecommerce.shop/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="startup-api.io/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://startup-api.io</a>
-            <div class="dim" style="font-size:.75rem">startup-api.io</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 3</span></td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="startup-api.io/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="devteam-internal.net/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://devteam-internal.net</a>
-            <div class="dim" style="font-size:.75rem">devteam-internal.net</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="devteam-internal.net/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="contractor-portal.com/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://contractor-portal.com</a>
-            <div class="dim" style="font-size:.75rem">contractor-portal.com</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">6</span></td>
-          <td class="text-right"><a href="contractor-portal.com/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="secure-bank.example/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://secure-bank.example</a>
-            <div class="dim" style="font-size:.75rem">secure-bank.example</div></td>
-          <td><span class="badge badge-muted">SECURE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right">—</td>
-          <td class="text-right"><a href="secure-bank.example/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr></tbody>
+      <tbody id="tbody"></tbody>
     </table>
   </div>
 </div>
+<script>
+const ROWS=[{"category": "HEAD", "description": ".git/HEAD accessible", "status": "OK", "evidence": "—", "action": "No action required."}, {"category": "refs_heads", "description": ".git/refs/heads/ accessible", "status": "OK", "evidence": "—", "action": "No action required."}, {"category": "packed_refs", "description": ".git/packed-refs accessible", "status": "OK", "evidence": "—", "action": "No action required."}, {"category": "index", "description": ".git/index accessible", "status": "OK", "evidence": "—", "action": "No action required."}, {"category": "objects_root", "description": ".git/objects/ accessible", "status": "OK", "evidence": "—", "action": "No action required."}, {"category": "logs", "description": ".git/logs/ accessible", "status": "OK", "evidence": "—", "action": "No action required."}, {"category": "config", "description": ".git/config accessible", "status": "OK", "evidence": "—", "action": "No action required."}, {"category": "stash", "description": ".git/refs/stash", "status": "OK", "evidence": "—", "action": "No action required."}, {"category": "info_refs", "description": ".git/info/refs (Smart HTTP map)", "status": "OK", "evidence": "—", "action": "No action required."}];
+const tbody=document.getElementById('tbody');
+const q=document.getElementById('q');
+function render(data){
+  tbody.innerHTML='';
+  data.forEach(r=>{
+    const cls=r.status==='CRITICAL'?'badge-red':r.status==='WARNING'?'badge-amber':'badge-green';
+    const tr=document.createElement('tr');
+    if(r.status!=='OK') tr.style.background='rgba(var(--red-rgb),.02)';
+    tr.innerHTML=`
+      <td><div style="font-weight:600;color:var(--text)">${r.category}</div>
+          <div class="dim" style="font-size:.78rem">${r.description}</div></td>
+      <td><span class="badge ${cls}">${r.status}</span></td>
+      <td class="mono" style="word-break:break-all;font-size:.75rem">${r.evidence}</td>
+      <td class="dim" style="font-size:.82rem;font-style:italic">${r.action}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+q.addEventListener('input',e=>{
+  const t=e.target.value.toLowerCase();
+  render(ROWS.filter(r=>r.category.toLowerCase().includes(t)||r.status.toLowerCase().includes(t)||r.evidence.toLowerCase().includes(t)));
+});
+render(ROWS);
+</script>
 
 <footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
   border-top:1px solid var(--border);margin-top:3rem">

@@ -1,0 +1,20 @@
+[
+  {
+    "raw": "Lucas Ferreira <lucas@legacy-ecommerce.shop>",
+    "name": "Lucas Ferreira",
+    "email": "lucas@legacy-ecommerce.shop",
+    "commits": 3
+  },
+  {
+    "raw": "Ana Souza <ana@legacy-ecommerce.shop>",
+    "name": "Ana Souza",
+    "email": "ana@legacy-ecommerce.shop",
+    "commits": 2
+  },
+  {
+    "raw": "Maria Oliveira <m.oliveira@legacy-ecommerce.shop>",
+    "name": "Maria Oliveira",
+    "email": "m.oliveira@legacy-ecommerce.shop",
+    "commits": 1
+  }
+]

@@ -1,0 +1,107 @@
+{
+  "head": "ca478d70517102dc3b6555804eb351b57b228bee",
+  "remote_url": "",
+  "commits": [
+    {
+      "sha": "ca478d70517102dc3b6555804eb351b57b228bee",
+      "author": "James Whitfield",
+      "email": "james@contractor-portal.com",
+      "date": "2025-02-28 09:00:00",
+      "message": "release: v1.2.1 — security patch (CVE-2025-1234)",
+      "changes": [
+        {
+          "path": "handlers/auth.go",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,1 @@\n-// old token validation\n+// patched token validation"
+        }
+      ],
+      "tree": "ca478d70517102dc3b6555804eb351b57b228bee",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "4cddf01a881b8125d30783e641712c7c077242cc",
+      "author": "Sofia Reyes",
+      "email": "sofia@contractor-portal.com",
+      "date": "2025-02-20 14:00:00",
+      "message": "feat: add PDF invoice generation",
+      "changes": [
+        {
+          "path": "handlers/invoice.go",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+package handlers\n+import \"github.com/jung-kurt/gofpdf\""
+        },
+        {
+          "path": "go.mod",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,1 @@\n+require github.com/jung-kurt/gofpdf v1.16.2"
+        }
+      ],
+      "tree": "4cddf01a881b8125d30783e641712c7c077242cc",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "39d405d2c11e77401da2751902572ad82bfa87c6",
+      "author": "James Whitfield",
+      "email": "james@contractor-portal.com",
+      "date": "2025-02-10 10:30:00",
+      "message": "chore: update dependencies",
+      "changes": [
+        {
+          "path": "go.sum",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,1 @@\n-# old checksums\n+# updated checksums"
+        },
+        {
+          "path": "go.mod",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,1 @@\n-go 1.21\n+go 1.22"
+        }
+      ],
+      "tree": "39d405d2c11e77401da2751902572ad82bfa87c6",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "3d15c2de07b2617a5cbefe9a3eb5769feb0b4348",
+      "author": "Sofia Reyes",
+      "email": "sofia@contractor-portal.com",
+      "date": "2025-01-20 11:00:00",
+      "message": "init: initial commit",
+      "changes": [
+        {
+          "path": "main.go",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+package main\n+func main() { ... }"
+        },
+        {
+          "path": "go.mod",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+module contractor-portal.com\n+go 1.21"
+        },
+        {
+          "path": "handlers/auth.go",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,1 @@\n+package handlers"
+        },
+        {
+          "path": "README.md",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,1 @@\n+# Contractor Portal"
+        }
+      ],
+      "tree": "3d15c2de07b2617a5cbefe9a3eb5769feb0b4348",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    }
+  ]
+}

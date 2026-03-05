@@ -1,0 +1,20 @@
+[
+  {
+    "raw": "Rodrigo Almeida <rodrigo@startup-api.io>",
+    "name": "Rodrigo Almeida",
+    "email": "rodrigo@startup-api.io",
+    "commits": 3
+  },
+  {
+    "raw": "Priya Nair <priya@startup-api.io>",
+    "name": "Priya Nair",
+    "email": "priya@startup-api.io",
+    "commits": 2
+  },
+  {
+    "raw": "Gabriel Costa <gabriel@startup-api.io>",
+    "name": "Gabriel Costa",
+    "email": "gabriel@startup-api.io",
+    "commits": 1
+  }
+]

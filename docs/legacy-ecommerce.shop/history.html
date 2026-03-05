@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Git Timeline — Git Leak Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+
+:root {
+  --bg:         #0c0e14;
+  --bg-card:    #12151f;
+  --bg-hover:   #1a1e2d;
+  --bg-inset:   #090b10;
+  --border:     #1e2535;
+  --border-hl:  #2e3a50;
+  --text:       #c9d1e0;
+  --text-muted: #5a6a88;
+  --text-dim:   #7a8aaa;
+  --accent:     #e8a020;
+  --accent-dim: rgba(232,160,32,0.12);
+  --green:      #22c55e;
+  --green-dim:  rgba(34,197,94,0.12);
+  --red:        #ef4444;
+  --red-dim:    rgba(239,68,68,0.12);
+  --blue:       #3b82f6;
+  --blue-dim:   rgba(59,130,246,0.12);
+  --purple:     #a78bfa;
+  --purple-dim: rgba(167,139,250,0.12);
+  --mono:       'Berkeley Mono','JetBrains Mono','Fira Code',monospace;
+  --sans:       'Geist','Syne','DM Sans',sans-serif;
+  --radius:     6px;
+  --shadow:     0 4px 24px rgba(0,0,0,0.6);
+}
+[data-theme="light"] {
+  --bg:         #f8f9fc;
+  --bg-card:    #ffffff;
+  --bg-hover:   #f1f3f8;
+  --bg-inset:   #e8eaf0;
+  --border:     #d1d9e6;
+  --border-hl:  #b8c4d8;
+  --text:       #1a2035;
+  --text-muted: #7a8aaa;
+  --text-dim:   #5a6a88;
+  --accent:     #c47a00;
+  --accent-dim: rgba(196,122,0,0.10);
+  --green:      #16a34a;
+  --green-dim:  rgba(22,163,74,0.10);
+  --red:        #dc2626;
+  --red-dim:    rgba(220,38,38,0.10);
+  --blue:       #2563eb;
+  --blue-dim:   rgba(37,99,235,0.10);
+  --purple:     #7c3aed;
+  --purple-dim: rgba(124,58,237,0.10);
+  --shadow:     0 4px 24px rgba(0,0,0,0.12);
+}
+
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:15px}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--sans);min-height:100vh;
+  line-height:1.6;
+  transition:background .2s,color .2s;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.mono{font-family:var(--mono);font-size:.82rem;letter-spacing:.02em}
+.muted{color:var(--text-muted)}
+.dim{color:var(--text-dim)}
+code{font-family:var(--mono);font-size:.82rem;background:var(--bg-inset);
+     padding:2px 6px;border-radius:3px;color:var(--accent)}
+
+/* ── layout ── */
+.container{max-width:1300px;margin:0 auto;padding:2rem}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.grid-2{grid-template-columns:1fr}}
+
+/* ── cards ── */
+.card{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;
+}
+.card-header{
+  padding:.8rem 1.1rem;background:rgba(255,255,255,.02);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  font-weight:600;font-size:.9rem;
+}
+.card-body{padding:1.1rem}
+
+/* ── badges ── */
+.badge{
+  display:inline-flex;align-items:center;
+  padding:3px 8px;border-radius:99px;
+  font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+}
+.badge-red   {background:var(--red-dim);   color:var(--red);   border:1px solid var(--red)}
+.badge-green {background:var(--green-dim); color:var(--green); border:1px solid var(--green)}
+.badge-blue  {background:var(--blue-dim);  color:var(--blue);  border:1px solid var(--blue)}
+.badge-amber {background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent)}
+.badge-purple{background:var(--purple-dim);color:var(--purple);border:1px solid var(--purple)}
+.badge-muted {background:var(--bg-hover);  color:var(--text-muted);border:1px solid var(--border)}
+
+/* ── buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:.4rem;
+  padding:.5rem 1rem;border-radius:var(--radius);
+  font-size:.85rem;cursor:pointer;transition:all .15s;
+  text-decoration:none;border:1px solid transparent;font-weight:500;
+}
+.btn-primary{background:var(--accent);color:#000;border-color:var(--accent)}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-ghost{background:transparent;color:var(--text-dim);border-color:var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── table ── */
+.tbl-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{padding:.75rem 1rem;text-align:left;color:var(--text-muted);font-weight:500;
+   background:rgba(255,255,255,.02);border-bottom:1px solid var(--border)}
+td{padding:.7rem 1rem;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr:hover{background:var(--bg-hover)}
+tbody tr:last-child td{border-bottom:none}
+
+/* ── search ── */
+.search-wrap{position:relative}
+.search-wrap input{
+  width:100%;padding:.6rem 1rem .6rem 2.4rem;
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);font-size:.88rem;
+  font-family:var(--sans);
+}
+.search-wrap input:focus{outline:none;border-color:var(--accent)}
+.search-icon{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);
+  color:var(--text-muted);pointer-events:none;font-size:.85rem}
+
+/* ── pagination ── */
+.pgn{display:flex;gap:.35rem}
+.pgn button{
+  width:30px;height:30px;border-radius:var(--radius);
+  background:var(--bg-card);border:1px solid var(--border);
+  color:var(--text);cursor:pointer;font-size:.85rem;
+}
+.pgn button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.pgn button.active{background:var(--accent);border-color:var(--accent);color:#000}
+.pgn button:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── top-bar ── */
+.topbar{
+  background:var(--bg-card);border-bottom:1px solid var(--border);
+  padding:.75rem 1.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.topbar-brand{display:flex;align-items:center;gap:.75rem;font-weight:700;font-size:1rem}
+.topbar-logo{
+  width:28px;height:28px;background:var(--accent);color:#000;
+  border-radius:5px;display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:.85rem;letter-spacing:-.05em;
+}
+.topbar-nav{display:flex;align-items:center;gap:.75rem}
+
+/* ── dark-mode toggle ── */
+.theme-toggle{
+  width:36px;height:20px;background:var(--bg-hover);border:1px solid var(--border);
+  border-radius:99px;cursor:pointer;position:relative;transition:background .2s;
+}
+.theme-toggle::after{
+  content:'';position:absolute;top:2px;left:2px;
+  width:14px;height:14px;background:var(--text-muted);border-radius:50%;
+  transition:transform .2s,background .2s;
+}
+[data-theme="light"] .theme-toggle{background:var(--accent-dim)}
+[data-theme="light"] .theme-toggle::after{
+  transform:translateX(16px);background:var(--accent);
+}
+
+/* ── code block ── */
+.code-block{
+  background:var(--bg-inset);border:1px solid var(--border);
+  border-radius:var(--radius);padding:1rem;
+  font-family:var(--mono);font-size:.8rem;
+  color:#7ee787;overflow-x:auto;white-space:pre-wrap;word-break:break-all;
+}
+
+/* ── diff ── */
+.diff-table{width:100%;border-collapse:collapse;table-layout:fixed;
+  font-family:var(--mono);font-size:.75rem}
+.diff-table td{padding:2px 6px;white-space:pre-wrap;word-break:break-all;border-bottom:none}
+.diff-num{width:36px;text-align:right;color:var(--text-muted);opacity:.5;
+  border-right:1px solid var(--border);user-select:none}
+.diff-add{background:rgba(34,197,94,.12);color:#4ade80}
+.diff-del{background:rgba(239,68,68,.12);color:#f87171}
+.diff-empty{background:var(--bg-inset)}
+
+/* ── misc ── */
+.stat-num{font-size:2.2rem;font-weight:800;line-height:1;color:var(--text)}
+.stat-lbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-top:.2rem}
+hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
+.mb-1{margin-bottom:.5rem}.mb-2{margin-bottom:1rem}.mb-3{margin-bottom:1.5rem}
+.mt-1{margin-top:.5rem}.mt-2{margin-top:1rem}.mt-3{margin-top:1.5rem}
+.flex{display:flex}.items-center{align-items:center}.gap-1{gap:.5rem}.gap-2{gap:1rem}
+.w-full{width:100%}.text-right{text-align:right}
+
+
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem('gle-theme') || 'dark';
+  document.documentElement.dataset.theme = saved;
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.theme-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem('gle-theme', next);
+      });
+    });
+  });
+})();
+</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--text-dim);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--text-dim);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--accent);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--text-dim);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--text-dim);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--text-dim);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
+<div class="container">
+  <div class="flex items-center gap-2 mb-3" style="justify-content:space-between;flex-wrap:wrap">
+    <div>
+      <h2 style="font-weight:700">&#x23F3; Git Timeline</h2>
+      <p class="muted" style="font-size:.82rem">Target: http://legacy-ecommerce.shop</p>
+    </div>
+    <div class="flex gap-2 items-center">
+      
+<div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:var(--radius);
+  padding:.5rem 1rem;font-size:.82rem">
+  Remote detected: <a href="git@github.com:legacy-ecom/shop-backend.git" target="_blank" style="font-weight:600">git@github.com:legacy-ecom/shop-backend.git</a>
+</div>
+      <span class="badge badge-muted">HEAD: <span class="mono" style="color:var(--purple)">bd045e5f</span></span>
+      <span class="badge badge-blue">6 commits</span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:.75rem;margin-bottom:1.2rem">
+    <a href="report.html" class="btn btn-ghost">&#x2190; Back</a>
+    <div class="search-wrap">
+      <span class="search-icon">&#x2315;</span>
+      <input id="qm" type="text" placeholder="Search commit (hash, author, message)&#x2026;">
+    </div>
+    <div class="search-wrap">
+      <span class="search-icon">&#x1F4C2;</span>
+      <input id="qf" type="text" placeholder="Filter by file name or diff content&#x2026;">
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th style="width:10%">Hash</th>
+        <th style="width:12%">Date</th>
+        <th style="width:15%">Author</th>
+        <th style="width:38%">Message</th>
+        <th style="width:25%">Files</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+  <div class="flex items-center mt-2" style="justify-content:space-between;color:var(--text-muted);font-size:.82rem">
+    <span id="info"></span><div class="pgn" id="pgn"></div>
+  </div>
+</div>
+<style>
+.diff-wrap { display:none; }
+.diff-wrap.open { display:block; }
+</style>
+<script>
+const COMMITS=[{"sha": "bd045e5f3482f9db303cadd26221bcceb3510db7", "author": "Lucas Ferreira", "email": "lucas@legacy-ecommerce.shop", "date": "2025-01-15 09:12:44", "message": "fix: remove debug prints from checkout", "changes": [{"path": "src/checkout/payment.php", "type": "MODIFIED", "diff": "--- a/file\n+++ b/file\n@@ -1,2 +1,1 @@\n-$debug = true;\n-error_log($card_data);\n+$debug = false;"}], "tree": "bd045e5f3482f9db303cadd26221bcceb3510db7", "parent": null, "is_stash": false, "is_orphan": false, "fast_mode_skipped": false}, {"sha": "1e28659a0e37b705b41787ba4d06a0f523b0008f", "author": "Ana Souza", "email": "ana@legacy-ecommerce.shop", "date": "2025-01-10 14:55:00", "message": "feat: add product recommendations engine", "changes": [{"path": "src/recommendations.php", "type": "ADDED", "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+\u003c?php\n+// ML-based engine\n+class Recommender {}"}, {"path": "src/catalog.php", "type": "MODIFIED", "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,1 @@\n-// old catalog\n+// updated catalog"}], "tree": "1e28659a0e37b705b41787ba4d06a0f523b0008f", "parent": null, "is_stash": false, "is_orphan": false, "fast_mode_skipped": false}, {"sha": "35ef9ca828692939c6a1576d40d7572288dd0c9a", "author": "Lucas Ferreira", "email": "lucas@legacy-ecommerce.shop", "date": "2025-01-08 11:30:00", "message": "chore: update DB credentials for prod migration", "changes": [{"path": "config/database.php", "type": "MODIFIED", "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,1 @@\n-$db_pass = 'dev_pass_123';\n+$db_pass = 'Pr0d!Secure#2025';"}], "tree": "35ef9ca828692939c6a1576d40d7572288dd0c9a", "parent": null, "is_stash": false, "is_orphan": false, "fast_mode_skipped": false}, {"sha": "3aec7a8af65f53489309946fc9675a6d277dc71d", "author": "Maria Oliveira", "email": "m.oliveira@legacy-ecommerce.shop", "date": "2025-01-05 16:00:00", "message": "fix: patch SQL injection in search endpoint", "changes": [{"path": "src/search.php", "type": "MODIFIED", "diff": "--- a/file\n+++ b/file\n@@ -1,2 +1,3 @@\n-$q = $_GET['q'];\n-\"SELECT * FROM products WHERE name LIKE '%$q%'\"\n+$q = $pdo-\u003equote($_GET['q']);\n+\"SELECT * FROM products WHERE name LIKE ?\"\n+// parameterized query"}], "tree": "3aec7a8af65f53489309946fc9675a6d277dc71d", "parent": null, "is_stash": false, "is_orphan": false, "fast_mode_skipped": false}, {"sha": "0efd250237832f709a0f589a62bca00d2af354a0", "author": "Ana Souza", "email": "ana@legacy-ecommerce.shop", "date": "2024-12-20 09:00:00", "message": "init: initial project structure", "changes": [{"path": "config/app.php", "type": "ADDED", "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+\u003c?php\n+define('APP_ENV','production');"}, {"path": "config/database.php", "type": "ADDED", "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+\u003c?php\n+$db_host='db.internal.shop';"}, {"path": "public/index.php", "type": "ADDED", "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+\u003c?php\n+require '../config/app.php';"}], "tree": "0efd250237832f709a0f589a62bca00d2af354a0", "parent": null, "is_stash": false, "is_orphan": false, "fast_mode_skipped": false}, {"sha": "deacbabbf8d8d76dd393ac6e64746f06a586d22c", "author": "Lucas Ferreira", "email": "lucas@legacy-ecommerce.shop", "date": "2025-01-16 08:00:00", "message": "WIP: migrating payment gateway to Stripe", "changes": [{"path": "src/checkout/stripe_integration.php", "type": "ADDED", "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+$stripe_key = 'sk_live_4eC39HqLyjWDarjtT1zdp7dc';\n+// TODO: move to env"}], "tree": "deacbabbf8d8d76dd393ac6e64746f06a586d22c", "parent": null, "is_stash": true, "is_orphan": false, "fast_mode_skipped": false}];
+/* commitFilter = commit-level text search; fileFilter = file/diff search */
+let commitFilter='', fileFilter='';
+let filtered=COMMITS.slice(), cur=1;
+const PS=20;
+const tb=document.getElementById('tb');
+const info=document.getElementById('info');
+const pgn=document.getElementById('pgn');
+
+function esc(t){if(!t)return'';return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+/* ── Diff renderer (side-by-side) ── */
+function renderSBS(diff){
+  if(!diff||diff.startsWith('['))return`<div style="padding:1rem;color:var(--red);font-size:.82rem">${esc(diff||'No content')}</div>`;
+  const lines=diff.split(/\r?\n/);
+  let rows='',ol=1,nl=1;
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    if(line.startsWith('---')||line.startsWith('+++')||line.startsWith('index '))continue;
+    if(line.startsWith('@@')){
+      rows+=`<tr style="background:var(--bg-hover)"><td colspan="4" style="padding:3px 8px;font-size:.7rem;color:var(--text-muted)">${esc(line)}</td></tr>`;
+      continue;
+    }
+    let lc='',rc='',lv='',rv='',ln='',rn='';
+    if(line.startsWith('-')){
+      lc='diff-del';lv=esc(line.slice(1))||'&nbsp;';ln=ol++;
+    }else if(line.startsWith('+')){
+      rc='diff-add';rv=esc(line.slice(1))||'&nbsp;';rn=nl++;
+    }else{
+      const c=esc(line.slice(1))||'&nbsp;';lv=c;rv=c;ln=ol++;rn=nl++;
+    }
+    rows+=`<tr>
+      <td class="diff-num">${ln||''}</td>
+      <td class="${lc||'diff-empty'}">${lv||'&nbsp;'}</td>
+      <td class="diff-num">${rn||''}</td>
+      <td class="${rc||'diff-empty'}">${rv||'&nbsp;'}</td></tr>`;
+  }
+  return`<table class="diff-table"><colgroup><col style="width:36px"><col><col style="width:36px"><col></colgroup>${rows}</table>`;
+}
+
+/* ── Toggle diff panel visibility ── */
+function toggleDiff(uid, btn){
+  const el=document.getElementById(uid);
+  if(!el)return;
+  const isOpen=el.classList.contains('open');
+  el.classList.toggle('open',!isOpen);
+  if(btn)btn.textContent=isOpen?'View Diff':'Hide Diff';
+}
+
+/* ── Toggle commit detail row ── */
+function toggleDetails(idx){
+  const det=document.getElementById('det-'+idx);
+  if(!det)return;
+  det.style.display=det.style.display==='table-row'?'none':'table-row';
+}
+
+/* ── Build the matched-file list for a commit given current fileFilter ──
+   Returns null if fast_mode_skipped, [] if no changes, or filtered array.
+   Also returns whether ANY file matched fileFilter (for row visibility). */
+function getMatchedChanges(c){
+  if(c.fast_mode_skipped)return{skipped:true,items:[],matched:true};
+  if(!c.changes||!c.changes.length)return{skipped:false,items:[],matched:!fileFilter};
+  if(!fileFilter)return{skipped:false,items:c.changes,matched:true};
+  const items=c.changes.filter(ch=>
+    (ch.path||'').toLowerCase().includes(fileFilter)||
+    (ch.diff||'').toLowerCase().includes(fileFilter)
+  );
+  return{skipped:false,items,matched:items.length>0};
+}
+
+/* ── Apply both filters and rebuild the visible commit list ── */
+function applyFilters(){
+  filtered=COMMITS.filter(c=>{
+    /* commit-level filter */
+    if(commitFilter){
+      const match=(c.sha||'').includes(commitFilter)||
+        (c.author||'').toLowerCase().includes(commitFilter)||
+        (c.message||'').toLowerCase().includes(commitFilter);
+      if(!match)return false;
+    }
+    /* file-level filter: keep commit only if at least one file matches */
+    if(fileFilter){
+      const m=getMatchedChanges(c);
+      if(!m.matched)return false;
+    }
+    return true;
+  });
+  cur=1;
+  render();
+}
+
+/* ── Main render ── */
+function render(){
+  const tot=filtered.length,tp=Math.max(1,Math.ceil(tot/PS));
+  if(cur>tp)cur=tp;if(cur<1)cur=1;
+  const sl=filtered.slice((cur-1)*PS,cur*PS);
+  tb.innerHTML='';
+
+  sl.forEach((c,idx)=>{
+    const isStash=!!c.is_stash, isOrphan=!!c.is_orphan;
+    const hashClr=isStash?'var(--accent)':isOrphan?'var(--red)':'var(--purple)';
+    const shortSha=isStash?'STASH':isOrphan?'REFLOG':c.sha.slice(0,8);
+    const mc=getMatchedChanges(c);
+    const realCnt=mc.items.length;
+    const filesSummary=mc.skipped
+      ?'<span class="badge badge-red" style="font-size:.7rem">Fast Mode</span>'
+      :`<span class="badge badge-muted">${realCnt} file${realCnt!==1?'s':''}</span> <span class="dim">&#x25B6;</span>`;
+
+    /* commit row */
+    const tr=document.createElement('tr');
+    tr.style.cursor='pointer';
+    if(isStash)tr.style.borderLeft='3px solid var(--accent)';
+    if(isOrphan)tr.style.borderLeft='3px solid var(--red)';
+    tr.onclick=()=>toggleDetails(idx);
+    tr.innerHTML=`
+      <td class="mono" style="color:${hashClr};font-weight:700">${shortSha}</td>
+      <td class="dim" style="font-size:.8rem">${c.date||'&#x2014;'}</td>
+      <td style="color:var(--text)">${esc(c.author)||'&#x2014;'}</td>
+      <td><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--text-dim)">${esc(c.message)}</div></td>
+      <td>${filesSummary}</td>`;
+
+    /* detail row */
+    const det=document.createElement('tr');
+    det.id='det-'+idx;
+    det.style.display='none';
+    det.style.background='var(--bg-inset)';
+
+    let cHtml='';
+    if(mc.skipped){
+      cHtml='<div style="padding:1rem;color:var(--red)">&#x26A0;&#xFE0F; Details omitted (Fast Mode). Re-run with <code>--full-history</code> for deep analysis.</div>';
+    }else if(mc.items.length){
+      cHtml=mc.items.map((ch,fi)=>{
+        const tagCls={ADDED:'badge-green',MODIFIED:'badge-blue',DELETED:'badge-red',STASHED:'badge-amber'}[ch.type]||'badge-muted';
+        const uid=`diff-${idx}-${fi}`;
+        const hasDiff=!!(ch.diff&&!ch.diff.startsWith('['));
+        const btnHtml=hasDiff
+          ?`<button class="btn btn-ghost" id="btn-${uid}" style="font-size:.75rem;padding:3px 8px"
+              onclick="event.stopPropagation();toggleDiff('${uid}',this)">View Diff</button>`
+          :'';
+        const diffHtml=hasDiff
+          ?`<div id="${uid}" class="diff-wrap">${renderSBS(ch.diff)}</div>`
+          :'';
+        return`<div style="border-bottom:1px solid var(--border)">
+          <div style="padding:.5rem 1rem;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <span class="badge ${tagCls}">${ch.type}</span>
+              <span class="mono" style="margin-left:.5rem;font-size:.82rem;color:var(--text)">${esc(ch.path)}</span>
+            </div>
+            ${btnHtml}
+          </div>
+          ${diffHtml}
+        </div>`;
+      }).join('');
+    }else{
+      cHtml='<div style="padding:.75rem 1rem;color:var(--text-muted)">No recorded changes.</div>';
+    }
+
+    det.innerHTML=`<td colspan="5" style="padding:0;border:none">${cHtml}</td>`;
+    tb.append(tr,det);
+  });
+
+  info.textContent=`Page ${cur} of ${tp} (${tot} commit${tot!==1?'s':''})`;
+  pgn.innerHTML='';
+  const pb=document.createElement('button');
+  pb.textContent='‹';pb.disabled=cur===1;
+  pb.onclick=()=>{cur--;render()};pgn.appendChild(pb);
+  const nb=document.createElement('button');
+  nb.textContent='›';nb.disabled=cur===tp;
+  nb.onclick=()=>{cur++;render()};pgn.appendChild(nb);
+}
+
+document.getElementById('qm').addEventListener('input',e=>{
+  commitFilter=e.target.value.trim().toLowerCase();
+  applyFilters();
+});
+document.getElementById('qf').addEventListener('input',e=>{
+  fileFilter=e.target.value.trim().toLowerCase();
+  applyFilters();
+});
+render();
+</script>
+
+<footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
+  border-top:1px solid var(--border);margin-top:3rem">
+  Git Leak Explorer &bull; Forensic &amp; Pentest Toolkit &bull;
+  Generated 2026-03-05 01:08 UTC
+</footer>
+</body></html>

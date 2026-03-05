@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard — Git Leak Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+
+:root {
+  --bg:         #0c0e14;
+  --bg-card:    #12151f;
+  --bg-hover:   #1a1e2d;
+  --bg-inset:   #090b10;
+  --border:     #1e2535;
+  --border-hl:  #2e3a50;
+  --text:       #c9d1e0;
+  --text-muted: #5a6a88;
+  --text-dim:   #7a8aaa;
+  --accent:     #e8a020;
+  --accent-dim: rgba(232,160,32,0.12);
+  --green:      #22c55e;
+  --green-dim:  rgba(34,197,94,0.12);
+  --red:        #ef4444;
+  --red-dim:    rgba(239,68,68,0.12);
+  --blue:       #3b82f6;
+  --blue-dim:   rgba(59,130,246,0.12);
+  --purple:     #a78bfa;
+  --purple-dim: rgba(167,139,250,0.12);
+  --mono:       'Berkeley Mono','JetBrains Mono','Fira Code',monospace;
+  --sans:       'Geist','Syne','DM Sans',sans-serif;
+  --radius:     6px;
+  --shadow:     0 4px 24px rgba(0,0,0,0.6);
+}
+[data-theme="light"] {
+  --bg:         #f8f9fc;
+  --bg-card:    #ffffff;
+  --bg-hover:   #f1f3f8;
+  --bg-inset:   #e8eaf0;
+  --border:     #d1d9e6;
+  --border-hl:  #b8c4d8;
+  --text:       #1a2035;
+  --text-muted: #7a8aaa;
+  --text-dim:   #5a6a88;
+  --accent:     #c47a00;
+  --accent-dim: rgba(196,122,0,0.10);
+  --green:      #16a34a;
+  --green-dim:  rgba(22,163,74,0.10);
+  --red:        #dc2626;
+  --red-dim:    rgba(220,38,38,0.10);
+  --blue:       #2563eb;
+  --blue-dim:   rgba(37,99,235,0.10);
+  --purple:     #7c3aed;
+  --purple-dim: rgba(124,58,237,0.10);
+  --shadow:     0 4px 24px rgba(0,0,0,0.12);
+}
+
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:15px}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--sans);min-height:100vh;
+  line-height:1.6;
+  transition:background .2s,color .2s;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.mono{font-family:var(--mono);font-size:.82rem;letter-spacing:.02em}
+.muted{color:var(--text-muted)}
+.dim{color:var(--text-dim)}
+code{font-family:var(--mono);font-size:.82rem;background:var(--bg-inset);
+     padding:2px 6px;border-radius:3px;color:var(--accent)}
+
+/* ── layout ── */
+.container{max-width:1300px;margin:0 auto;padding:2rem}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.grid-2{grid-template-columns:1fr}}
+
+/* ── cards ── */
+.card{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;
+}
+.card-header{
+  padding:.8rem 1.1rem;background:rgba(255,255,255,.02);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  font-weight:600;font-size:.9rem;
+}
+.card-body{padding:1.1rem}
+
+/* ── badges ── */
+.badge{
+  display:inline-flex;align-items:center;
+  padding:3px 8px;border-radius:99px;
+  font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+}
+.badge-red   {background:var(--red-dim);   color:var(--red);   border:1px solid var(--red)}
+.badge-green {background:var(--green-dim); color:var(--green); border:1px solid var(--green)}
+.badge-blue  {background:var(--blue-dim);  color:var(--blue);  border:1px solid var(--blue)}
+.badge-amber {background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent)}
+.badge-purple{background:var(--purple-dim);color:var(--purple);border:1px solid var(--purple)}
+.badge-muted {background:var(--bg-hover);  color:var(--text-muted);border:1px solid var(--border)}
+
+/* ── buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:.4rem;
+  padding:.5rem 1rem;border-radius:var(--radius);
+  font-size:.85rem;cursor:pointer;transition:all .15s;
+  text-decoration:none;border:1px solid transparent;font-weight:500;
+}
+.btn-primary{background:var(--accent);color:#000;border-color:var(--accent)}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-ghost{background:transparent;color:var(--text-dim);border-color:var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── table ── */
+.tbl-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{padding:.75rem 1rem;text-align:left;color:var(--text-muted);font-weight:500;
+   background:rgba(255,255,255,.02);border-bottom:1px solid var(--border)}
+td{padding:.7rem 1rem;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr:hover{background:var(--bg-hover)}
+tbody tr:last-child td{border-bottom:none}
+
+/* ── search ── */
+.search-wrap{position:relative}
+.search-wrap input{
+  width:100%;padding:.6rem 1rem .6rem 2.4rem;
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);font-size:.88rem;
+  font-family:var(--sans);
+}
+.search-wrap input:focus{outline:none;border-color:var(--accent)}
+.search-icon{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);
+  color:var(--text-muted);pointer-events:none;font-size:.85rem}
+
+/* ── pagination ── */
+.pgn{display:flex;gap:.35rem}
+.pgn button{
+  width:30px;height:30px;border-radius:var(--radius);
+  background:var(--bg-card);border:1px solid var(--border);
+  color:var(--text);cursor:pointer;font-size:.85rem;
+}
+.pgn button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.pgn button.active{background:var(--accent);border-color:var(--accent);color:#000}
+.pgn button:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── top-bar ── */
+.topbar{
+  background:var(--bg-card);border-bottom:1px solid var(--border);
+  padding:.75rem 1.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.topbar-brand{display:flex;align-items:center;gap:.75rem;font-weight:700;font-size:1rem}
+.topbar-logo{
+  width:28px;height:28px;background:var(--accent);color:#000;
+  border-radius:5px;display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:.85rem;letter-spacing:-.05em;
+}
+.topbar-nav{display:flex;align-items:center;gap:.75rem}
+
+/* ── dark-mode toggle ── */
+.theme-toggle{
+  width:36px;height:20px;background:var(--bg-hover);border:1px solid var(--border);
+  border-radius:99px;cursor:pointer;position:relative;transition:background .2s;
+}
+.theme-toggle::after{
+  content:'';position:absolute;top:2px;left:2px;
+  width:14px;height:14px;background:var(--text-muted);border-radius:50%;
+  transition:transform .2s,background .2s;
+}
+[data-theme="light"] .theme-toggle{background:var(--accent-dim)}
+[data-theme="light"] .theme-toggle::after{
+  transform:translateX(16px);background:var(--accent);
+}
+
+/* ── code block ── */
+.code-block{
+  background:var(--bg-inset);border:1px solid var(--border);
+  border-radius:var(--radius);padding:1rem;
+  font-family:var(--mono);font-size:.8rem;
+  color:#7ee787;overflow-x:auto;white-space:pre-wrap;word-break:break-all;
+}
+
+/* ── diff ── */
+.diff-table{width:100%;border-collapse:collapse;table-layout:fixed;
+  font-family:var(--mono);font-size:.75rem}
+.diff-table td{padding:2px 6px;white-space:pre-wrap;word-break:break-all;border-bottom:none}
+.diff-num{width:36px;text-align:right;color:var(--text-muted);opacity:.5;
+  border-right:1px solid var(--border);user-select:none}
+.diff-add{background:rgba(34,197,94,.12);color:#4ade80}
+.diff-del{background:rgba(239,68,68,.12);color:#f87171}
+.diff-empty{background:var(--bg-inset)}
+
+/* ── misc ── */
+.stat-num{font-size:2.2rem;font-weight:800;line-height:1;color:var(--text)}
+.stat-lbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-top:.2rem}
+hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
+.mb-1{margin-bottom:.5rem}.mb-2{margin-bottom:1rem}.mb-3{margin-bottom:1.5rem}
+.mt-1{margin-top:.5rem}.mt-2{margin-top:1rem}.mt-3{margin-top:1.5rem}
+.flex{display:flex}.items-center{align-items:center}.gap-1{gap:.5rem}.gap-2{gap:1rem}
+.w-full{width:100%}.text-right{text-align:right}
+
+
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem('gle-theme') || 'dark';
+  document.documentElement.dataset.theme = saved;
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.theme-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem('gle-theme', next);
+      });
+    });
+  });
+})();
+</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--accent);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--text-dim);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--text-dim);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--text-dim);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--text-dim);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--text-dim);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
+<div class="container">
+  <div class="flex items-center mb-3" style="justify-content:space-between">
+    <div>
+      <h2 style="font-weight:700">Analysis Dashboard</h2>
+      <a href="https://startup-api.io" target="_blank" class="muted" style="font-size:.82rem">https://startup-api.io</a>
+    </div>
+  </div>
+
+  
+<div class="card mb-3" style="border-color:var(--red)">
+  <div class="card-header" style="background:var(--red-dim);color:var(--red)">
+    <span>&#x26A0;&#xFE0F; CRITICAL SECRETS DETECTED</span>
+    <span class="badge badge-red">3</span>
+  </div>
+  <div class="card-body">
+    <table><tr><td><span class="badge badge-red">GitHub Token</span></td><td class="dim" style="font-size:.8rem">.github/workflows/deploy.yml</td><td class="mono" style="font-size:.78rem;color:var(--red)">ghp_16C7e42F292c6912E7710c838347Ae178B4a</td></tr><tr><td><span class="badge badge-red">Slack Token</span></td><td class="dim" style="font-size:.8rem">.env.production</td><td class="mono" style="font-size:.78rem;color:var(--red)">xoxb-263594206-2162371917-token_removed</td></tr><tr><td><span class="badge badge-red">Generic API Key</span></td><td class="dim" style="font-size:.8rem">src/db/prisma.ts</td><td class="mono" style="font-size:.78rem;color:var(--red)">access_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.DEMO'</td></tr></table>
+    <a href="secrets.html" class="btn w-full mt-2"
+       style="background:var(--red);color:#fff;border-color:var(--red);font-weight:600">
+      View Secrets Report &#x2192;
+    </a>
+  </div>
+</div>
+  
+
+  <div class="grid-2 mb-3">
+    <div>
+<div class="card">
+  <div class="card-header">
+    <span>🛡 Hardening &amp; Config</span>
+    <span class="badge badge-red">4 failures</span>
+  </div>
+  <div class="card-body">
+    <table><tr><td class="mono" style="font-size:.8rem">HEAD</td><td><span class="badge badge-red">EXPOSED</span></td></tr><tr><td class="mono" style="font-size:.8rem">refs_heads</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">packed_refs</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">index</td><td><span class="badge badge-red">EXPOSED</span></td></tr><tr><td class="mono" style="font-size:.8rem">objects_root</td><td><span class="badge badge-red">EXPOSED</span></td></tr><tr><td class="mono" style="font-size:.8rem">logs</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">config</td><td><span class="badge badge-red">EXPOSED</span></td></tr><tr><td class="mono" style="font-size:.8rem">stash</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">info_refs</td><td><span class="badge badge-green">OK</span></td></tr></table>
+    <a href="hardening_report.html" class="btn btn-ghost w-full mt-2">Full Diagnostic →</a>
+  </div>
+</div><div style="margin-top:1rem">
+<div class="card">
+  <div class="card-header">
+    <span>⏳ Recent History</span>
+    <span class="badge badge-blue">6 commits</span>
+  </div>
+  <div class="card-body">
+    <div class="muted mb-2" style="font-size:.8rem">HEAD: <span class="mono">aeed18f2</span></div>
+    <table><tr>
+          <td class="mono" style="color:var(--purple);font-weight:700">aeed18f</td>
+          <td class="dim" style="font-size:.82rem">ci: add GitHub Actions deploy workflow</td>
+          <td class="text-right"><span class="badge badge-muted">2025-02-28</span></td></tr><tr>
+          <td class="mono" style="color:var(--purple);font-weight:700">ae7e256</td>
+          <td class="dim" style="font-size:.82rem">feat: add rate limiting middleware</td>
+          <td class="text-right"><span class="badge badge-muted">2025-02-25</span></td></tr><tr>
+          <td class="mono" style="color:var(--purple);font-weight:700">c0bf4de</td>
+          <td class="dim" style="font-size:.82rem">fix: rotate leaked Slack token (oops)</td>
+          <td class="text-right"><span class="badge badge-muted">2025-02-20</span></td></tr><tr>
+          <td class="mono" style="color:var(--purple);font-weight:700">e9d7744</td>
+          <td class="dim" style="font-size:.82rem">feat: JWT authentication</td>
+          <td class="text-right"><span class="badge badge-muted">2025-02-15</span></td></tr><tr>
+          <td class="mono" style="color:var(--purple);font-weight:700">b8d7d33</td>
+          <td class="dim" style="font-size:.82rem">init: project scaffold</td>
+          <td class="text-right"><span class="badge badge-muted">2025-02-10</span></td></tr><tr>
+          <td class="mono" style="color:var(--red);font-weight:700">REFLOG</td>
+          <td class="dim" style="font-size:.82rem">temp: hardcode token for staging test (REVERTED)</td>
+          <td class="text-right"><span class="badge badge-red">ORPHAN</span></td></tr></table>
+    <a href="history.html" class="btn btn-ghost w-full mt-2">Explore Timeline →</a>
+  </div>
+</div></div></div>
+    <div>
+<div class="card">
+  <div class="card-header">👤 Identities (OSINT)</div>
+  <div class="card-body" style="text-align:center">
+    <div class="stat-num">3</div>
+    <div class="stat-lbl">Identified Authors</div>
+    <p class="muted mt-1" style="font-size:.82rem">Developers and emails extracted from history.</p>
+    <a href="users.html" class="btn btn-ghost w-full mt-2">View User List →</a>
+  </div>
+</div><div style="margin-top:1rem">
+<div class="card">
+  <div class="card-header">
+    <span>📂 Files (.git Index)</span>
+    <span class="badge badge-amber">12 files</span>
+  </div>
+  <div class="card-body">
+    <table><tr><td class="mono" style="font-size:.78rem;word-break:break-all">src/app.ts</td><td class="text-right"><a href="https://startup-api.io/src/app.ts" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr><tr><td class="mono" style="font-size:.78rem;word-break:break-all">src/auth/jwt.ts</td><td class="text-right"><a href="https://startup-api.io/src/auth/jwt.ts" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr><tr><td class="mono" style="font-size:.78rem;word-break:break-all">src/routes/auth.ts</td><td class="text-right"><a href="https://startup-api.io/src/routes/auth.ts" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr><tr><td class="mono" style="font-size:.78rem;word-break:break-all">src/routes/users.ts</td><td class="text-right"><a href="https://startup-api.io/src/routes/users.ts" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr><tr><td class="mono" style="font-size:.78rem;word-break:break-all">src/middleware/rateLimit.ts</td><td class="text-right"><a href="https://startup-api.io/src/middleware/rateLimit.ts" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr><tr><td class="mono" style="font-size:.78rem;word-break:break-all">src/controllers/authController.ts</td><td class="text-right"><a href="https://startup-api.io/src/controllers/authController.ts" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr><tr><td class="mono" style="font-size:.78rem;word-break:break-all">src/db/prisma.ts</td><td class="text-right"><a href="https://startup-api.io/src/db/prisma.ts" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr><tr><td class="mono" style="font-size:.78rem;word-break:break-all">.github/workflows/deploy.yml</td><td class="text-right"><a href="https://startup-api.io/.github/workflows/deploy.yml" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr></table>
+    <p class="muted text-right mt-1" style="font-size:.75rem">+4 more files</p>
+    <a href="listing.html" class="btn btn-ghost w-full mt-2">Full Listing →</a>
+  </div>
+</div></div></div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <span>&#x1F310; Infrastructure Map</span>
+      <span class="badge badge-blue">5</span>
+    </div>
+    <div class="card-body"><table><tr><td><span class="badge badge-blue" style="font-size:.68rem">API_ENDPOINT</span></td><td class="mono" style="font-size:.78rem;color:var(--purple)">/api/v1/auth/login</td><td class="dim" style="font-size:.75rem">src/routes/auth.ts</td></tr><tr><td><span class="badge badge-blue" style="font-size:.68rem">API_ENDPOINT</span></td><td class="mono" style="font-size:.78rem;color:var(--purple)">/api/v1/users</td><td class="dim" style="font-size:.75rem">src/routes/users.ts</td></tr><tr><td><span class="badge badge-blue" style="font-size:.68rem">EXTERNAL_HOST</span></td><td class="mono" style="font-size:.78rem;color:var(--purple)">api.startup-api.io</td><td class="dim" style="font-size:.75rem">src/app.ts</td></tr><tr><td><span class="badge badge-blue" style="font-size:.68rem">EXTERNAL_HOST</span></td><td class="mono" style="font-size:.78rem;color:var(--purple)">hooks.slack.com</td><td class="dim" style="font-size:.75rem">src/middleware/rateLimit.ts</td></tr><tr><td><span class="badge badge-blue" style="font-size:.68rem">IP_ADDRESS</span></td><td class="mono" style="font-size:.78rem;color:var(--purple)">10.0.1.42</td><td class="dim" style="font-size:.75rem">.env.production</td></tr></table><a href="infrastructure_report.html" class="btn btn-ghost w-full mt-2">Open Infrastructure Map (5) →</a></div>
+  </div>
+
+  
+<div class="card mb-3">
+  <div class="card-header">
+    <span>🔨 Brute-Force Files</span>
+    <span class="badge badge-blue">4</span>
+  </div>
+  <div class="card-body">
+    <table><tr><td class="mono" style="font-size:.78rem">.env.production</td><td class="text-right"><span class="badge badge-green">VERSIONED</span></td></tr><tr><td class="mono" style="font-size:.78rem">.github/workflows/deploy.yml</td><td class="text-right"><span class="badge badge-green">VERSIONED</span></td></tr><tr><td class="mono" style="font-size:.78rem">../../../etc/shadow</td><td class="text-right"><span class="badge badge-muted">LOCAL</span></td></tr><tr><td class="mono" style="font-size:.78rem">package.json</td><td class="text-right"><span class="badge badge-green">VERSIONED</span></td></tr></table>
+    <a href="bruteforce_report.html" class="btn btn-ghost w-full mt-2">Full Brute-Force Report →</a>
+  </div>
+</div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <span>📦 Packfiles</span>
+        <span class="badge badge-muted">0</span>
+      </div>
+      <div class="card-body"><p class="muted" style="font-size:.82rem">No packfiles detected.</p></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span>⚠️ Other Leaks (--full-scan)</span>
+        <span class="badge badge-muted">0</span>
+      </div>
+      <div class="card-body"><p class="muted" style="font-size:.82rem">No additional leaks.</p></div>
+    </div>
+  </div>
+</div>
+<script>
+const ABS_BASE="/home/claude/demo_output/startup-api.io";
+const isServed=window.location.protocol.startsWith('http');
+function handlePackAction(rel,btn){
+  if(isServed){window.open(rel+'/','_blank')}
+  else{
+    const p=ABS_BASE+'/'+rel;
+    navigator.clipboard.writeText(p).then(()=>{
+      const orig=btn.textContent;btn.textContent='Copied!';
+      setTimeout(()=>btn.textContent=orig,2000);
+    });
+  }
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.btn-pack-action').forEach(b=>{
+    b.textContent=isServed?'Open Folder ↗':'Copy Local Path';
+  });
+});
+</script>
+
+<footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
+  border-top:1px solid var(--border);margin-top:3rem">
+  Git Leak Explorer &bull; Forensic &amp; Pentest Toolkit &bull;
+  Generated 2026-03-05 01:08 UTC
+</footer>
+</body></html>

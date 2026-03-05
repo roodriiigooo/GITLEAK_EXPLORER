@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "sha": "deacbabbf8d8d76dd393ac6e64746f06a586d22c",
+    "author": "Lucas Ferreira <lucas@legacy-ecommerce.shop>",
+    "date": "2025-01-16 08:00:00",
+    "message": "WIP: migrating payment gateway to Stripe"
+  },
+  "entries": [
+    {
+      "path": "src/checkout/stripe_integration.php",
+      "sha1": "53174b2556d17d0e21954c6043e9e1ce41e38a6d",
+      "type": "STASHED",
+      "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+<?php\n+$stripe_key = 'sk_live_4eC39HqLyjWDarjtT1zdp7dc';\n+// TODO: move to env"
+    },
+    {
+      "path": "config/stripe.env",
+      "sha1": "31aace491ae3e6bb3edb1184af12e1cad6578035",
+      "type": "STASHED",
+      "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+STRIPE_SECRET=sk_live_4eC39HqLyjWDarjtT1zdp7dc\n+STRIPE_PUBLIC=pk_live_abc123"
+    }
+  ]
+}

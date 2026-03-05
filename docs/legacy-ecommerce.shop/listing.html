@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>File Listing — Git Leak Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+
+:root {
+  --bg:         #0c0e14;
+  --bg-card:    #12151f;
+  --bg-hover:   #1a1e2d;
+  --bg-inset:   #090b10;
+  --border:     #1e2535;
+  --border-hl:  #2e3a50;
+  --text:       #c9d1e0;
+  --text-muted: #5a6a88;
+  --text-dim:   #7a8aaa;
+  --accent:     #e8a020;
+  --accent-dim: rgba(232,160,32,0.12);
+  --green:      #22c55e;
+  --green-dim:  rgba(34,197,94,0.12);
+  --red:        #ef4444;
+  --red-dim:    rgba(239,68,68,0.12);
+  --blue:       #3b82f6;
+  --blue-dim:   rgba(59,130,246,0.12);
+  --purple:     #a78bfa;
+  --purple-dim: rgba(167,139,250,0.12);
+  --mono:       'Berkeley Mono','JetBrains Mono','Fira Code',monospace;
+  --sans:       'Geist','Syne','DM Sans',sans-serif;
+  --radius:     6px;
+  --shadow:     0 4px 24px rgba(0,0,0,0.6);
+}
+[data-theme="light"] {
+  --bg:         #f8f9fc;
+  --bg-card:    #ffffff;
+  --bg-hover:   #f1f3f8;
+  --bg-inset:   #e8eaf0;
+  --border:     #d1d9e6;
+  --border-hl:  #b8c4d8;
+  --text:       #1a2035;
+  --text-muted: #7a8aaa;
+  --text-dim:   #5a6a88;
+  --accent:     #c47a00;
+  --accent-dim: rgba(196,122,0,0.10);
+  --green:      #16a34a;
+  --green-dim:  rgba(22,163,74,0.10);
+  --red:        #dc2626;
+  --red-dim:    rgba(220,38,38,0.10);
+  --blue:       #2563eb;
+  --blue-dim:   rgba(37,99,235,0.10);
+  --purple:     #7c3aed;
+  --purple-dim: rgba(124,58,237,0.10);
+  --shadow:     0 4px 24px rgba(0,0,0,0.12);
+}
+
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:15px}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--sans);min-height:100vh;
+  line-height:1.6;
+  transition:background .2s,color .2s;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.mono{font-family:var(--mono);font-size:.82rem;letter-spacing:.02em}
+.muted{color:var(--text-muted)}
+.dim{color:var(--text-dim)}
+code{font-family:var(--mono);font-size:.82rem;background:var(--bg-inset);
+     padding:2px 6px;border-radius:3px;color:var(--accent)}
+
+/* ── layout ── */
+.container{max-width:1300px;margin:0 auto;padding:2rem}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:768px){.grid-2{grid-template-columns:1fr}}
+
+/* ── cards ── */
+.card{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;
+}
+.card-header{
+  padding:.8rem 1.1rem;background:rgba(255,255,255,.02);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  font-weight:600;font-size:.9rem;
+}
+.card-body{padding:1.1rem}
+
+/* ── badges ── */
+.badge{
+  display:inline-flex;align-items:center;
+  padding:3px 8px;border-radius:99px;
+  font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+}
+.badge-red   {background:var(--red-dim);   color:var(--red);   border:1px solid var(--red)}
+.badge-green {background:var(--green-dim); color:var(--green); border:1px solid var(--green)}
+.badge-blue  {background:var(--blue-dim);  color:var(--blue);  border:1px solid var(--blue)}
+.badge-amber {background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent)}
+.badge-purple{background:var(--purple-dim);color:var(--purple);border:1px solid var(--purple)}
+.badge-muted {background:var(--bg-hover);  color:var(--text-muted);border:1px solid var(--border)}
+
+/* ── buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:.4rem;
+  padding:.5rem 1rem;border-radius:var(--radius);
+  font-size:.85rem;cursor:pointer;transition:all .15s;
+  text-decoration:none;border:1px solid transparent;font-weight:500;
+}
+.btn-primary{background:var(--accent);color:#000;border-color:var(--accent)}
+.btn-primary:hover{filter:brightness(1.1)}
+.btn-ghost{background:transparent;color:var(--text-dim);border-color:var(--border)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── table ── */
+.tbl-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{padding:.75rem 1rem;text-align:left;color:var(--text-muted);font-weight:500;
+   background:rgba(255,255,255,.02);border-bottom:1px solid var(--border)}
+td{padding:.7rem 1rem;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr:hover{background:var(--bg-hover)}
+tbody tr:last-child td{border-bottom:none}
+
+/* ── search ── */
+.search-wrap{position:relative}
+.search-wrap input{
+  width:100%;padding:.6rem 1rem .6rem 2.4rem;
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);font-size:.88rem;
+  font-family:var(--sans);
+}
+.search-wrap input:focus{outline:none;border-color:var(--accent)}
+.search-icon{position:absolute;left:.75rem;top:50%;transform:translateY(-50%);
+  color:var(--text-muted);pointer-events:none;font-size:.85rem}
+
+/* ── pagination ── */
+.pgn{display:flex;gap:.35rem}
+.pgn button{
+  width:30px;height:30px;border-radius:var(--radius);
+  background:var(--bg-card);border:1px solid var(--border);
+  color:var(--text);cursor:pointer;font-size:.85rem;
+}
+.pgn button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.pgn button.active{background:var(--accent);border-color:var(--accent);color:#000}
+.pgn button:disabled{opacity:.35;cursor:not-allowed}
+
+/* ── top-bar ── */
+.topbar{
+  background:var(--bg-card);border-bottom:1px solid var(--border);
+  padding:.75rem 1.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.topbar-brand{display:flex;align-items:center;gap:.75rem;font-weight:700;font-size:1rem}
+.topbar-logo{
+  width:28px;height:28px;background:var(--accent);color:#000;
+  border-radius:5px;display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:.85rem;letter-spacing:-.05em;
+}
+.topbar-nav{display:flex;align-items:center;gap:.75rem}
+
+/* ── dark-mode toggle ── */
+.theme-toggle{
+  width:36px;height:20px;background:var(--bg-hover);border:1px solid var(--border);
+  border-radius:99px;cursor:pointer;position:relative;transition:background .2s;
+}
+.theme-toggle::after{
+  content:'';position:absolute;top:2px;left:2px;
+  width:14px;height:14px;background:var(--text-muted);border-radius:50%;
+  transition:transform .2s,background .2s;
+}
+[data-theme="light"] .theme-toggle{background:var(--accent-dim)}
+[data-theme="light"] .theme-toggle::after{
+  transform:translateX(16px);background:var(--accent);
+}
+
+/* ── code block ── */
+.code-block{
+  background:var(--bg-inset);border:1px solid var(--border);
+  border-radius:var(--radius);padding:1rem;
+  font-family:var(--mono);font-size:.8rem;
+  color:#7ee787;overflow-x:auto;white-space:pre-wrap;word-break:break-all;
+}
+
+/* ── diff ── */
+.diff-table{width:100%;border-collapse:collapse;table-layout:fixed;
+  font-family:var(--mono);font-size:.75rem}
+.diff-table td{padding:2px 6px;white-space:pre-wrap;word-break:break-all;border-bottom:none}
+.diff-num{width:36px;text-align:right;color:var(--text-muted);opacity:.5;
+  border-right:1px solid var(--border);user-select:none}
+.diff-add{background:rgba(34,197,94,.12);color:#4ade80}
+.diff-del{background:rgba(239,68,68,.12);color:#f87171}
+.diff-empty{background:var(--bg-inset)}
+
+/* ── misc ── */
+.stat-num{font-size:2.2rem;font-weight:800;line-height:1;color:var(--text)}
+.stat-lbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-top:.2rem}
+hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
+.mb-1{margin-bottom:.5rem}.mb-2{margin-bottom:1rem}.mb-3{margin-bottom:1.5rem}
+.mt-1{margin-top:.5rem}.mt-2{margin-top:1rem}.mt-3{margin-top:1.5rem}
+.flex{display:flex}.items-center{align-items:center}.gap-1{gap:.5rem}.gap-2{gap:1rem}
+.w-full{width:100%}.text-right{text-align:right}
+
+
+</style>
+<script>
+(function(){
+  const saved = localStorage.getItem('gle-theme') || 'dark';
+  document.documentElement.dataset.theme = saved;
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.theme-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        localStorage.setItem('gle-theme', next);
+      });
+    });
+  });
+})();
+</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--text-dim);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--accent);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--text-dim);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--text-dim);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--text-dim);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--text-dim);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
+<div class="container">
+  <div class="flex items-center gap-2 mb-3" style="justify-content:space-between">
+    <div>
+      <h2 style="font-weight:700">📂 Recovered Files</h2>
+      <p class="muted" style="font-size:.82rem">Complete repository index (.git/index)</p>
+    </div>
+    <span class="badge badge-amber">15 files</span>
+  </div>
+  <div class="flex gap-2 mb-3">
+    <a href="report.html" class="btn btn-ghost">← Back</a>
+    <div class="search-wrap" style="flex:1;max-width:500px">
+      <span class="search-icon">⌕</span>
+      <input id="q" type="text" placeholder="Search by name, extension or SHA…">
+    </div>
+    <select id="ps" class="btn btn-ghost" style="cursor:pointer">
+      <option value="25">25 / page</option>
+      <option value="100" selected>100 / page</option>
+      <option value="500">500 / page</option>
+    </select>
+    <button id="reset" class="btn btn-ghost">✕ Clear</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th style="width:48%" class="sortable" data-k="path" style="cursor:pointer">Filename ↕</th>
+        <th style="width:18%">Local Status</th>
+        <th style="width:10%">Remote</th>
+        <th style="width:24%" class="sortable" data-k="sha" style="cursor:pointer">Blob SHA-1 ↕</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+  <div class="flex items-center mt-2" style="justify-content:space-between;color:var(--text-muted);font-size:.82rem">
+    <span id="info">Loading…</span>
+    <div class="flex items-center gap-1">
+      <button id="prev" class="pgn-btn btn btn-ghost" style="padding:4px 10px">‹</button>
+      <span id="pd" style="font-size:.8rem"></span>
+      <button id="next" class="pgn-btn btn btn-ghost" style="padding:4px 10px">›</button>
+    </div>
+  </div>
+</div>
+<!-- File viewer overlay -->
+<div id="fv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;padding:1.5rem">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);
+    height:100%;display:flex;flex-direction:column">
+    <div style="padding:.75rem 1rem;border-bottom:1px solid var(--border);
+      display:flex;justify-content:space-between;align-items:center">
+      <span id="fv-title" class="mono" style="font-size:.85rem"></span>
+      <button onclick="document.getElementById('fv').style.display='none'"
+        class="btn btn-ghost" style="padding:4px 10px">✕</button>
+    </div>
+    <div style="flex:1;overflow:auto;padding:1rem;background:var(--bg-inset)">
+      <img id="fv-img" style="display:none;max-width:100%;height:auto">
+      <pre id="fv-code" class="code-block" style="display:none;height:100%"></pre>
+    </div>
+  </div>
+</div>
+<script>
+const DATA=[{"path": "src/checkout/payment.php", "remote_url": "http://legacy-ecommerce.shop/src/checkout/payment.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/52/33e9d176271b9eb5a039525dca79a6a2a0d7f9", "sha": "5233e9d176271b9eb5a039525dca79a6a2a0d7f9", "local_exists": false, "local_url": ""}, {"path": "src/recommendations.php", "remote_url": "http://legacy-ecommerce.shop/src/recommendations.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/c7/2971e4807612ef7b3a047ec4586e9ac1652056", "sha": "c72971e4807612ef7b3a047ec4586e9ac1652056", "local_exists": false, "local_url": ""}, {"path": "src/catalog.php", "remote_url": "http://legacy-ecommerce.shop/src/catalog.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/bd/011306afd26eaa5a9cc7ce61d57deffa23c441", "sha": "bd011306afd26eaa5a9cc7ce61d57deffa23c441", "local_exists": false, "local_url": ""}, {"path": "src/search.php", "remote_url": "http://legacy-ecommerce.shop/src/search.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/bf/d357a8b5286e4776eec2d108e4d3818f954f7a", "sha": "bfd357a8b5286e4776eec2d108e4d3818f954f7a", "local_exists": false, "local_url": ""}, {"path": "src/cart.php", "remote_url": "http://legacy-ecommerce.shop/src/cart.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/3a/3395be297eaffcdb2fe0832025553a20fa8716", "sha": "3a3395be297eaffcdb2fe0832025553a20fa8716", "local_exists": false, "local_url": ""}, {"path": "src/user/auth.php", "remote_url": "http://legacy-ecommerce.shop/src/user/auth.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/69/98ef7d24126acd5b52bd489ba06d665dfa9a63", "sha": "6998ef7d24126acd5b52bd489ba06d665dfa9a63", "local_exists": false, "local_url": ""}, {"path": "src/admin/dashboard.php", "remote_url": "http://legacy-ecommerce.shop/src/admin/dashboard.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/9c/f3aed3a5f662899ec8ecfb66a3a7f785c4eb08", "sha": "9cf3aed3a5f662899ec8ecfb66a3a7f785c4eb08", "local_exists": false, "local_url": ""}, {"path": "config/database.php", "remote_url": "http://legacy-ecommerce.shop/config/database.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/28/eed038c914fb43c10f4e8af1c013c2c86ad323", "sha": "28eed038c914fb43c10f4e8af1c013c2c86ad323", "local_exists": false, "local_url": ""}, {"path": "config/app.php", "remote_url": "http://legacy-ecommerce.shop/config/app.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/9a/05483556e329529b9d9e71ef57a61beb8f330e", "sha": "9a05483556e329529b9d9e71ef57a61beb8f330e", "local_exists": false, "local_url": ""}, {"path": "config/mail.php", "remote_url": "http://legacy-ecommerce.shop/config/mail.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/20/40ca0a6a1e851647be3ecc6e077347484266d0", "sha": "2040ca0a6a1e851647be3ecc6e077347484266d0", "local_exists": false, "local_url": ""}, {"path": "public/index.php", "remote_url": "http://legacy-ecommerce.shop/public/index.php", "blob_url": "http://legacy-ecommerce.shop/.git/objects/8e/d4eedcac0a919841828cb8108ff044682125ab", "sha": "8ed4eedcac0a919841828cb8108ff044682125ab", "local_exists": false, "local_url": ""}, {"path": "public/.htaccess", "remote_url": "http://legacy-ecommerce.shop/public/.htaccess", "blob_url": "http://legacy-ecommerce.shop/.git/objects/3b/bf0e85a16003bea8e76d4c41593057b6829bf2", "sha": "3bbf0e85a16003bea8e76d4c41593057b6829bf2", "local_exists": false, "local_url": ""}, {"path": "composer.json", "remote_url": "http://legacy-ecommerce.shop/composer.json", "blob_url": "http://legacy-ecommerce.shop/.git/objects/1b/3c4dacfa5e5af7c8dac9ee10180e8af6a19019", "sha": "1b3c4dacfa5e5af7c8dac9ee10180e8af6a19019", "local_exists": false, "local_url": ""}, {"path": "composer.lock", "remote_url": "http://legacy-ecommerce.shop/composer.lock", "blob_url": "http://legacy-ecommerce.shop/.git/objects/8e/7147fec367ce45b3059cd57dc116da522caf9d", "sha": "8e7147fec367ce45b3059cd57dc116da522caf9d", "local_exists": false, "local_url": ""}, {"path": ".env", "remote_url": "http://legacy-ecommerce.shop/.env", "blob_url": "http://legacy-ecommerce.shop/.git/objects/d3/d862054f1adac0ab8f06ba0520a58aebd0403b", "sha": "d3d862054f1adac0ab8f06ba0520a58aebd0403b", "local_exists": false, "local_url": ""}];
+let filtered=DATA.slice(),sortK=null,sortD=1,pageSize=100,cur=1;
+const tb=document.getElementById('tb');
+const info=document.getElementById('info');
+const pd=document.getElementById('pd');
+const prev=document.getElementById('prev');
+const next=document.getElementById('next');
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function render(){
+  pageSize=parseInt(document.getElementById('ps').value,10);
+  const tot=filtered.length,tp=Math.max(1,Math.ceil(tot/pageSize));
+  if(cur>tp)cur=tp;if(cur<1)cur=1;
+  const sl=filtered.slice((cur-1)*pageSize,cur*pageSize);
+  tb.innerHTML='';
+  sl.forEach(r=>{
+    const tr=document.createElement('tr');
+    const localHtml=r.local_exists
+      ?`<button onclick="viewFile('${r.local_url}','${esc(r.path)}')"
+          class="badge badge-green" style="cursor:pointer;border:none">✓ Restored Local</button>`
+      :`<span class="badge badge-muted">Remote Only</span>`;
+    tr.innerHTML=`
+      <td class="mono" style="word-break:break-all;font-size:.8rem;color:var(--text)">${esc(r.path)}</td>
+      <td>${localHtml}</td>
+      <td><a href="${r.remote_url}" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
+      <td><a href="${r.blob_url}" target="_blank" class="mono" style="color:var(--purple);font-size:.8rem">${r.sha}</a></td>`;
+    tb.appendChild(tr);
+  });
+  const s=(cur-1)*pageSize+1,e=Math.min(cur*pageSize,tot);
+  info.textContent=`Showing ${tot?s:0}–${e} of ${tot} files`;
+  pd.textContent=`Page ${cur} / ${tp}`;
+  prev.disabled=cur===1;next.disabled=cur===tp;
+}
+function applyFilter(){
+  const term=document.getElementById('q').value.trim().toLowerCase();
+  filtered=term?DATA.filter(r=>(r.path||'').toLowerCase().includes(term)||(r.sha||'').toLowerCase().includes(term)):DATA.slice();
+  if(sortK){filtered.sort((a,b)=>{const A=(a[sortK]||'').toLowerCase(),B=(b[sortK]||'').toLowerCase();return A<B?-sortD:A>B?sortD:0})}
+  cur=1;render();
+}
+document.getElementById('q').addEventListener('input',applyFilter);
+document.getElementById('ps').addEventListener('change',()=>{cur=1;render()});
+document.getElementById('reset').addEventListener('click',()=>{
+  document.getElementById('q').value='';
+  document.getElementById('ps').value='100';
+  sortK=null;sortD=1;filtered=DATA.slice();cur=1;render();
+});
+prev.addEventListener('click',()=>{if(cur>1){cur--;render()}});
+next.addEventListener('click',()=>{const tp=Math.ceil(filtered.length/pageSize);if(cur<tp){cur++;render()}});
+document.querySelectorAll('th.sortable').forEach(th=>{
+  th.style.cursor='pointer';
+  th.addEventListener('click',()=>{
+    const k=th.dataset.k;sortD=sortK===k?-sortD:1;sortK=k;applyFilter();
+  });
+});
+async function viewFile(url,filename){
+  const fv=document.getElementById('fv');
+  const img=document.getElementById('fv-img');
+  const code=document.getElementById('fv-code');
+  document.getElementById('fv-title').textContent=filename;
+  fv.style.display='block';img.style.display='none';code.style.display='none';code.textContent='Loading…';
+  const ext=filename.split('.').pop().toLowerCase();
+  const imgs=['png','jpg','jpeg','gif','svg','webp','ico'];
+  if(imgs.includes(ext)){img.src=url;img.style.display='block'}
+  else{
+    code.style.display='block';
+    try{const r=await fetch(url);if(!r.ok)throw new Error('Failed');code.textContent=await r.text()}
+    catch(e){code.textContent='Error loading file: '+e.message}
+  }
+}
+render();
+</script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+
+<footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
+  border-top:1px solid var(--border);margin-top:3rem">
+  Git Leak Explorer &bull; Forensic &amp; Pentest Toolkit &bull;
+  Generated 2026-03-05 01:08 UTC
+</footer>
+</body></html>

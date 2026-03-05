@@ -121,11 +121,11 @@ jobs:
           tag_name: ${{ steps.get_version.outputs.tag }}
           name: Release v${{ steps.get_version.outputs.version }}
           body: |
-            ## 🚀 Nova Versão Disponível
+            ## 🚀 New Version Available
             
-            Versão extraída de `version_info.txt`: **${{ steps.get_version.outputs.version }}**
+            Version extracted from `version_info.txt`: **${{ steps.get_version.outputs.version }}**
             
-            Build automático gerado a partir do commit:
+            Automatic build generated from commit:
             > ${{ steps.check_release.outputs.commit_subject }}
             
             ---

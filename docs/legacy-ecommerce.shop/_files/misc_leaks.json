@@ -1,0 +1,9 @@
+[
+  {
+    "type": "env",
+    "desc": "Environment Variables (.env)",
+    "url": "http://legacy-ecommerce.shop/.env",
+    "report_file": "env_report.html",
+    "dump_file": ".env"
+  }
+]

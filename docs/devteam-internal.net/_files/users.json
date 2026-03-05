@@ -1,0 +1,20 @@
+[
+  {
+    "raw": "Felipe Ramos <felipe.ramos@devteam.net>",
+    "name": "Felipe Ramos",
+    "email": "felipe.ramos@devteam.net",
+    "commits": 3
+  },
+  {
+    "raw": "Camila Torres <camila@devteam.net>",
+    "name": "Camila Torres",
+    "email": "camila@devteam.net",
+    "commits": 2
+  },
+  {
+    "raw": "Igor Mendes <igor.mendes@devteam.net>",
+    "name": "Igor Mendes",
+    "email": "igor.mendes@devteam.net",
+    "commits": 2
+  }
+]

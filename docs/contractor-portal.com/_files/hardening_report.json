@@ -1,0 +1,54 @@
+{
+  "base": "https://contractor-portal.com",
+  "checked_at": "2025-03-04T10:00:00+00:00",
+  "results": {
+    "HEAD": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "https://contractor-portal.com/.git/HEAD",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "refs_heads": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "https://contractor-portal.com/.git/refs/heads",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "packed_refs": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "index": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "objects_root": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "logs": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "config": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "stash": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "info_refs": {
+      "exposed": false,
+      "positive_urls": []
+    }
+  }
+}

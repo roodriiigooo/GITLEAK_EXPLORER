@@ -1,0 +1,66 @@
+{
+  "base": "https://startup-api.io",
+  "checked_at": "2025-03-04T10:00:00+00:00",
+  "results": {
+    "HEAD": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "https://startup-api.io/.git/HEAD",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "refs_heads": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "packed_refs": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "index": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "https://startup-api.io/.git/index",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "objects_root": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "https://startup-api.io/.git/objects/root",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "logs": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "config": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "https://startup-api.io/.git/config",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "stash": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "info_refs": {
+      "exposed": false,
+      "positive_urls": []
+    }
+  }
+}

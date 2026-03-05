@@ -1,428 +1,491 @@
 # 🕵️ Git Leak Explorer
 
-
-
-
 <div align="center">
 
-   **Ferramenta avançada de análise forense, recuperação de repositórios Git e outros artefatos expostos publicamente na web via HTTP com saída visual, perfeita para aquele recon de respeito**
+**Advanced forensic analysis, recovery, and reporting tool for exposed `.git` repositories and other artifacts publicly accessible over HTTP — with a modern visual interface, built for serious reconnaissance.**
 
 <img width="1111" height="428" alt="_multi_menu" src="https://github.com/user-attachments/assets/b29aea0a-48e4-44fd-9ec6-99e8e541d73e" />
 
+[About](#about) | [Legal Notice](#️-legal-notice) | [Features](#-key-features) | [Screenshots](#screenshots) | [Installation](#-installation--setup) | [Usage](#-how-to-use) | [Thanks](#tophat-thanks-)
 
- [Sobre](#sobre) | [Aviso Legal](#%EF%B8%8F-aviso-legal) | [Funcionalidades](#-funcionalidades-principais) | [Screenshots](#screenshots) | [Instalação](#-instalação-e-configuração) | [Como Usar](#-como-usar) | [Agradecimentos](#tophat-obrigado-)
+<br>
+
+### <a href="http://demo-gitleak-explorer.rodrigo.londrina.br/" target="_blank">Live report demo available here</a>
 
 <br>
 
-
-### <a href="http://demo-gitleak-explorer.rodrigo.londrina.br/" target="_blank">Têm uma demonstração do relatório aqui</a>
-
-
-<br>
 <a href="https://github.com/roodriiigooo/GITLEAK_EXPLORER/releases/latest">
-    <img src="https://img.shields.io/github/v/release/roodriiigooo/GITLEAK_EXPLORER?style=flat&color=blue" alt="Latest Release">
-  </a>
-  
-  <a href="https://www.python.org/">
-    <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python Version">
-  </a>
+  <img src="https://img.shields.io/github/v/release/roodriiigooo/GITLEAK_EXPLORER?style=flat&color=blue" alt="Latest Release">
+</a>
 
-  <a href="https://desktop.github.com/download/">
-    <img src="https://img.shields.io/badge/GitHub_Desktop-3.5.4%2B-3776AB?logo=github&logoColor=white" alt="Github">
-  </a>
+<a href="https://www.python.org/">
+  <img src="https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat&logo=python&logoColor=white" alt="Python Version">
+</a>
 
-  <a href="LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="License">
-  </a>
+<a href="https://desktop.github.com/download/">
+  <img src="https://img.shields.io/badge/GitHub_Desktop-3.5.4%2B-3776AB?logo=github&logoColor=white" alt="Github">
+</a>
 
-  <img src="https://img.shields.io/badge/Status-Active-success?style=flat" alt="Status">
+<a href="LICENSE">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="License">
+</a>
+
+<img src="https://img.shields.io/badge/Status-Active-success?style=flat" alt="Status">
 
 </div>
+
 <br>
 
-## Sobre
-O **Git Leak Explorer** é uma ferramenta "tudo-em-um" projetada para pesquisadores de segurança e administradores de sistemas. Ela permite identificar, baixar, reconstruir e analisar artefatos de pastas `.git` expostas inadvertidamente em servidores web.
+---
 
-A ferramenta vai além do download simples, oferecendo reconstrução de histórico de commits, detecção de riscos de segurança (hardening), suporte a *packfiles* e uma interface visual moderna (com Dark Mode) para análise dos dados. Opcionalmente suporta também busca de vazamentos de artefatos SVN, HG, Env e DS_Store. Também possui a habilidade de scan massivo em lista de alvos e efetuar bruteforce com wordlist em busca de artefatos de interesse.
+## About
 
-Tudo isso em um só projeto. Leve, direto e brasileiro.
+**Git Leak Explorer** is an all-in-one tool designed for security researchers, penetration testers, and system administrators. It identifies, downloads, reconstructs, and analyzes artifacts from `.git` folders inadvertently exposed on web servers.
 
-> Ajude a desenvolver este projeto
->> Sinta-se a vontade para contribuir, enviar sugestões e suas pull requests :D
+The tool goes far beyond a simple downloader. It offers commit history reconstruction with file-level diffs and stash recovery, security exposure detection (hardening analysis), packfile support, secrets scanning with entropy-based filtering, infrastructure mapping, brute-force file discovery, and a modern interactive HTML interface with Dark Mode for all generated reports.
 
+It also optionally detects leaks from SVN, Mercurial, `.env`, and `.DS_Store` artifacts. Mass scanning over a list of targets and brute-force recovery using custom wordlists are both supported.
+
+Everything in a single Python file. Lightweight, direct, and effective.
+
+> **Contributing**
+> Feel free to contribute, submit suggestions, and open pull requests. 🙂
 
 ---
 
+## ⚠️ Legal Notice
 
-## ⚠️ Aviso Legal
-Esta ferramenta foi desenvolvida para fins profissionais éticos, educacionais e de auditoria autorizada. O acesso a sistemas de terceiros sem permissão explícita é ilegal,  antiético e passível de punições legais. 
+This tool was developed for ethical professional use, education, and authorized security auditing only. Accessing third-party systems without explicit permission is illegal, unethical, and subject to legal penalties.
 
-# O desenvolvedor não se responsabiliza pelo mau uso deste software.
-
+**The developer assumes no responsibility for misuse of this software.**
 
 ---
 
-## ✨ Funcionalidades Principais
+## ✨ Key Features
 
-* **👁️ Blind Mode:** Recuperação inteligente mesmo quando o arquivo `.git/index` está ausente ou bloqueado (403/404), utilizando "Crawling" da árvores e commits.
-* **🔍 Reconstrução de Artefatos:** Baixa e reconstrói arquivos localmente a partir do `.git/index` remoto.
-* **📜 Histórico de Commits:** Reconstrói a árvore de commits (mensagens, autores, timestamps) sem precisar clonar o repositório inteiro via `git clone`, com suporte a visualização de stash e diffs de arquivos.
-* **🛡️ Análise de Hardening:** Verifica a exposição de arquivos sensíveis (`config`, `HEAD`, `logs`, etc.) e gera um relatório de risco (Crítico/Atenção).
-* **📦 Suporte a Packfiles:** Detecta, baixa e extrai arquivos `.pack` (Git objects comprimidos) automaticamente.
-* **📊 Relatórios Unificados:** Gera um painel HTML interativo (`report.html`) contendo listagem de arquivos, histórico, hardening e status de packfiles.
-* **🎨 Interface Moderna:** Todos os relatórios HTML possuem tema escuro (Dark UI), busca em tempo real e paginação.
-* **🚀 Alta Performance:** Utiliza *multi-threading* e session pooling para downloads paralelos de objetos.
-* **🔍 Suporte Adicional:** Efetua buscas por artefatos SVN, HG, Env e DS_Store.
-* **💪 Suporte a Brute Force:** Habilidade de utilizar wordlists contendo artefatos de interesse e seus respectivos paths de busca.
-* **:earth_americas: Suporte a Proxy:** Conecte-se com o Proxy que desejar, incluindo a rede Tor.
-* **:busts_in_silhouette: Random User-Agents:** User-Agentes simulados por default.
+- **👁️ Blind Mode** — Intelligent recovery even when `.git/index` is absent or blocked (HTTP 403/404), by crawling commit trees and object references directly.
+- **🔍 Artifact Reconstruction** — Downloads and reconstructs files locally from the remote `.git/index`, restoring the original directory structure.
+- **📜 Commit History** — Reconstructs the full commit chain (messages, authors, timestamps, changed files) without cloning the repository, with stash recovery, orphan/reflog detection, and side-by-side diff viewing.
+- **🛡️ Hardening Analysis** — Checks exposure of sensitive Git files (`config`, `HEAD`, `logs`, `packed-refs`, `index`, etc.) and generates a risk report with Critical/Warning severity levels.
+- **📦 Packfile Support** — Detects, downloads, and unpacks `.pack` files (compressed Git objects) automatically. Requires `git` to be installed for unpacking.
+- **🔐 Secrets Scanner** — Scans recovered source files using regex patterns and Shannon entropy analysis to detect credentials, API keys, tokens, and connection strings. Includes per-pattern validation to suppress false positives.
+- **🌐 Infrastructure Mapping** — Extracts API endpoints, external hosts, and IP addresses from recovered source and config files, with an interactive network graph view.
+- **📊 Unified Reports** — Generates a complete interactive HTML dashboard (`report.html`) covering files, history, hardening, secrets, infrastructure, and more. All reports share a consistent navigation bar and dark theme.
+- **🎨 Modern Interface** — Every HTML report features a terminal-noir dark theme (with light mode toggle), real-time search, sorting, and pagination.
+- **💪 Brute-Force Recovery** — Probes for common files and paths using a built-in wordlist or a custom one. Automatically fingerprints the server's 404 response to eliminate false positives (catch-all pages, custom error pages, homepage redirects).
+- **🚀 High Performance** — Multi-threaded downloads using a pooled session for parallel object retrieval. Configurable worker count.
+- **🔍 Additional Leak Detection** — Scans for SVN (`wc.db`), Mercurial, `.env`, `.DS_Store`, Git hooks, and other artifacts via `--full-scan`.
+- **🌍 Proxy Support** — Connect through any proxy, including Burp Suite, OWASP ZAP, and the Tor network (SOCKS5).
+- **🕵️ Random User-Agents** — Rotates User-Agent headers by default to reduce detection likelihood.
+- **💻 Local Mode** — Analyze an already-cloned or recovered local `.git` folder without making any network requests.
+- **📺 Built-in HTTP Server** — Serve generated reports locally via `--serve` for convenient browser-based review.
 
 ---
 
 ## Screenshots
 
 <details>
-  <summary># Visão Geral - Multi Scan</summary>
+  <summary>Multi-Scan Overview</summary>
   <img width="1032" height="554" alt="image" src="https://github.com/user-attachments/assets/9aa6ce38-6806-4d6e-ab57-36d503daa005" />
 </details>
 
 <details>
-  <summary># Visão Geral - Alvo</summary>
+  <summary>Target Dashboard</summary>
   <img width="1227" height="2154" alt="image" src="https://github.com/user-attachments/assets/479cfcda-4b74-4523-a331-59954a6b64ce" />
 </details>
 
 <details>
-  <summary># Secrets</summary>
+  <summary>Secrets Report</summary>
   <img width="1466" height="767" alt="_secrets" src="https://github.com/user-attachments/assets/67241847-3ef3-4e46-81e9-1eb25918418d" />
 </details>
 
 <details>
-  <summary># Stash</summary>
+  <summary>Stash Recovery</summary>
   <img width="1428" height="2255" alt="image" src="https://github.com/user-attachments/assets/35133ffe-104e-473f-8b4f-1a6fbeb84c3e" />
 </details>
 
 <details>
-  <summary># Hardening</summary>
+  <summary>Hardening Analysis</summary>
   <img width="1284" height="963" alt="_hardening" src="https://github.com/user-attachments/assets/34ecb782-f030-45cb-b7e7-2eeb1fd0b4e1" />
 </details>
 
 <details>
-  <summary># Usuarios - baseado em histórico</summary>
+  <summary>Users / OSINT (from history)</summary>
   <img width="1284" height="963" alt="_users" src="https://github.com/user-attachments/assets/d757b98a-011e-4d4d-be90-637afaca9f1e" />
 </details>
 
 <details>
-  <summary># Reconsrução de histórico</summary>
+  <summary>Git Timeline (Commit History)</summary>
   <img width="1903" height="2486" alt="image" src="https://github.com/user-attachments/assets/e15d6ce6-8340-45e8-a230-8c15dc3058f9" />
-
 </details>
 
 <details>
-  <summary># Listagem de arquivos - com filtro</summary>
+  <summary>File Listing (with filter)</summary>
   <img width="1641" height="1231" alt="_listing" src="https://github.com/user-attachments/assets/2084abe1-9f68-4a37-a91a-5a2dc4c66730" />
 </details>
 
 <details>
-  <summary># Bruteforce & Path traversal - com filtro</summary>
+  <summary>Brute-Force & Path Traversal (with filter)</summary>
   <img width="1512" height="822" alt="_brute_traversal" src="https://github.com/user-attachments/assets/e0d348c5-86ab-4494-84a7-a3f25643f32d" />
 </details>
 
 <details>
-  <summary># Outros</summary>
+  <summary>Other Leaks (.env, SVN, DS_Store…)</summary>
   <img width="1136" height="852" alt="_outros" src="https://github.com/user-attachments/assets/1fd48b68-66c1-4791-9498-169bb6099967" />
 </details>
 
+---
 
-
-## 🚀 Instalação e Configuração
+## 🚀 Installation & Setup
 
 > [!TIP]
-> ESTE REPOSITÓRIO POSSUI UMA BUILD STANDALONE PARA WINDOWS, se preferir utilizar ao invés do python.
-> >  Apenas copie o arquivo em um path que você desejar e registre-o no sistema para ser reconhecido como um cmdlet e pule os próximos passos.
-> > > Não exclui a necessidade de ter o Git instalado no sistema.
+> This repository includes a **standalone Windows build** (`.exe`) in the [Releases](https://github.com/roodriiigooo/GITLEAK_EXPLORER/releases/latest) section. Copy it to a directory of your choice, register it in your system `PATH`, and you can skip the steps below.
+> Git still needs to be installed on the system for packfile unpacking.
 
-<br>
-
-Certifique-se de ter os seguintes requisitos instalados: [**Python 3.8+**](https://www.python.org/downloads/) e [**Git**](https://desktop.github.com/download/) (necessário para descompactação de objetos):
+**Requirements:** [Python 3.8+](https://www.python.org/downloads/) and [Git](https://desktop.github.com/download/) (required for unpacking `.pack` objects).
 
 [![Python](https://img.shields.io/badge/Python-Download-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![GitHub Desktop](https://img.shields.io/badge/GitHub_Desktop-Download-181717?logo=github&logoColor=white)](https://desktop.github.com/download/)
-
-
+[![GitHub Desktop](https://img.shields.io/badge/Git-Download-181717?logo=git&logoColor=white)](https://git-scm.com/downloads)
 
 <br>
 
+**Clone the repository:**
+```bash
+git clone https://github.com/roodriiigooo/GITLEAK_EXPLORER.git
+cd GITLEAK_EXPLORER
+```
 
-
-### Opção 1: Pip (Padrão)
-```sql
+### Option 1: pip (recommended)
+```bash
 pip install -r requirements.txt
 ```
 
-
-### Opção 2: Pipenv
-```sql
+### Option 2: Pipenv
+```bash
 pipenv install requests
 pipenv shell
 python git_leak.py --help
 ```
 
-
-### Opção 3: Poetry
-```sql
+### Option 3: Poetry
+```bash
 poetry init -n
 poetry add requests
 poetry run python git_leak.py --help
 ```
 
-### Opção 4: 🐳 Docker
-```sql
+### Option 4: 🐳 Docker
+```bash
 docker build -t gitleak_explorer .
-docker run -v $(pwd)/repo:/app/repo gitleak_explorer http://alvo.com/.git --default --output-dir /app/repo
+docker run -v $(pwd)/repo:/app/repo gitleak_explorer http://target.com/.git --default --output-dir /app/repo
 ```
 
-### Opção 5: 📦 Compilação para .EXE (Windows)
-Para criar um executável portátil (standalone):
-1. Instale o PyInstaller:
-```sql
+### Option 5: 📦 Compile to .EXE (Windows)
+To create a portable standalone executable:
+
+1. Install PyInstaller:
+```bash
 pip install pyinstaller
 ```
-2. Compile o script:
-```sql
+2. Compile:
+```bash
 pyinstaller --onefile --name "git_leak" git_leak.py
 ```
+The resulting `git_leak.exe` will be found in the `dist/` folder.
 
-## 📖 Como Usar
+---
 
-> [!TIP]
-> >  Se estiver utilizando a versão RELEASE (Windows), considere usar `git_leak.exe` ao invés de `python git_leak.py`.
-
-```terminal
-git_leak.py — Conjunto completo de ferramentas em arquivo único para recuperação e análise forense de vazamentos do Git.
-
-Funcionalidades Principais:
- - Recuperação via Index ou Blind Mode (Crawling)
- - Reconstrução inteligente de arquivos e estrutura de diretórios
- - Análise de histórico de commits (Metadados + Arquivos)
- - Detecção de Hardening e outros vazamentos (SVN, HG, Env, DS_Store)
- - Geração de relatórios técnicos detalhados e interface visual
-
-Uso: python git_leak.py <URL> [OPÇÕES]
-Exemplo: python git_leak.py http://alvo.com --full-scan
-
-Principais funcionalidades implementadas:
- - --parse-index         : baixa .git/index e converte para JSON
- - --blind               : Blind mode: Rastrear commits/árvores quando .git/index está ausente/403
- - --reconstruct         : Baixa os blobs do dump.json e reconstrói o diretório .git/objects localmente.
- - --list                : gera listing.html (UI simplificada) dos arquivos encontrados no indice, com links
- - --serve               : abre um servidor http para visualização dos relatórios
- - --sha1                : baixa um objeto único pelo SHA
- - --reconstruct-history : reconstrói cadeia de commits somente como interface do usuário (history.json + history.html)
- - --detect-hardening    : verificações de exposição e gera os arquivos hardening_report.json e hardening_report.html.
- - --packfile [MODE]     : manuseio de packfiles (modes: list, download, download-unpack)
- - --scan                : roda scan em multiplos albos em busca de .git/HEAD exposure
- - --default             : roda parse-index, detect-hardening, packfile(list), list, reconstruct-history e serve
- - --full-history        : analisa árvore de arquivos completa de TODOS os commits (lento)
- - --full-scan           : executa verificação completa de vazamentos (SVN, HG, Env, DS_Store)
- - --report              : gera apenas o relatório final (report.html)
- - --bruteforce          : ativa a tentativa de recuperação de arquivos comuns via força bruta
- - --wordlist            : caminho para wordlist (Brute-Force) personalizada
- - --proxy               : URL do Proxy (ex: http://127.0.0.1:8080 para Burp/ZAP ou socks5h://127.0.0.1:9150 para rede Tor) 
- - --no-random-agent     : desativa a rotação de User-Agents (Usa um fixo)
- - --secrets             : Executa scanner de regex/entropia em busca de chaves
- - --show-dif            : Baixa e exibe as diferenças (diffs) de código no histórico (Pode ser MUITO Lento)
- - --local,              : Caminho completo da pasta do projeto local (ex: /home/user/app ou C:\Projeto\)
- - options: --max-commits, --ignore-missing, --strict, --workers, --output-index, --output-dir, --serve-dir
- 
-
- - Todos os arquivos de saída são armazenados no diretório externo fornecido: arquivos HTML na raiz, arquivos JSON/outros arquivos em outdir/_files.
-
-
-Utilize de forma responsável e somente em sistemas que você esteja autorizado a testar.
-```
-
-
-Modo Automático (Recomendado)
-Executa todo o pipeline: baixa índice, verifica segurança, procura packfiles, reconstrói histórico e gera o relatório final.
-
-```sql
-python git_leak.py http://exemplo.com
-# ou
-python git_leak.py http://exemplo.com/.git --default
-```
-
-Efetuar uma análise em uma pasta .git localmente: `--local`:
-```sql
-# Não é o propósito deste script, mas pode ser útil em caso de extração de arquivos expostos ou somente um teste local
-python git_leak.py --local c:\Projeto\Meu_Projeto
-# ou em conjunto com --output-dir para servir a saída em um diretório especifico
-python git_leak.py --local c:\Projeto\Meu_Projeto --serve --output-dir temp/arquivos/
-```
-
-Modo Adicional `--full-scan`
-Executa além do modo padrão, outros vazamentos (SVN, HG, Env, DS_Store)
-
-```sql
-python git_leak.py http://exemplo.com/.git --full-scan
-```
-
-Modo comparativo `--show-diff`
-Para mostrar um comparativo das alterações no histórico de commits
-
-```sql
-python git_leak.py http://exemplo.com/.git --show-diff
-```
-
-Modo lento `--full-history`
-Executa em modo padrão ou modo adicional, mas tenta reconstruir o history de commits analisando todos os registros encontrados, pode ser utilizado em conjunto com `--show-diff` para mostrar um comparativo completo das alterações
-
-```sql
-python git_leak.py http://exemplo.com/.git --full-history
-```
-
-
-### Comandos Específicos
-- Apenas Gerar Relatório Unificado (se já houver dados baixados anteriormente) `--report`:
-
-```sql
-python git_leak.py http://exemplo.com/.git --report
-```
-
-- Habilitar servidor http para visualizar relatorios ou servir outros arquivos `--serve`:
-```sql
-python git_leak.py http://exemplo.com/.git --serve
-# ou em conjunto com --output-dir para servir um diretório especifico
-python git_leak.py --serve --output-dir temp/arquivos/
-```
-
-
-- Recuperar um objeto diretamente pelo SHA `--sha1`
-```sql
-## Útil quando encontrado um arquivo de interesse na listagem de arquivos e o link para o objeto está acessível, --sha1 faz o download do arquivo e reconstrói seu conteúdo
-python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16
-# Pode ser usado em conjunto com --output-dir
-python git_leak.py http://exemplo.com/.git  --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16 --output-dir temp/arquivos/
-```
-
-
-- Gerenciar Packfiles (Listar/Baixar/Extrair) `--packfile`:
-```sql
-# Apenas listar packfiles encontrados
-python git_leak.py http://exemplo.com/.git --packfile list
-
-# Baixar e tentar extrair (requer git instalado no sistema)
-python git_leak.py http://exemplo.com/.git --packfile download-unpack
-```
-
-- Escanear Lista de URLs (Mass Scan) `--scan`:
-```sql
-python git_leak.py --scan alvos.txt
-```
-
-- Servir Relatórios Localmente:
-```sql 
-python git_leak.py --serve --output-dir repo/temp
-```
-
-- Executar scan massivo de alvos utilizando bruteforce de objetos de interesse através de lista personalizada com resultado organizado em pastas distintas:
-```sql
-python git_leak.py --scan alvos-exemplo.txt --output-dir pasta-alvos  --full-scan --bruteforce --wordlist wordlist-exemplo.txt --serve
-```
-
-- Caso executado apenas com `--brute-force`, o bruteforce utilizará uma lista hardcoded:
-```sql
-    # --- Environment & Secrets ---
-    ".env", ".env.local", ".env.dev", ".env.development", ".env.prod", ".env.production",
-    ".env.example", ".env.sample", ".env.save", ".env.bak", ".env.old",
-    "config.json", "secrets.json", "config.yaml", "secrets.yaml", "config.toml", "config.php",
-    "settings.py", "database.yml", "robots.txt", "README.md", "index.php", "index.html", "server.js",
-
-    
-    # --- Version Control & CI/CD (Risco Crítico) ---
-    ".git/config", ".gitignore", ".gitmodules",
-    ".gitlab-ci.yml", ".travis.yml", "circle.yml", "jenkinsfile", "Jenkinsfile",
-    ".github/workflows/main.yml", ".github/workflows/deploy.yml",
-    
-    # --- Javascript / Node.js ---
-    "package.json", "package-lock.json", "yarn.lock", ".npmrc",
-    "webpack.config.js", "rollup.config.js", "next.config.js", "nuxt.config.js",
-    "server.js", "app.js",
-    
-    # --- PHP / CMS / Frameworks ---
-    "wp-config.php", "wp-config.php.bak", "wp-config.php.old", # WordPress
-    "configuration.php", "configuration.php.bak", # Joomla
-    ".htaccess", "composer.json", "composer.lock", "auth.json",
-    "artisan", "phpunit.xml", # Laravel
-    
-    # --- Python / Django / Flask ---
-    "requirements.txt", "Pipfile", "Pipfile.lock", "setup.py", "pyproject.toml",
-    "manage.py", "app.py", "wsgi.py", "uwsgi.ini",
-    
-    # --- ASP.NET / C# (IIS) ---
-    "web.config", "Web.config", "appsettings.json", "appsettings.Development.json",
-    "packages.config", "Global.asax",
-    
-    # --- Docker / Kubernetes / Cloud / Terraform ---
-    "Dockerfile", "docker-compose.yml", "docker-compose.yaml", ".dockerignore",
-    "Makefile", "Vagrantfile",
-    "k8s.yaml", "kubeconfig", "deployment.yaml",
-    "main.tf", "variables.tf", "terraform.tfvars", ".terraform.lock.hcl",
-    "serverless.yml", "serverless.yaml",
-    
-    # --- Backups & Dumps (Arquivos pesados) ---
-    "backup.zip", "backup.tar.gz", "backup.sql",
-    "dump.sql", "database.sql", "db_backup.sql", "users.sql",
-    "www.zip", "site.zip", "public.zip", "html.tar.gz",
-    
-    # --- IDEs & Logs ---
-    ".vscode/settings.json", ".idea/workspace.xml",
-    "debug.log", "error_log", "access.log", "npm-debug.log",
-    "id_rsa", "id_rsa.pub", "known_hosts"
-```
-
-- Modo completo com Proxy:
-```sql
-python git_leak.py exemplo.com --output-dir teste_proxy --proxy 127.0.0.1:8080 --full-scan --bruteforce --serve
-# ou rede Tor (SOCKS5)
-python git_leak.py exemplo.com --output-dir teste_proxy --proxy socks5h://127.0.0.1:9150 --full-scan --bruteforce --serve
-
-```
-- Desativa User-Agents aleatórios:
-```sql
-python git_leak.py exemplo.com --output-dir sua_pasta --proxy 127.0.0.1:8080 --no-random-agent --serve
-```
-
-- Comando tudo em um:
-```sql
-## Efetua scan de alvos em um arquivo de texto, com full scan ativado, saindo para a pasta MEU_SCAN, utilizando Tor como proxy, 
-## ativando 250 workers (threads), ativando scan por secrets (WIP), bruteforce nativo sem wordlist 
-## com reconstrução completa de histórico de commits carregando as diffs e servindo em localhost no final.
-python git_leak.py --scan minha-lista.txt --full-scan --output-dir MEU_SCAN --proxy socks5h://127.0.0.1:9150 --workers 250 --secrets --bruteforce --full-history --show-diff --packfile download-unpack --serve
-```
-
+## 📖 How to Use
 
 > [!TIP]
-> >  Ao analisar arquivos, principalemnte de pack files extraídas eu recomendo abrir a pasta dentro de uma IDE de sua preferencia, como o Visual Studio Code.
+> If you are using the Windows standalone release, replace `python git_leak.py` with `git_leak.exe` in all commands below.
 
+### Available Flags
 
+```
+git_leak.py — Full forensic recovery and analysis toolkit for exposed Git repositories.
 
-## :tophat: Obrigado ♥
-Err.. ninguém contribuiu ainda :(
+Usage: python git_leak.py <URL> [OPTIONS]
+Example: python git_leak.py http://target.com --full-scan
 
+Core flags:
+  --parse-index           Download .git/index and convert to JSON
+  --blind                 Blind mode: crawl commits/trees when .git/index is absent or blocked (403/404)
+  --reconstruct           Download blobs from dump.json and rebuild .git/objects locally
+  --list                  Generate listing.html — a searchable file listing from the index
+  --reconstruct-history   Rebuild the commit chain as an interactive UI (history.json + history.html)
+  --detect-hardening      Check exposure of sensitive Git files; generate hardening_report.json/.html
+  --packfile [MODE]       Manage .pack files  (modes: list | download | download-unpack)
+  --secrets               Run regex + Shannon entropy scanner to detect credentials and API keys
+  --extract-infra         Extract API endpoints, external hosts, and IPs from recovered source files
+  --full-history          Analyze the full file tree of ALL commits (slow; use with --show-diff)
+  --show-diff             Download and render side-by-side code diffs in history (can be VERY slow)
+  --full-scan             Run extended leak scan: SVN, Mercurial, .env, .DS_Store, Git hooks
+  --bruteforce            Attempt recovery of common files via brute force
+  --wordlist PATH         Path to a custom wordlist for brute-force (overrides built-in list)
+  --report                Re-generate only the final unified dashboard (report.html) from existing data
+  --serve                 Start a local HTTP server and open reports in the browser when done
+  --sha1 HASH             Download and reconstruct a single Git object by its SHA-1 hash
+  --scan FILE             Mass-scan mode: read a list of target URLs from a file
+  --local PATH            Analyze a local .git folder instead of a remote target
+  --proxy URL             Proxy URL (e.g. http://127.0.0.1:8080 for Burp/ZAP, socks5h://127.0.0.1:9150 for Tor)
+  --no-random-agent       Disable User-Agent rotation (use a fixed agent)
+  --workers N             Number of parallel download threads (default: 10)
+  --max-commits N         Maximum number of commits to process (default: 200)
+  --output-dir PATH       Root output directory (default: ./repo)
+  --output-index FILE     Filename for the JSON index (default: dump.json)
+  --serve-dir PATH        Specific directory to serve with --serve
+  --ignore-missing        Silently skip missing objects instead of warning
+  --strict                Abort on critical errors
 
-## :sparkling_heart: Support Me 
+All output files are stored under the provided output directory:
+  HTML reports     → outdir/
+  JSON/data files  → outdir/_files/
+```
+
+---
+
+### Automatic Mode (Recommended)
+
+Runs the full pipeline: downloads the index, checks hardening, detects packfiles, reconstructs history, runs stash recovery, and generates the final report.
+
+```bash
+python git_leak.py http://example.com
+# or explicitly
+python git_leak.py http://example.com/.git --default
+```
+
+---
+
+### Local Analysis
+
+Analyze a folder that already contains a `.git` directory, without making any network requests. Useful for post-extraction analysis or local testing.
+
+```bash
+python git_leak.py --local /path/to/project
+# with a custom output directory and built-in server
+python git_leak.py --local /path/to/project --serve --output-dir temp/output/
+```
+
+---
+
+### Extended Leak Detection (`--full-scan`)
+
+In addition to the standard pipeline, scans for SVN, Mercurial, `.env`, `.DS_Store`, Git hooks, and other artifacts.
+
+```bash
+python git_leak.py http://example.com/.git --full-scan
+```
+
+---
+
+### Commit Diff View (`--show-diff`)
+
+Fetches and renders side-by-side code diffs for each changed file in history. Can significantly increase runtime.
+
+```bash
+python git_leak.py http://example.com/.git --show-diff
+```
+
+---
+
+### Full History Reconstruction (`--full-history`)
+
+Traces and analyzes every commit reachable from HEAD, not just the main chain. Combine with `--show-diff` for a complete picture.
+
+```bash
+python git_leak.py http://example.com/.git --full-history
+# with diffs
+python git_leak.py http://example.com/.git --full-history --show-diff
+```
+
+---
+
+### Secrets Scanning (`--secrets`)
+
+Scans recovered files for credentials, API keys, tokens, and connection strings using a combination of pattern matching and Shannon entropy thresholds. Patterns include AWS, GitHub, GitLab, Stripe, Heroku, Twilio, Telegram, Slack, DigitalOcean, NPM, private keys, database connection strings, and generic API key assignments.
+
+```bash
+python git_leak.py http://example.com/.git --secrets
+```
+
+---
+
+### Infrastructure Mapping (`--extract-infra`)
+
+Extracts API endpoint assignments, HTTP call sites, external hosts, and non-private IP addresses from recovered source and config files. Results are shown as an interactive network graph and a searchable table.
+
+```bash
+python git_leak.py http://example.com/.git --extract-infra
+```
+
+---
+
+### Specific Commands
+
+**Re-generate the report from already-downloaded data:**
+```bash
+python git_leak.py http://example.com/.git --report
+```
+
+**Start the built-in HTTP server to browse reports:**
+```bash
+python git_leak.py http://example.com/.git --serve
+# serve a specific output directory
+python git_leak.py --serve --output-dir temp/output/
+```
+
+**Download a single object by SHA-1:**
+```bash
+# Useful when you spot an interesting file in the listing and have its blob SHA
+python git_leak.py http://example.com/.git --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16
+# with custom output directory
+python git_leak.py http://example.com/.git --sha1 138605f2337271f004c5d18cf3158fce3f4a4b16 --output-dir temp/output/
+```
+
+**Manage packfiles:**
+```bash
+# List detected packfiles
+python git_leak.py http://example.com/.git --packfile list
+# Download and unpack (requires git)
+python git_leak.py http://example.com/.git --packfile download-unpack
+```
+
+**Mass scan a list of targets:**
+```bash
+python git_leak.py --scan targets.txt
+```
+
+**Mass scan with brute-force and a custom wordlist:**
+```bash
+python git_leak.py --scan targets.txt --output-dir scan_results --full-scan --bruteforce --wordlist wordlist.txt --serve
+```
+
+---
+
+### Brute-Force (`--bruteforce`)
+
+Probes the target for common files and paths. Before scanning, the tool sends requests to two guaranteed-absent URLs to fingerprint the server's 404 response (content hash, size, similarity), then filters out any response that matches this baseline — preventing false positives from catch-all pages or homepage redirects.
+
+When `--bruteforce` is used without `--wordlist`, the built-in list is used, covering:
+
+```
+# Environment & Secrets
+.env, .env.local, .env.dev, .env.prod, .env.production, .env.example, .env.bak,
+config.json, secrets.json, config.yaml, secrets.yaml, config.toml, config.php,
+settings.py, database.yml
+
+# Version Control & CI/CD
+.git/config, .gitignore, .gitmodules,
+.gitlab-ci.yml, .travis.yml, circle.yml, Jenkinsfile,
+.github/workflows/main.yml, .github/workflows/deploy.yml
+
+# JavaScript / Node.js
+package.json, package-lock.json, yarn.lock, .npmrc,
+webpack.config.js, next.config.js, nuxt.config.js, server.js, app.js
+
+# PHP / CMS / Frameworks
+wp-config.php, wp-config.php.bak, configuration.php,   # WordPress, Joomla
+.htaccess, composer.json, composer.lock, artisan        # Laravel
+
+# Python / Django / Flask
+requirements.txt, Pipfile, manage.py, app.py, wsgi.py
+
+# ASP.NET / C#
+web.config, appsettings.json, appsettings.Development.json, Global.asax
+
+# Docker / Kubernetes / Terraform / Serverless
+Dockerfile, docker-compose.yml, kubeconfig, deployment.yaml,
+main.tf, variables.tf, terraform.tfvars, serverless.yml
+
+# Backups & Dumps
+backup.zip, backup.sql, dump.sql, database.sql, www.zip, site.zip
+
+# IDEs, SSH & Logs
+.vscode/settings.json, .idea/workspace.xml,
+id_rsa, id_rsa.pub, known_hosts, debug.log, access.log
+```
+
+**VERSIONED** files (those whose SHA-1 matches a known Git object on the server) can be previewed directly in the report browser with a single click.
+
+---
+
+### Proxy & Anonymity
+
+```bash
+# Through Burp Suite or OWASP ZAP
+python git_leak.py example.com --proxy http://127.0.0.1:8080 --full-scan --bruteforce --serve
+
+# Through Tor (SOCKS5)
+python git_leak.py example.com --proxy socks5h://127.0.0.1:9150 --full-scan --bruteforce --serve
+
+# Disable User-Agent rotation (use a fixed agent)
+python git_leak.py example.com --no-random-agent --proxy http://127.0.0.1:8080 --serve
+```
+
+---
+
+### Full Kitchen-Sink Command
+
+```bash
+# Scans every target in a text file with all features enabled:
+# full-scan, Tor proxy, 250 workers, secrets detection, brute-force,
+# full history reconstruction with diffs, packfile unpacking, served locally at the end.
+python git_leak.py \
+  --scan targets.txt \
+  --full-scan \
+  --output-dir MY_SCAN \
+  --proxy socks5h://127.0.0.1:9150 \
+  --workers 250 \
+  --secrets \
+  --extract-infra \
+  --bruteforce \
+  --full-history \
+  --show-diff \
+  --packfile download-unpack \
+  --serve
+```
+
+---
+
+### Output Structure
+
+After a run, the output directory will contain:
+
+```
+outdir/
+├── report.html                 ← Main unified dashboard
+├── listing.html                ← File listing from .git/index
+├── history.html                ← Commit timeline with diffs and stash entries
+├── users.html                  ← Identified authors (OSINT)
+├── secrets.html                ← Detected credentials and API keys
+├── hardening_report.html       ← Exposure risk report
+├── infrastructure_report.html  ← Network graph + endpoint table
+├── bruteforce_report.html      ← Brute-force / traversal results
+├── <recovered source files>    ← Reconstructed files in their original paths
+└── _files/
+    ├── dump.json               ← Parsed .git/index entries
+    ├── history.json            ← Reconstructed commit chain
+    ├── secrets.json            ← Raw secrets findings
+    ├── bruteforce.json         ← Brute-force results
+    ├── hardening_report.json   ← Raw hardening data
+    ├── users.json              ← Author list
+    ├── stash.json              ← Stash metadata (if recovered)
+    ├── infrastructure.json     ← Infrastructure findings
+    ├── bruteforce/             ← Downloaded brute-force files
+    ├── extracted_packs/        ← Unpacked packfile contents
+    └── misc/                   ← .env, SVN, DS_Store dumps
+```
+
+> [!TIP]
+> When reviewing recovered packfile contents, it is recommended to open the `extracted_packs/` folder in an IDE such as Visual Studio Code for easier navigation and syntax highlighting.
+
+---
+
+## :tophat: Thanks ♥
+
+No contributors yet — be the first! 🙂
+
+## :sparkling_heart: Support
+
 <a href="https://www.buymeacoffee.com/rodrigoo" target="_blank"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-5C3317?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Buy Me A Coffee" target="_blank"></a>
-<!-- <a href="https://www.paypal.com/donate/?business=RNSQFDU927P8A&no_recurring=0&item_name=Every+penny+donated+is+an+investment+not+only+in+me+but+also+in+fulfilling+dreams+and+creating+opportunities.&currency_code=BRL" target="_blank"><img src="https://img.shields.io/badge/Paypal%20%28BRL%29-4287f5?style=for-the-badge&logo=paypal&logoColor=white" alt="Paypal" target="_blank"></a> -->
-
-
-
-
-
-
-
-
-
-
-
-
-

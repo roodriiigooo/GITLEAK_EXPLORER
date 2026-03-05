@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Master Dashboard — Git Leak Explorer</title>
+<title>File Listing — Git Leak Explorer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 
@@ -225,70 +225,147 @@ hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 </head>
 <body>
 
-<style>body{padding:2rem}</style>
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--text-dim);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--accent);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--text-dim);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--text-dim);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--text-dim);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--text-dim);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
 <div class="container">
   <div class="flex items-center gap-2 mb-3" style="justify-content:space-between">
     <div>
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
-        <div style="width:28px;height:28px;background:var(--accent);color:#000;border-radius:5px;
-          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.85rem">GL</div>
-        <span style="font-weight:700;font-size:1.1rem">Git Leak Explorer</span>
-      </div>
-      <h2 style="font-weight:700">Master Dashboard</h2>
-      <p class="muted" style="font-size:.82rem">5 targets scanned</p>
+      <h2 style="font-weight:700">📂 Recovered Files</h2>
+      <p class="muted" style="font-size:.82rem">Complete repository index (.git/index)</p>
     </div>
-    <div class="flex gap-2">
-      <span class="badge badge-muted">5 targets</span>
-      <span class="badge badge-red">9 secrets</span>
+    <span class="badge badge-amber">6 files</span>
+  </div>
+  <div class="flex gap-2 mb-3">
+    <a href="report.html" class="btn btn-ghost">← Back</a>
+    <div class="search-wrap" style="flex:1;max-width:500px">
+      <span class="search-icon">⌕</span>
+      <input id="q" type="text" placeholder="Search by name, extension or SHA…">
     </div>
+    <select id="ps" class="btn btn-ghost" style="cursor:pointer">
+      <option value="25">25 / page</option>
+      <option value="100" selected>100 / page</option>
+      <option value="500">500 / page</option>
+    </select>
+    <button id="reset" class="btn btn-ghost">✕ Clear</button>
   </div>
   <div class="tbl-wrap">
     <table>
       <thead><tr>
-        <th>Target</th><th>Status</th>
-        <th class="text-right">Secrets</th>
-        <th class="text-right">Files</th>
-        <th class="text-right">Action</th>
+        <th style="width:48%" class="sortable" data-k="path" style="cursor:pointer">Filename ↕</th>
+        <th style="width:18%">Local Status</th>
+        <th style="width:10%">Remote</th>
+        <th style="width:24%" class="sortable" data-k="sha" style="cursor:pointer">Blob SHA-1 ↕</th>
       </tr></thead>
-      <tbody><tr>
-          <td><a href="legacy-ecommerce.shop/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://legacy-ecommerce.shop</a>
-            <div class="dim" style="font-size:.75rem">legacy-ecommerce.shop</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 6</span></td>
-          <td class="text-right"><span style="color:var(--accent)">15</span></td>
-          <td class="text-right"><a href="legacy-ecommerce.shop/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="startup-api.io/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://startup-api.io</a>
-            <div class="dim" style="font-size:.75rem">startup-api.io</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 3</span></td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="startup-api.io/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="devteam-internal.net/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://devteam-internal.net</a>
-            <div class="dim" style="font-size:.75rem">devteam-internal.net</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="devteam-internal.net/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="contractor-portal.com/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://contractor-portal.com</a>
-            <div class="dim" style="font-size:.75rem">contractor-portal.com</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">6</span></td>
-          <td class="text-right"><a href="contractor-portal.com/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="secure-bank.example/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://secure-bank.example</a>
-            <div class="dim" style="font-size:.75rem">secure-bank.example</div></td>
-          <td><span class="badge badge-muted">SECURE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right">—</td>
-          <td class="text-right"><a href="secure-bank.example/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr></tbody>
+      <tbody id="tb"></tbody>
     </table>
   </div>
+  <div class="flex items-center mt-2" style="justify-content:space-between;color:var(--text-muted);font-size:.82rem">
+    <span id="info">Loading…</span>
+    <div class="flex items-center gap-1">
+      <button id="prev" class="pgn-btn btn btn-ghost" style="padding:4px 10px">‹</button>
+      <span id="pd" style="font-size:.8rem"></span>
+      <button id="next" class="pgn-btn btn btn-ghost" style="padding:4px 10px">›</button>
+    </div>
+  </div>
 </div>
+<!-- File viewer overlay -->
+<div id="fv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;padding:1.5rem">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);
+    height:100%;display:flex;flex-direction:column">
+    <div style="padding:.75rem 1rem;border-bottom:1px solid var(--border);
+      display:flex;justify-content:space-between;align-items:center">
+      <span id="fv-title" class="mono" style="font-size:.85rem"></span>
+      <button onclick="document.getElementById('fv').style.display='none'"
+        class="btn btn-ghost" style="padding:4px 10px">✕</button>
+    </div>
+    <div style="flex:1;overflow:auto;padding:1rem;background:var(--bg-inset)">
+      <img id="fv-img" style="display:none;max-width:100%;height:auto">
+      <pre id="fv-code" class="code-block" style="display:none;height:100%"></pre>
+    </div>
+  </div>
+</div>
+<script>
+const DATA=[{"path": "main.go", "remote_url": "https://contractor-portal.com/main.go", "blob_url": "https://contractor-portal.com/.git/objects/89/8ac744479ce9aad9cd152d51d5358b600d9ea4", "sha": "898ac744479ce9aad9cd152d51d5358b600d9ea4", "local_exists": false, "local_url": ""}, {"path": "go.mod", "remote_url": "https://contractor-portal.com/go.mod", "blob_url": "https://contractor-portal.com/.git/objects/7d/4821577d4decf99a5b6a3543615c518c23754c", "sha": "7d4821577d4decf99a5b6a3543615c518c23754c", "local_exists": false, "local_url": ""}, {"path": "go.sum", "remote_url": "https://contractor-portal.com/go.sum", "blob_url": "https://contractor-portal.com/.git/objects/08/775f1879727041deca1536c08780a6a44a35d5", "sha": "08775f1879727041deca1536c08780a6a44a35d5", "local_exists": false, "local_url": ""}, {"path": "handlers/auth.go", "remote_url": "https://contractor-portal.com/handlers/auth.go", "blob_url": "https://contractor-portal.com/.git/objects/ac/3cc703a8870425575512ca7d57b7305b8c2231", "sha": "ac3cc703a8870425575512ca7d57b7305b8c2231", "local_exists": false, "local_url": ""}, {"path": "handlers/invoice.go", "remote_url": "https://contractor-portal.com/handlers/invoice.go", "blob_url": "https://contractor-portal.com/.git/objects/37/a699c2b0f1d0a2fc279ab9d704a4be8ee3ddd1", "sha": "37a699c2b0f1d0a2fc279ab9d704a4be8ee3ddd1", "local_exists": false, "local_url": ""}, {"path": "README.md", "remote_url": "https://contractor-portal.com/README.md", "blob_url": "https://contractor-portal.com/.git/objects/7b/6fe5dca926715b6984e918ce755d47ef030201", "sha": "7b6fe5dca926715b6984e918ce755d47ef030201", "local_exists": false, "local_url": ""}];
+let filtered=DATA.slice(),sortK=null,sortD=1,pageSize=100,cur=1;
+const tb=document.getElementById('tb');
+const info=document.getElementById('info');
+const pd=document.getElementById('pd');
+const prev=document.getElementById('prev');
+const next=document.getElementById('next');
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function render(){
+  pageSize=parseInt(document.getElementById('ps').value,10);
+  const tot=filtered.length,tp=Math.max(1,Math.ceil(tot/pageSize));
+  if(cur>tp)cur=tp;if(cur<1)cur=1;
+  const sl=filtered.slice((cur-1)*pageSize,cur*pageSize);
+  tb.innerHTML='';
+  sl.forEach(r=>{
+    const tr=document.createElement('tr');
+    const localHtml=r.local_exists
+      ?`<button onclick="viewFile('${r.local_url}','${esc(r.path)}')"
+          class="badge badge-green" style="cursor:pointer;border:none">✓ Restored Local</button>`
+      :`<span class="badge badge-muted">Remote Only</span>`;
+    tr.innerHTML=`
+      <td class="mono" style="word-break:break-all;font-size:.8rem;color:var(--text)">${esc(r.path)}</td>
+      <td>${localHtml}</td>
+      <td><a href="${r.remote_url}" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
+      <td><a href="${r.blob_url}" target="_blank" class="mono" style="color:var(--purple);font-size:.8rem">${r.sha}</a></td>`;
+    tb.appendChild(tr);
+  });
+  const s=(cur-1)*pageSize+1,e=Math.min(cur*pageSize,tot);
+  info.textContent=`Showing ${tot?s:0}–${e} of ${tot} files`;
+  pd.textContent=`Page ${cur} / ${tp}`;
+  prev.disabled=cur===1;next.disabled=cur===tp;
+}
+function applyFilter(){
+  const term=document.getElementById('q').value.trim().toLowerCase();
+  filtered=term?DATA.filter(r=>(r.path||'').toLowerCase().includes(term)||(r.sha||'').toLowerCase().includes(term)):DATA.slice();
+  if(sortK){filtered.sort((a,b)=>{const A=(a[sortK]||'').toLowerCase(),B=(b[sortK]||'').toLowerCase();return A<B?-sortD:A>B?sortD:0})}
+  cur=1;render();
+}
+document.getElementById('q').addEventListener('input',applyFilter);
+document.getElementById('ps').addEventListener('change',()=>{cur=1;render()});
+document.getElementById('reset').addEventListener('click',()=>{
+  document.getElementById('q').value='';
+  document.getElementById('ps').value='100';
+  sortK=null;sortD=1;filtered=DATA.slice();cur=1;render();
+});
+prev.addEventListener('click',()=>{if(cur>1){cur--;render()}});
+next.addEventListener('click',()=>{const tp=Math.ceil(filtered.length/pageSize);if(cur<tp){cur++;render()}});
+document.querySelectorAll('th.sortable').forEach(th=>{
+  th.style.cursor='pointer';
+  th.addEventListener('click',()=>{
+    const k=th.dataset.k;sortD=sortK===k?-sortD:1;sortK=k;applyFilter();
+  });
+});
+async function viewFile(url,filename){
+  const fv=document.getElementById('fv');
+  const img=document.getElementById('fv-img');
+  const code=document.getElementById('fv-code');
+  document.getElementById('fv-title').textContent=filename;
+  fv.style.display='block';img.style.display='none';code.style.display='none';code.textContent='Loading…';
+  const ext=filename.split('.').pop().toLowerCase();
+  const imgs=['png','jpg','jpeg','gif','svg','webp','ico'];
+  if(imgs.includes(ext)){img.src=url;img.style.display='block'}
+  else{
+    code.style.display='block';
+    try{const r=await fetch(url);if(!r.ok)throw new Error('Failed');code.textContent=await r.text()}
+    catch(e){code.textContent='Error loading file: '+e.message}
+  }
+}
+render();
+</script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 
 <footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
   border-top:1px solid var(--border);margin-top:3rem">

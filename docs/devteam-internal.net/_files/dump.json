@@ -1,0 +1,74 @@
+[
+  {
+    "path": "manage.py",
+    "sha1": "cca5235653eab00ea7f0fd9b98076ef3d9dd0d4c",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "requirements.txt",
+    "sha1": "e84d23690c55de25ac18850d4045fdab16689075",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "celery.py",
+    "sha1": "a86a0e03567ad20da4b1bc1ff11bfa5be9e1d191",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "settings/base.py",
+    "sha1": "c7a2482fbe61e9b171dae73d21e8d6a439b89577",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "settings/production.py",
+    "sha1": "b1acb98a4fc9ff48b2a3f3208d55c7d43e96ebef",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "app/admin/views.py",
+    "sha1": "f0dd6a697f5738da8558214ff35fbd9498c966cb",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "app/utils/uploader.py",
+    "sha1": "a30b6f34b51e6abb31cd502aa8b60e6548bb2bcc",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "app/tasks.py",
+    "sha1": "7f97ea87460187c1a852ec1f7ba09472cc2e377d",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "app/version.py",
+    "sha1": "aa9c2e26551176cfc750f6bdcbfbbb9f428ed5b2",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "templates/admin/dashboard_v2.html",
+    "sha1": "7eab333b45f1263ac3298e53400c9636f02913f1",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": "CHANGELOG.md",
+    "sha1": "f92d39f494e2e9c7c684ae2ee6445af36828aca4",
+    "mode": "100644",
+    "flags": 0
+  },
+  {
+    "path": ".env.example",
+    "sha1": "a7b1776fd72ded6e4b49e51578d59efe8735094a",
+    "mode": "100644",
+    "flags": 0
+  }
+]

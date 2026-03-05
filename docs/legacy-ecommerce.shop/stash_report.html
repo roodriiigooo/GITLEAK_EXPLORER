@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Master Dashboard — Git Leak Explorer</title>
+<title>Stash Recovery — Git Leak Explorer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 
@@ -225,70 +225,88 @@ hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 </head>
 <body>
 
-<style>body{padding:2rem}</style>
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--text-dim);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--text-dim);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--text-dim);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--text-dim);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--text-dim);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--text-dim);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
 <div class="container">
-  <div class="flex items-center gap-2 mb-3" style="justify-content:space-between">
-    <div>
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
-        <div style="width:28px;height:28px;background:var(--accent);color:#000;border-radius:5px;
-          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.85rem">GL</div>
-        <span style="font-weight:700;font-size:1.1rem">Git Leak Explorer</span>
+  <div class="card mb-3" style="border-color:var(--accent);background:var(--accent-dim)">
+    <div class="card-body flex items-center gap-2" style="justify-content:space-between">
+      <div>
+        <div style="font-size:1rem;font-weight:700;color:var(--accent)">&#x1F4BE; Git Stash Recovered</div>
+        <div class="muted" style="font-size:.8rem">
+          SHA: <span class="mono">deacbabbf8d8d76dd393ac6e64746f06a586d22c</span> &nbsp;&bull;&nbsp;
+          Author: Lucas Ferreira <lucas@legacy-ecommerce.shop> &nbsp;&bull;&nbsp;
+          Date: 2025-01-16 08:00:00
+        </div>
+        <div class="mono mt-1" style="font-size:.82rem;color:var(--text)">WIP: migrating payment gateway to Stripe</div>
       </div>
-      <h2 style="font-weight:700">Master Dashboard</h2>
-      <p class="muted" style="font-size:.82rem">5 targets scanned</p>
+      <div class="text-right">
+        <div class="stat-num" style="color:var(--accent)">2</div>
+        <div class="stat-lbl">Stashed Files</div>
+      </div>
     </div>
-    <div class="flex gap-2">
-      <span class="badge badge-muted">5 targets</span>
-      <span class="badge badge-red">9 secrets</span>
+  </div>
+  <div class="flex gap-2 mb-3">
+    <a href="report.html" class="btn btn-ghost">← Back</a>
+    <div class="search-wrap" style="flex:1;max-width:500px">
+      <span class="search-icon">⌕</span>
+      <input id="q" type="text" placeholder="Filter by filename…">
     </div>
   </div>
   <div class="tbl-wrap">
     <table>
       <thead><tr>
-        <th>Target</th><th>Status</th>
-        <th class="text-right">Secrets</th>
-        <th class="text-right">Files</th>
-        <th class="text-right">Action</th>
+        <th style="width:60%">File Path</th>
+        <th style="width:15%">Type</th>
+        <th style="width:25%">SHA-1</th>
       </tr></thead>
-      <tbody><tr>
-          <td><a href="legacy-ecommerce.shop/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://legacy-ecommerce.shop</a>
-            <div class="dim" style="font-size:.75rem">legacy-ecommerce.shop</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 6</span></td>
-          <td class="text-right"><span style="color:var(--accent)">15</span></td>
-          <td class="text-right"><a href="legacy-ecommerce.shop/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="startup-api.io/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://startup-api.io</a>
-            <div class="dim" style="font-size:.75rem">startup-api.io</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 3</span></td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="startup-api.io/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="devteam-internal.net/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://devteam-internal.net</a>
-            <div class="dim" style="font-size:.75rem">devteam-internal.net</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="devteam-internal.net/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="contractor-portal.com/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://contractor-portal.com</a>
-            <div class="dim" style="font-size:.75rem">contractor-portal.com</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">6</span></td>
-          <td class="text-right"><a href="contractor-portal.com/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="secure-bank.example/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://secure-bank.example</a>
-            <div class="dim" style="font-size:.75rem">secure-bank.example</div></td>
-          <td><span class="badge badge-muted">SECURE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right">—</td>
-          <td class="text-right"><a href="secure-bank.example/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr></tbody>
+      <tbody id="tb"></tbody>
     </table>
   </div>
+  <div class="flex items-center mt-2" style="justify-content:space-between;color:var(--text-muted);font-size:.82rem">
+    <span id="info"></span><div class="pgn" id="pgn"></div>
+  </div>
 </div>
+<script>
+const DATA=[{"path": "src/checkout/stripe_integration.php", "sha1": "53174b2556d17d0e21954c6043e9e1ce41e38a6d", "type": "STASHED", "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+\u003c?php\n+$stripe_key = 'sk_live_4eC39HqLyjWDarjtT1zdp7dc';\n+// TODO: move to env"}, {"path": "config/stripe.env", "sha1": "31aace491ae3e6bb3edb1184af12e1cad6578035", "type": "STASHED", "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+STRIPE_SECRET=sk_live_4eC39HqLyjWDarjtT1zdp7dc\n+STRIPE_PUBLIC=pk_live_abc123"}];
+let filtered=DATA.slice(),cur=1;const PS=50;
+const tb=document.getElementById('tb');
+const info=document.getElementById('info');
+const pgn=document.getElementById('pgn');
+function esc(t){if(!t)return'';return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function render(){
+  const tot=filtered.length,tp=Math.max(1,Math.ceil(tot/PS));
+  if(cur>tp)cur=tp;if(cur<1)cur=1;
+  const sl=filtered.slice((cur-1)*PS,cur*PS);
+  tb.innerHTML='';
+  sl.forEach(r=>{
+    const tr=document.createElement('tr');
+    const tc={'STASHED':'badge-amber','ADDED':'badge-green','MODIFIED':'badge-blue','DELETED':'badge-red'}[r.type]||'badge-muted';
+    tr.innerHTML=`<td class="mono" style="font-size:.8rem;word-break:break-all">${esc(r.path)}</td>
+      <td><span class="badge ${tc}">${esc(r.type||'STASHED')}</span></td>
+      <td class="mono" style="font-size:.78rem;color:var(--purple)">${esc(r.sha1||'')}</td>`;
+    tb.appendChild(tr);
+  });
+  info.textContent=`Showing ${tot?((cur-1)*PS+1):0}–${Math.min(cur*PS,tot)} of ${tot}`;
+  pgn.innerHTML='';
+  const pb=document.createElement('button');pb.textContent='‹';pb.disabled=cur===1;pb.onclick=()=>{cur--;render()};pgn.appendChild(pb);
+  const nb=document.createElement('button');nb.textContent='›';nb.disabled=cur===tp;nb.onclick=()=>{cur++;render()};pgn.appendChild(nb);
+}
+document.getElementById('q').addEventListener('input',e=>{
+  const t=e.target.value.toLowerCase();
+  filtered=t?DATA.filter(r=>(r.path||'').toLowerCase().includes(t)):DATA.slice();
+  cur=1;render();
+});
+render();
+</script>
 
 <footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
   border-top:1px solid var(--border);margin-top:3rem">

@@ -1,0 +1,18 @@
+[
+  {
+    "filename": "requirements.txt",
+    "url": "http://devteam-internal.net/requirements.txt",
+    "git_sha": "e84d23690c55de25ac18850d4045fdab16689075",
+    "in_git": true,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  },
+  {
+    "filename": "manage.py",
+    "url": "http://devteam-internal.net/manage.py",
+    "git_sha": "cca5235653eab00ea7f0fd9b98076ef3d9dd0d4c",
+    "in_git": true,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  }
+]

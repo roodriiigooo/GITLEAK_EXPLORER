@@ -1,0 +1,174 @@
+{
+  "head": "2757933279c139ed1b590628a53841bc7407064e",
+  "remote_url": "",
+  "commits": [
+    {
+      "sha": "2757933279c139ed1b590628a53841bc7407064e",
+      "author": "Felipe Ramos",
+      "email": "felipe.ramos@devteam.net",
+      "date": "2025-03-01 10:00:00",
+      "message": "release: v2.4.0 — stable",
+      "changes": [
+        {
+          "path": "CHANGELOG.md",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,3 @@\n-## v2.3.9\n+## v2.4.0\n+- New dashboard\n+## v2.3.9"
+        },
+        {
+          "path": "app/version.py",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,1 @@\n-VERSION = '2.3.9'\n+VERSION = '2.4.0'"
+        }
+      ],
+      "tree": "2757933279c139ed1b590628a53841bc7407064e",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "1a3279a82f7ec07d72914bb6113e03ab50aefab0",
+      "author": "Camila Torres",
+      "email": "camila@devteam.net",
+      "date": "2025-02-28 14:20:00",
+      "message": "feat: redesign admin panel with new UI components",
+      "changes": [
+        {
+          "path": "app/admin/views.py",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,2 +1,3 @@\n-def dashboard(request):\n-    return render(request,'admin/old.html')\n+def dashboard(request):\n+    ctx = get_dashboard_context(request)\n+    return render(request,'admin/dashboard_v2.html', ctx)"
+        },
+        {
+          "path": "templates/admin/dashboard_v2.html",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+{% extends 'base.html' %}\n+{% block content %}\n+<!-- new dashboard -->"
+        }
+      ],
+      "tree": "1a3279a82f7ec07d72914bb6113e03ab50aefab0",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "74f73135f871e9a13633de6fd55963f1ad16b548",
+      "author": "Felipe Ramos",
+      "email": "felipe.ramos@devteam.net",
+      "date": "2025-02-20 09:30:00",
+      "message": "fix: prevent directory traversal in file upload",
+      "changes": [
+        {
+          "path": "app/utils/uploader.py",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,2 +1,3 @@\n-filename = request.FILES['file'].name\n-path = os.path.join(UPLOAD_DIR, filename)\n+filename = os.path.basename(request.FILES['file'].name)\n+if '..' in filename: raise PermissionError('Invalid filename')\n+path = os.path.join(UPLOAD_DIR, filename)"
+        }
+      ],
+      "tree": "74f73135f871e9a13633de6fd55963f1ad16b548",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "27a769a41c819cc07de951d189212b4cfc355b22",
+      "author": "Igor Mendes",
+      "email": "igor.mendes@devteam.net",
+      "date": "2025-02-10 17:00:00",
+      "message": "chore: migrate from SQLite to PostgreSQL",
+      "changes": [
+        {
+          "path": "settings/base.py",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,1 +1,2 @@\n-DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3'}}\n+DATABASES = {'default': {'ENGINE': 'django.db.backends.postgresql',\n+  'NAME': os.environ.get('DB_NAME'), 'HOST': os.environ.get('DB_HOST')}}"
+        },
+        {
+          "path": "requirements.txt",
+          "type": "MODIFIED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,1 @@\n+psycopg2-binary==2.9.9"
+        }
+      ],
+      "tree": "27a769a41c819cc07de951d189212b4cfc355b22",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "a43670f44ac58d66846224090e7788ce31498b44",
+      "author": "Camila Torres",
+      "email": "camila@devteam.net",
+      "date": "2025-01-15 11:00:00",
+      "message": "feat: add Celery task queue for async jobs",
+      "changes": [
+        {
+          "path": "app/tasks.py",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+from celery import shared_task\n+@shared_task\n+def send_report(): ..."
+        },
+        {
+          "path": "celery.py",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+from celery import Celery\n+app = Celery('devteam')"
+        }
+      ],
+      "tree": "a43670f44ac58d66846224090e7788ce31498b44",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "3bdde8a1e70367ee0366fcb312750a662e951f62",
+      "author": "Igor Mendes",
+      "email": "igor.mendes@devteam.net",
+      "date": "2024-11-01 09:00:00",
+      "message": "init: project initialization — Django 4.2",
+      "changes": [
+        {
+          "path": "manage.py",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+#!/usr/bin/env python\n+import django"
+        },
+        {
+          "path": "requirements.txt",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,2 @@\n+Django==4.2.9\n+gunicorn==21.2.0"
+        },
+        {
+          "path": "settings/base.py",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,1 @@\n+SECRET_KEY = os.environ.get('SECRET_KEY')"
+        },
+        {
+          "path": ".env.example",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+SECRET_KEY=\n+DB_NAME=\n+DB_HOST="
+        }
+      ],
+      "tree": "3bdde8a1e70367ee0366fcb312750a662e951f62",
+      "parent": null,
+      "is_stash": false,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    },
+    {
+      "sha": "042caa250d062aa3549f63bd8e8b47335ddeeabb",
+      "author": "Felipe Ramos",
+      "email": "felipe.ramos@devteam.net",
+      "date": "2025-03-02 08:00:00",
+      "message": "WIP: experimenting with OpenAI integration",
+      "changes": [
+        {
+          "path": "app/ai/openai_client.py",
+          "type": "ADDED",
+          "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+import openai\n+openai.api_key = os.environ.get('OPENAI_API_KEY')\n+# TODO: move key to vault"
+        }
+      ],
+      "tree": "042caa250d062aa3549f63bd8e8b47335ddeeabb",
+      "parent": null,
+      "is_stash": true,
+      "is_orphan": false,
+      "fast_mode_skipped": false
+    }
+  ]
+}

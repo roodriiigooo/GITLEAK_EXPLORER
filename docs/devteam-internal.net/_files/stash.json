@@ -1,0 +1,16 @@
+{
+  "metadata": {
+    "sha": "042caa250d062aa3549f63bd8e8b47335ddeeabb",
+    "author": "Felipe Ramos <felipe.ramos@devteam.net>",
+    "date": "2025-03-02 08:00:00",
+    "message": "WIP: experimenting with OpenAI integration"
+  },
+  "entries": [
+    {
+      "path": "app/ai/openai_client.py",
+      "sha1": "33437a252603acaf64b9605db2b54b37252e5a12",
+      "type": "STASHED",
+      "diff": "--- a/file\n+++ b/file\n@@ -1,0 +1,3 @@\n+import openai\n+openai.api_key = os.environ.get('OPENAI_API_KEY')\n+# TODO: move key to vault"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "base": "http://devteam-internal.net",
+  "checked_at": "2025-03-04T10:00:00+00:00",
+  "results": {
+    "HEAD": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://devteam-internal.net/.git/HEAD",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "refs_heads": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://devteam-internal.net/.git/refs/heads",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "packed_refs": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://devteam-internal.net/.git/packed/refs",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "index": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "objects_root": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "logs": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://devteam-internal.net/.git/logs",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "config": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "stash": {
+      "exposed": false,
+      "positive_urls": []
+    },
+    "info_refs": {
+      "exposed": false,
+      "positive_urls": []
+    }
+  }
+}

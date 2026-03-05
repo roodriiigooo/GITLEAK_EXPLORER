@@ -1,0 +1,16 @@
+[
+  {
+    "type": "env",
+    "desc": "Environment Variables (.env)",
+    "url": "http://devteam-internal.net/.env",
+    "report_file": "env_report.html",
+    "dump_file": ".env"
+  },
+  {
+    "type": "svn",
+    "desc": "SVN Repository (wc.db)",
+    "url": "http://devteam-internal.net/.svn/wc.db",
+    "report_file": "svn_report.html",
+    "dump_file": "wc.db"
+  }
+]

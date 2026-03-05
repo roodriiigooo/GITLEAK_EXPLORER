@@ -1,0 +1,34 @@
+[
+  {
+    "filename": ".env.production",
+    "url": "https://startup-api.io/.env.production",
+    "git_sha": "7a65530a86a21af1e867a3ac04660367828a45b1",
+    "in_git": true,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  },
+  {
+    "filename": ".github/workflows/deploy.yml",
+    "url": "https://startup-api.io/.github/workflows/deploy.yml",
+    "git_sha": "af51e0ebb6d8b28f3a9e5bd36c42690d20900732",
+    "in_git": true,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  },
+  {
+    "filename": "../../../etc/shadow",
+    "url": "https://startup-api.io/../../../etc/shadow",
+    "git_sha": "",
+    "in_git": false,
+    "type": "traversal",
+    "local_path": ""
+  },
+  {
+    "filename": "package.json",
+    "url": "https://startup-api.io/package.json",
+    "git_sha": "6c14cd102bb36751f2721af89e85727bac4b5c66",
+    "in_git": true,
+    "type": "DEFAULT LIST",
+    "local_path": ""
+  }
+]

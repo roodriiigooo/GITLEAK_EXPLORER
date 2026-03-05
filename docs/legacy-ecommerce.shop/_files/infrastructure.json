@@ -1,0 +1,50 @@
+[
+  {
+    "category": "API_ENDPOINT",
+    "value": "/api/v1/products",
+    "file": "src/catalog.php",
+    "context": "JGFwaUJhc2UgPSAnL2FwaS92MS9wcm9kdWN0cyc7"
+  },
+  {
+    "category": "API_ENDPOINT",
+    "value": "/api/v1/checkout",
+    "file": "src/checkout/payment.php",
+    "context": "JGVuZHBvaW50ID0gJy9hcGkvdjEvY2hlY2tvdXQnOw=="
+  },
+  {
+    "category": "API_ENDPOINT",
+    "value": "https://api.stripe.com/v1/charges",
+    "file": "src/checkout/stripe_integration.php",
+    "context": "JHVybCA9ICdodHRwczovL2FwaS5zdHJpcGUuY29tL3YxL2NoYXJnZXMnOw=="
+  },
+  {
+    "category": "EXTERNAL_HOST",
+    "value": "db.internal.shop",
+    "file": "config/database.php",
+    "context": "JGhvc3QgPSAnZGIuaW50ZXJuYWwuc2hvcCc7"
+  },
+  {
+    "category": "EXTERNAL_HOST",
+    "value": "smtp.sendgrid.net",
+    "file": "config/mail.php",
+    "context": "J2hvc3QnID0+ICdzbXRwLnNlbmRncmlkLm5ldCc="
+  },
+  {
+    "category": "IP_ADDRESS",
+    "value": "203.0.113.45",
+    "file": ".env",
+    "context": "TEVHQUNZX1BBWU1FTlRfSE9TVD0yMDMuMC4xMTMuNDU="
+  },
+  {
+    "category": "IP_ADDRESS",
+    "value": "198.51.100.22",
+    "file": ".env",
+    "context": "UkVESVNfSE9TVD0xOTguNTEuMTAwLjIy"
+  },
+  {
+    "category": "EXTERNAL_HOST",
+    "value": "cdn.legacy-ecommerce.shop",
+    "file": "public/index.php",
+    "context": "ZGVmaW5lKCdDRE5fVVJMJywnaHR0cHM6Ly9jZG4ubGVnYWN5LWVjb21tZXJjZS5zaG9wJyk7"
+  }
+]

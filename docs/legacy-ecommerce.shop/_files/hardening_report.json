@@ -1,0 +1,90 @@
+{
+  "base": "http://legacy-ecommerce.shop",
+  "checked_at": "2025-03-04T10:00:00+00:00",
+  "results": {
+    "HEAD": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://legacy-ecommerce.shop/.git/HEAD",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "refs_heads": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://legacy-ecommerce.shop/.git/refs/heads",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "packed_refs": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://legacy-ecommerce.shop/.git/packed/refs",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "index": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://legacy-ecommerce.shop/.git/index",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "objects_root": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://legacy-ecommerce.shop/.git/objects/root",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "logs": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://legacy-ecommerce.shop/.git/logs",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "config": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://legacy-ecommerce.shop/.git/config",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "stash": {
+      "exposed": true,
+      "positive_urls": [
+        {
+          "url": "http://legacy-ecommerce.shop/.git/stash",
+          "status_code": 200,
+          "method": "GET"
+        }
+      ]
+    },
+    "info_refs": {
+      "exposed": false,
+      "positive_urls": []
+    }
+  }
+}

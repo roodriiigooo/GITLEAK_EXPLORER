@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Master Dashboard — Git Leak Explorer</title>
+<title>Infrastructure Map — Git Leak Explorer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 
@@ -225,70 +225,94 @@ hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 </head>
 <body>
 
-<style>body{padding:2rem}</style>
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--text-dim);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--text-dim);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--text-dim);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--text-dim);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--accent);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--text-dim);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
 <div class="container">
   <div class="flex items-center gap-2 mb-3" style="justify-content:space-between">
-    <div>
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
-        <div style="width:28px;height:28px;background:var(--accent);color:#000;border-radius:5px;
-          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.85rem">GL</div>
-        <span style="font-weight:700;font-size:1.1rem">Git Leak Explorer</span>
-      </div>
-      <h2 style="font-weight:700">Master Dashboard</h2>
-      <p class="muted" style="font-size:.82rem">5 targets scanned</p>
-    </div>
-    <div class="flex gap-2">
-      <span class="badge badge-muted">5 targets</span>
-      <span class="badge badge-red">9 secrets</span>
-    </div>
+    <h2 style="font-weight:700">🌐 Infrastructure Map</h2>
+    <a href="report.html" class="btn btn-ghost">← Back</a>
   </div>
-  <div class="tbl-wrap">
-    <table>
+  <div id="graph" style="height:400px;background:var(--bg-inset);border:1px solid var(--border);
+    border-radius:var(--radius);margin-bottom:1.5rem"></div>
+  <div class="search-wrap mb-2" style="max-width:500px">
+    <span class="search-icon">⌕</span>
+    <input id="gs" type="text" placeholder="Search host, IP, endpoint, file…">
+  </div>
+  <div id="dt-wrap" class="tbl-wrap">
+    <table id="infra">
       <thead><tr>
-        <th>Target</th><th>Status</th>
-        <th class="text-right">Secrets</th>
-        <th class="text-right">Files</th>
-        <th class="text-right">Action</th>
+        <th style="width:13%">Category</th>
+        <th style="width:28%">Asset Detected</th>
+        <th style="width:25%">Source File</th>
+        <th>Code Context</th>
       </tr></thead>
-      <tbody><tr>
-          <td><a href="legacy-ecommerce.shop/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://legacy-ecommerce.shop</a>
-            <div class="dim" style="font-size:.75rem">legacy-ecommerce.shop</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 6</span></td>
-          <td class="text-right"><span style="color:var(--accent)">15</span></td>
-          <td class="text-right"><a href="legacy-ecommerce.shop/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="startup-api.io/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://startup-api.io</a>
-            <div class="dim" style="font-size:.75rem">startup-api.io</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 3</span></td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="startup-api.io/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="devteam-internal.net/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://devteam-internal.net</a>
-            <div class="dim" style="font-size:.75rem">devteam-internal.net</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="devteam-internal.net/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="contractor-portal.com/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://contractor-portal.com</a>
-            <div class="dim" style="font-size:.75rem">contractor-portal.com</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">6</span></td>
-          <td class="text-right"><a href="contractor-portal.com/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="secure-bank.example/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://secure-bank.example</a>
-            <div class="dim" style="font-size:.75rem">secure-bank.example</div></td>
-          <td><span class="badge badge-muted">SECURE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right">—</td>
-          <td class="text-right"><a href="secure-bank.example/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr></tbody>
+      <tbody id="tb"></tbody>
     </table>
   </div>
+  <div class="flex items-center mt-2" style="justify-content:space-between;color:var(--text-muted);font-size:.82rem">
+    <span id="pg-info"></span><div class="pgn" id="pgn"></div>
+  </div>
 </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+<script>
+const DATA=[{"category": "API_ENDPOINT", "value": "/api/v1/auth/login", "file": "src/routes/auth.ts", "context": "cm91dGVyLnBvc3QoJy9hcGkvdjEvYXV0aC9sb2dpbicsIGF1dGhDb250cm9sbGVyLmxvZ2luKTs="}, {"category": "API_ENDPOINT", "value": "/api/v1/users", "file": "src/routes/users.ts", "context": "YXBpVXJsID0gJy9hcGkvdjEvdXNlcnMn"}, {"category": "EXTERNAL_HOST", "value": "api.startup-api.io", "file": "src/app.ts", "context": "Y29uc3QgQkFTRV9VUkwgPSAnaHR0cHM6Ly9hcGkuc3RhcnR1cC1hcGkuaW8nOw=="}, {"category": "EXTERNAL_HOST", "value": "hooks.slack.com", "file": "src/middleware/rateLimit.ts", "context": "Y29uc3Qgc2xhY2tVcmwgPSAnaHR0cHM6Ly9ob29rcy5zbGFjay5jb20vc2VydmljZXMvLi4uJw=="}, {"category": "IP_ADDRESS", "value": "10.0.1.42", "file": ".env.production", "context": "SU5URVJOQUxfREJfSE9TVD0xMC4wLjEuNDIgICMgc3RhZ2luZw=="}];
+const decoded=DATA.map(d=>({...d,context:atob(d.context)}));
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+// graph
+const net=new vis.Network(document.getElementById('graph'),
+  {nodes:[{"id": "root", "label": "TARGET", "shape": "diamond", "color": "#e8a020", "size": 30}, {"id": "/api/v1/auth/login", "label": "/api/v1/auth/login", "color": "#22c55e", "font": {"color": "#fff"}}, {"id": "/api/v1/users", "label": "/api/v1/users", "color": "#22c55e", "font": {"color": "#fff"}}, {"id": "api.startup-api.io", "label": "api.startup-api.io", "color": "#a78bfa", "font": {"color": "#fff"}}, {"id": "hooks.slack.com", "label": "hooks.slack.com", "color": "#a78bfa", "font": {"color": "#fff"}}, {"id": "10.0.1.42", "label": "10.0.1.42", "color": "#ef4444", "font": {"color": "#fff"}}],edges:[{"from": "root", "to": "/api/v1/auth/login"}, {"from": "root", "to": "/api/v1/users"}, {"from": "root", "to": "api.startup-api.io"}, {"from": "root", "to": "hooks.slack.com"}, {"from": "root", "to": "10.0.1.42"}]},
+  {physics:{solver:'forceAtlas2Based',stabilization:{iterations:80}},
+    edges:{color:'#2e3a50'}});
+
+// table
+const tb=document.getElementById('tb');
+const pgInfo=document.getElementById('pg-info');
+const pgn=document.getElementById('pgn');
+let filtered=decoded,cur=1;const PS=25;
+function catCls(c){return c==='IP_ADDRESS'?'badge-red':c==='API_ENDPOINT'?'badge-green':'badge-purple'}
+function render(){
+  const tot=filtered.length,tp=Math.max(1,Math.ceil(tot/PS));
+  if(cur>tp)cur=tp;if(cur<1)cur=1;
+  const sl=filtered.slice((cur-1)*PS,cur*PS);
+  tb.innerHTML='';
+  sl.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><span class="badge ${catCls(r.category)}">${r.category.replace('_',' ')}</span></td>
+      <td class="mono" style="word-break:break-all;color:var(--text)">${esc(r.value)}</td>
+      <td class="dim" style="font-size:.78rem">${esc(r.file)}</td>
+      <td><div class="code-block" style="font-size:.72rem;padding:.4rem .6rem">${esc(r.context)}</div></td>`;
+    tb.appendChild(tr);
+  });
+  pgInfo.textContent=`${(cur-1)*PS+1}–${Math.min(cur*PS,tot)} of ${tot} assets`;
+  pgn.innerHTML='';
+  const pb=document.createElement('button');pb.textContent='‹';pb.disabled=cur===1;
+  pb.onclick=()=>{cur--;render()};pgn.appendChild(pb);
+  const nb=document.createElement('button');nb.textContent='›';nb.disabled=cur===tp;
+  nb.onclick=()=>{cur++;render()};pgn.appendChild(nb);
+}
+document.getElementById('gs').addEventListener('input',e=>{
+  const t=e.target.value.toLowerCase();
+  filtered=decoded.filter(r=>(r.value||'').toLowerCase().includes(t)||(r.file||'').toLowerCase().includes(t));
+  cur=1;render();
+});
+net.on('click',p=>{if(p.nodes.length){
+  const id=p.nodes[0];
+  document.getElementById('gs').value=id==='root'?'':id;
+  filtered=id==='root'?decoded:decoded.filter(r=>r.value===id);
+  cur=1;render();
+}
+});
+render();
+</script>
 
 <footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
   border-top:1px solid var(--border);margin-top:3rem">

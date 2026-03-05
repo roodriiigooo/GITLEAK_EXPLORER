@@ -1,0 +1,6 @@
+# Custom target wordlist for git_leak.py
+# Lines starting with # are ignored by the script
+
+alvo.com
+alvo-teste.com.br
+outro-alvo.co.jp

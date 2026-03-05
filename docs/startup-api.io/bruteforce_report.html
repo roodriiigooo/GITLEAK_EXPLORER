@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Master Dashboard — Git Leak Explorer</title>
+<title>Brute-Force Report — Git Leak Explorer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 
@@ -225,70 +225,181 @@ hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 </head>
 <body>
 
-<style>body{padding:2rem}</style>
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--text-dim);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--text-dim);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--text-dim);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--text-dim);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--text-dim);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--accent);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
 <div class="container">
   <div class="flex items-center gap-2 mb-3" style="justify-content:space-between">
     <div>
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
-        <div style="width:28px;height:28px;background:var(--accent);color:#000;border-radius:5px;
-          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.85rem">GL</div>
-        <span style="font-weight:700;font-size:1.1rem">Git Leak Explorer</span>
-      </div>
-      <h2 style="font-weight:700">Master Dashboard</h2>
-      <p class="muted" style="font-size:.82rem">5 targets scanned</p>
+      <h2 style="font-weight:700">&#x1F528; Brute-Force / Traversal</h2>
+      <p class="muted" style="font-size:.82rem">Results via Brute-Force &amp; Path Traversal</p>
     </div>
-    <div class="flex gap-2">
-      <span class="badge badge-muted">5 targets</span>
-      <span class="badge badge-red">9 secrets</span>
+    <span class="badge badge-blue" style="font-size:.85rem">4 found</span>
+  </div>
+  <div class="flex gap-2 mb-3">
+    <a href="report.html" class="btn btn-ghost">&#x2190; Back</a>
+    <div class="search-wrap" style="flex:1;max-width:450px">
+      <span class="search-icon">&#x2315;</span>
+      <input id="q" type="text" placeholder="Filter by name, URL or status&#x2026;">
     </div>
   </div>
   <div class="tbl-wrap">
     <table>
       <thead><tr>
-        <th>Target</th><th>Status</th>
-        <th class="text-right">Secrets</th>
-        <th class="text-right">Files</th>
-        <th class="text-right">Action</th>
+        <th style="width:12%">Source</th>
+        <th style="width:28%">File</th>
+        <th style="width:30%">URL</th>
+        <th style="width:13%">Status</th>
+        <th style="width:17%">SHA-1 / Preview</th>
       </tr></thead>
-      <tbody><tr>
-          <td><a href="legacy-ecommerce.shop/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://legacy-ecommerce.shop</a>
-            <div class="dim" style="font-size:.75rem">legacy-ecommerce.shop</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 6</span></td>
-          <td class="text-right"><span style="color:var(--accent)">15</span></td>
-          <td class="text-right"><a href="legacy-ecommerce.shop/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="startup-api.io/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://startup-api.io</a>
-            <div class="dim" style="font-size:.75rem">startup-api.io</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 3</span></td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="startup-api.io/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="devteam-internal.net/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://devteam-internal.net</a>
-            <div class="dim" style="font-size:.75rem">devteam-internal.net</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="devteam-internal.net/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="contractor-portal.com/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://contractor-portal.com</a>
-            <div class="dim" style="font-size:.75rem">contractor-portal.com</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">6</span></td>
-          <td class="text-right"><a href="contractor-portal.com/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="secure-bank.example/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://secure-bank.example</a>
-            <div class="dim" style="font-size:.75rem">secure-bank.example</div></td>
-          <td><span class="badge badge-muted">SECURE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right">—</td>
-          <td class="text-right"><a href="secure-bank.example/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr></tbody>
+      <tbody id="tb"></tbody>
     </table>
   </div>
+  <div class="flex items-center mt-2" style="justify-content:space-between;color:var(--text-muted);font-size:.82rem">
+    <span id="info"></span><div class="pgn" id="pgn"></div>
+  </div>
 </div>
+
+<!-- File preview overlay (same design as listing.html) -->
+<div id="fv" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;padding:1.5rem">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);
+    height:100%;display:flex;flex-direction:column">
+    <div style="padding:.75rem 1rem;border-bottom:1px solid var(--border);
+      display:flex;justify-content:space-between;align-items:center">
+      <span id="fv-title" class="mono" style="font-size:.85rem"></span>
+      <button onclick="closeFv()" class="btn btn-ghost" style="padding:4px 10px">&#x2715;</button>
+    </div>
+    <div style="flex:1;overflow:auto;padding:1rem;background:var(--bg-inset)">
+      <img id="fv-img" style="display:none;max-width:100%;height:auto;border-radius:4px">
+      <pre id="fv-code" class="code-block" style="display:none;height:100%;margin:0"></pre>
+      <div id="fv-binary" style="display:none;text-align:center;padding:3rem">
+        <div style="font-size:3rem;margin-bottom:1rem">&#x1F4E6;</div>
+        <p style="color:var(--text-muted)">The binary file cannot be viewed in this window.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA=[{"source": "DEFAULT LIST", "filename": ".env.production", "url": "https://startup-api.io/.env.production", "git_sha": "7a65530a86a21af1e867a3ac04660367828a45b1", "in_git": true, "local_rel": ""}, {"source": "DEFAULT LIST", "filename": ".github/workflows/deploy.yml", "url": "https://startup-api.io/.github/workflows/deploy.yml", "git_sha": "af51e0ebb6d8b28f3a9e5bd36c42690d20900732", "in_git": true, "local_rel": ""}, {"source": "traversal", "filename": "../../../etc/shadow", "url": "https://startup-api.io/../../../etc/shadow", "git_sha": "", "in_git": false, "local_rel": ""}, {"source": "DEFAULT LIST", "filename": "package.json", "url": "https://startup-api.io/package.json", "git_sha": "6c14cd102bb36751f2721af89e85727bac4b5c66", "in_git": true, "local_rel": ""}];
+let filtered=DATA.slice(),cur=1;const PS=20;
+const tb=document.getElementById('tb');
+const info=document.getElementById('info');
+const pgn=document.getElementById('pgn');
+
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+/* ── Binary detection ── */
+const BIN_EXTS=new Set(['exe','dll','so','bin','obj','class','pyc','pyd',
+  'zip','gz','tar','7z','rar','bz2','xz','pack','idx',
+  'png','jpg','jpeg','gif','bmp','ico','tiff','webp',
+  'mp3','mp4','avi','mov','mkv','flac','ogg',
+  'pdf','doc','docx','xls','xlsx','ppt','pptx',
+  'woff','woff2','eot','ttf','otf']);
+const IMG_EXTS=new Set(['png','jpg','jpeg','gif','bmp','svg','webp','ico']);
+
+function isBinary(fname){
+  const ext=(fname.split('.').pop()||'').toLowerCase();
+  return BIN_EXTS.has(ext);
+}
+function isImage(fname){
+  const ext=(fname.split('.').pop()||'').toLowerCase();
+  return IMG_EXTS.has(ext);
+}
+
+/* ── Overlay helpers ── */
+function closeFv(){
+  document.getElementById('fv').style.display='none';
+  document.getElementById('fv-img').style.display='none';
+  document.getElementById('fv-code').style.display='none';
+  document.getElementById('fv-binary').style.display='none';
+}
+async function viewFile(localRel, filename){
+  const fv=document.getElementById('fv');
+  const img=document.getElementById('fv-img');
+  const code=document.getElementById('fv-code');
+  const binMsg=document.getElementById('fv-binary');
+  document.getElementById('fv-title').textContent=filename;
+  fv.style.display='block';
+  img.style.display='none';code.style.display='none';binMsg.style.display='none';
+
+  if(isBinary(filename)&&!isImage(filename)){
+    binMsg.style.display='block';
+    return;
+  }
+  if(isImage(filename)){
+    img.src=localRel;img.style.display='block';
+    return;
+  }
+  code.style.display='block';code.textContent='Loading…';
+  try{
+    const r=await fetch(localRel);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const text=await r.text();
+    /* Heuristic binary check on fetched content */
+    const hasBin=/[\x00-\x08\x0e-\x1f\x7f]/.test(text.slice(0,512));
+    if(hasBin){
+      code.style.display='none';binMsg.style.display='block';
+    }else{
+      code.textContent=text;
+    }
+  }catch(e){
+    code.textContent='Error loading file: '+e.message;
+  }
+}
+
+function render(){
+  const tot=filtered.length,tp=Math.max(1,Math.ceil(tot/PS));
+  if(cur>tp)cur=tp;if(cur<1)cur=1;
+  const sl=filtered.slice((cur-1)*PS,cur*PS);
+  tb.innerHTML='';
+  sl.forEach(r=>{
+    const tr=document.createElement('tr');
+    const sCls=r.source==='traversal'?'badge-amber':r.source==='Custom'?'badge-blue':'badge-muted';
+    const stCls=r.in_git?'badge-green':'badge-amber';
+    const stLbl=r.in_git?'VERSIONED':'LOCAL ONLY';
+    /* VERSIONED: single button that IS the status AND opens the preview */
+    const statusCell=r.in_git&&r.local_rel
+      ?`<button onclick="viewFile('${esc(r.local_rel)}','${esc(r.filename)}')"
+          class="badge badge-green" style="cursor:pointer;border:none;padding:3px 8px">
+          &#x1F441;&nbsp;VERSIONED</button>`
+      :`<span class="badge ${stCls}">${stLbl}</span>`;
+    const shaLabel=r.git_sha?r.git_sha.slice(0,8):'&#x2014;';
+    tr.innerHTML=`
+      <td><span class="badge ${sCls}">${esc(r.source)}</span></td>
+      <td class="mono" style="word-break:break-all;font-size:.8rem">${esc(r.filename)}</td>
+      <td class="mono" style="font-size:.75rem;word-break:break-all">
+        <a href="${esc(r.url)}" target="_blank" class="dim">${esc(r.url)}</a></td>
+      <td>${statusCell}</td>
+      <td class="mono" style="font-size:.78rem;color:var(--purple)">${shaLabel}</td>`;
+    tb.appendChild(tr);
+  });
+  info.textContent=`${tot?((cur-1)*PS+1):0}–${Math.min(cur*PS,tot)} of ${tot} files`;
+  pgn.innerHTML='';
+  const pb=document.createElement('button');pb.textContent='‹';pb.disabled=cur===1;
+  pb.onclick=()=>{cur--;render()};pgn.appendChild(pb);
+  const nb=document.createElement('button');nb.textContent='›';nb.disabled=cur===tp;
+  nb.onclick=()=>{cur++;render()};pgn.appendChild(nb);
+}
+document.getElementById('q').addEventListener('input',e=>{
+  const t=e.target.value.toLowerCase();
+  filtered=t?DATA.filter(r=>
+    (r.filename||'').toLowerCase().includes(t)||
+    (r.url||'').toLowerCase().includes(t)||
+    (r.in_git?'versioned':'local only').includes(t)
+  ):DATA.slice();
+  cur=1;render();
+});
+render();
+</script>
 
 <footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
   border-top:1px solid var(--border);margin-top:3rem">

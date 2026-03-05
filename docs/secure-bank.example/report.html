@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Master Dashboard — Git Leak Explorer</title>
+<title>Dashboard — Git Leak Explorer</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 
@@ -225,70 +225,126 @@ hr{border:none;border-top:1px solid var(--border);margin:1rem 0}
 </head>
 <body>
 
-<style>body{padding:2rem}</style>
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">GL</div>
+    <span>Git Leak Explorer</span>
+  </div>
+  <nav class="topbar-nav">
+    <a href="report.html" style="font-size:.82rem;color:var(--accent);">Dashboard</a><a href="listing.html" style="font-size:.82rem;color:var(--text-dim);">Files</a><a href="history.html" style="font-size:.82rem;color:var(--text-dim);">History</a><a href="hardening_report.html" style="font-size:.82rem;color:var(--text-dim);">Hardening</a><a href="users.html" style="font-size:.82rem;color:var(--text-dim);">Users</a><a href="secrets.html" style="font-size:.82rem;color:var(--text-dim);">Secrets</a><a href="infrastructure_report.html" style="font-size:.82rem;color:var(--text-dim);">Infra Map</a><a href="bruteforce_report.html" style="font-size:.82rem;color:var(--text-dim);">Brute-Force</a>
+    <div class="theme-toggle" title="Toggle dark/light mode"></div>
+  </nav>
+</div>
+
 <div class="container">
-  <div class="flex items-center gap-2 mb-3" style="justify-content:space-between">
+  <div class="flex items-center mb-3" style="justify-content:space-between">
     <div>
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
-        <div style="width:28px;height:28px;background:var(--accent);color:#000;border-radius:5px;
-          display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.85rem">GL</div>
-        <span style="font-weight:700;font-size:1.1rem">Git Leak Explorer</span>
-      </div>
-      <h2 style="font-weight:700">Master Dashboard</h2>
-      <p class="muted" style="font-size:.82rem">5 targets scanned</p>
-    </div>
-    <div class="flex gap-2">
-      <span class="badge badge-muted">5 targets</span>
-      <span class="badge badge-red">9 secrets</span>
+      <h2 style="font-weight:700">Analysis Dashboard</h2>
+      <a href="https://secure-bank.example" target="_blank" class="muted" style="font-size:.82rem">https://secure-bank.example</a>
     </div>
   </div>
-  <div class="tbl-wrap">
-    <table>
-      <thead><tr>
-        <th>Target</th><th>Status</th>
-        <th class="text-right">Secrets</th>
-        <th class="text-right">Files</th>
-        <th class="text-right">Action</th>
-      </tr></thead>
-      <tbody><tr>
-          <td><a href="legacy-ecommerce.shop/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://legacy-ecommerce.shop</a>
-            <div class="dim" style="font-size:.75rem">legacy-ecommerce.shop</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 6</span></td>
-          <td class="text-right"><span style="color:var(--accent)">15</span></td>
-          <td class="text-right"><a href="legacy-ecommerce.shop/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="startup-api.io/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://startup-api.io</a>
-            <div class="dim" style="font-size:.75rem">startup-api.io</div></td>
-          <td><span class="badge badge-red">CRITICAL</span></td>
-          <td class="text-right"><span style="color:var(--red);font-weight:700">⚠ 3</span></td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="startup-api.io/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="devteam-internal.net/report.html" target="_blank" style="font-weight:600;color:var(--accent)">http://devteam-internal.net</a>
-            <div class="dim" style="font-size:.75rem">devteam-internal.net</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">12</span></td>
-          <td class="text-right"><a href="devteam-internal.net/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="contractor-portal.com/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://contractor-portal.com</a>
-            <div class="dim" style="font-size:.75rem">contractor-portal.com</div></td>
-          <td><span class="badge badge-amber">VULNERABLE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right"><span style="color:var(--accent)">6</span></td>
-          <td class="text-right"><a href="contractor-portal.com/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr><tr>
-          <td><a href="secure-bank.example/report.html" target="_blank" style="font-weight:600;color:var(--accent)">https://secure-bank.example</a>
-            <div class="dim" style="font-size:.75rem">secure-bank.example</div></td>
-          <td><span class="badge badge-muted">SECURE</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right">—</td>
-          <td class="text-right"><a href="secure-bank.example/report.html" target="_blank" class="dim" style="font-size:.85rem">Open ↗</a></td>
-        </tr></tbody>
-    </table>
+
+  
+  
+
+  <div class="grid-2 mb-3">
+    <div>
+<div class="card">
+  <div class="card-header">
+    <span>🛡 Hardening &amp; Config</span>
+    <span class="badge badge-green">0 failures</span>
+  </div>
+  <div class="card-body">
+    <table><tr><td class="mono" style="font-size:.8rem">HEAD</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">refs_heads</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">packed_refs</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">index</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">objects_root</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">logs</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">config</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">stash</td><td><span class="badge badge-green">OK</span></td></tr><tr><td class="mono" style="font-size:.8rem">info_refs</td><td><span class="badge badge-green">OK</span></td></tr></table>
+    <a href="hardening_report.html" class="btn btn-ghost w-full mt-2">Full Diagnostic →</a>
+  </div>
+</div><div style="margin-top:1rem">
+<div class="card">
+  <div class="card-header">
+    <span>⏳ Recent History</span>
+    <span class="badge badge-blue">2 commits</span>
+  </div>
+  <div class="card-body">
+    <div class="muted mb-2" style="font-size:.8rem">HEAD: <span class="mono">b3a358cd</span></div>
+    <table><tr>
+          <td class="mono" style="color:var(--purple);font-weight:700">b3a358c</td>
+          <td class="dim" style="font-size:.82rem">[automated] dependency audit — all clear</td>
+          <td class="text-right"><span class="badge badge-muted">2025-03-01</span></td></tr><tr>
+          <td class="mono" style="color:var(--purple);font-weight:700">37fb893</td>
+          <td class="dim" style="font-size:.82rem">[automated] rotate signing keys (scheduled)</td>
+          <td class="text-right"><span class="badge badge-muted">2025-02-01</span></td></tr></table>
+    <a href="history.html" class="btn btn-ghost w-full mt-2">Explore Timeline →</a>
+  </div>
+</div></div></div>
+    <div>
+<div class="card">
+  <div class="card-header">👤 Identities (OSINT)</div>
+  <div class="card-body" style="text-align:center">
+    <div class="stat-num">1</div>
+    <div class="stat-lbl">Identified Authors</div>
+    <p class="muted mt-1" style="font-size:.82rem">Developers and emails extracted from history.</p>
+    <a href="users.html" class="btn btn-ghost w-full mt-2">View User List →</a>
+  </div>
+</div><div style="margin-top:1rem">
+<div class="card">
+  <div class="card-header">
+    <span>📂 Files (.git Index)</span>
+    <span class="badge badge-amber">1 files</span>
+  </div>
+  <div class="card-body">
+    <table><tr><td class="mono" style="font-size:.78rem;word-break:break-all">audit.log</td><td class="text-right"><a href="https://secure-bank.example/audit.log" target="_blank" class="dim" style="font-size:.78rem">Remote ↗</a></td></tr></table>
+    <p class="muted text-right mt-1" style="font-size:.75rem">+0 more files</p>
+    <a href="listing.html" class="btn btn-ghost w-full mt-2">Full Listing →</a>
+  </div>
+</div></div></div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <span>&#x1F310; Infrastructure Map</span>
+      <span class="badge badge-blue">0</span>
+    </div>
+    <div class="card-body"><p class="muted" style="font-size:.82rem">Use --extract-infra for network mapping.</p></div>
+  </div>
+
+  
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <span>📦 Packfiles</span>
+        <span class="badge badge-muted">0</span>
+      </div>
+      <div class="card-body"><p class="muted" style="font-size:.82rem">No packfiles detected.</p></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span>⚠️ Other Leaks (--full-scan)</span>
+        <span class="badge badge-muted">0</span>
+      </div>
+      <div class="card-body"><p class="muted" style="font-size:.82rem">No additional leaks.</p></div>
+    </div>
   </div>
 </div>
+<script>
+const ABS_BASE="/home/claude/demo_output/secure-bank.example";
+const isServed=window.location.protocol.startsWith('http');
+function handlePackAction(rel,btn){
+  if(isServed){window.open(rel+'/','_blank')}
+  else{
+    const p=ABS_BASE+'/'+rel;
+    navigator.clipboard.writeText(p).then(()=>{
+      const orig=btn.textContent;btn.textContent='Copied!';
+      setTimeout(()=>btn.textContent=orig,2000);
+    });
+  }
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.btn-pack-action').forEach(b=>{
+    b.textContent=isServed?'Open Folder ↗':'Copy Local Path';
+  });
+});
+</script>
 
 <footer style="text-align:center;padding:2rem;color:var(--text-muted);font-size:.78rem;
   border-top:1px solid var(--border);margin-top:3rem">
