@@ -83,7 +83,7 @@ This tool was developed for ethical professional use, education, and authorized 
 
 ---
 
-## Screenshots (Outdated)
+## Screenshots
 
 <details>
   <summary>Multi-Scan Overview</summary>
@@ -92,47 +92,43 @@ This tool was developed for ethical professional use, education, and authorized 
 
 <details>
   <summary>Target Dashboard</summary>
-  <img width="1227" height="2154" alt="image" src="https://github.com/user-attachments/assets/479cfcda-4b74-4523-a331-59954a6b64ce" />
+  <img width="1227" height="2154" alt="image" src="https://github.com/user-attachments/assets/90eb3771-a71f-49ec-8084-974dfabb9eae" />
+
 </details>
 
 <details>
   <summary>Secrets Report</summary>
-  <img width="1466" height="767" alt="_secrets" src="https://github.com/user-attachments/assets/67241847-3ef3-4e46-81e9-1eb25918418d" />
-</details>
-
-<details>
-  <summary>Stash Recovery</summary>
-  <img width="1428" height="2255" alt="image" src="https://github.com/user-attachments/assets/35133ffe-104e-473f-8b4f-1a6fbeb84c3e" />
+  <img width="1466" height="767" alt="_secrets" src="https://github.com/user-attachments/assets/fbf439d0-774b-4e30-9839-a418ea648a02" />
 </details>
 
 <details>
   <summary>Hardening Analysis</summary>
-  <img width="1284" height="963" alt="_hardening" src="https://github.com/user-attachments/assets/34ecb782-f030-45cb-b7e7-2eeb1fd0b4e1" />
+  <img width="1284" height="963" alt="_hardening" src="https://github.com/user-attachments/assets/8cb1fd9f-918d-4fd3-9659-001703d10ebd" />
 </details>
 
 <details>
   <summary>Users / OSINT (from history)</summary>
-  <img width="1284" height="963" alt="_users" src="https://github.com/user-attachments/assets/d757b98a-011e-4d4d-be90-637afaca9f1e" />
+  <img width="1284" height="963" alt="_users" src="https://github.com/user-attachments/assets/75a2389e-8c57-4bae-887a-63558916db6c" />
 </details>
 
 <details>
-  <summary>Git Timeline (Commit History)</summary>
-  <img width="1903" height="2486" alt="image" src="https://github.com/user-attachments/assets/e15d6ce6-8340-45e8-a230-8c15dc3058f9" />
+  <summary>Git Timeline (Commit History, Stash and Orphan)</summary>
+  <img width="1903" height="2486" alt="image" src="https://github.com/user-attachments/assets/a9a2599d-4be1-4a3a-8ada-495b19df1d4a" />
 </details>
 
 <details>
   <summary>File Listing (with filter)</summary>
-  <img width="1641" height="1231" alt="_listing" src="https://github.com/user-attachments/assets/2084abe1-9f68-4a37-a91a-5a2dc4c66730" />
+  <img width="1641" height="1231" alt="_listing" src="https://github.com/user-attachments/assets/098c40d7-9126-4812-a999-6c3ddcbe02d4" />
 </details>
 
 <details>
   <summary>Brute-Force & Path Traversal (with filter)</summary>
-  <img width="1512" height="822" alt="_brute_traversal" src="https://github.com/user-attachments/assets/e0d348c5-86ab-4494-84a7-a3f25643f32d" />
+  <img width="1512" height="822" alt="_brute_traversal" src="https://github.com/user-attachments/assets/d205e83a-cea6-48b7-9805-0456c8f5059c" />
 </details>
 
 <details>
-  <summary>Other Leaks (.env, SVN, DS_Store…)</summary>
-  <img width="1136" height="852" alt="_outros" src="https://github.com/user-attachments/assets/1fd48b68-66c1-4791-9498-169bb6099967" />
+  <summary>Infrastructure Map</summary>
+  <img width="1136" height="852" alt="_outros" src="https://github.com/user-attachments/assets/9b2e4361-3940-4cd8-8514-e172135e2853" />
 </details>
 
 ---
