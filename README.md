@@ -1,10 +1,11 @@
-# 🕵️ Git Leak Explorer
+#  Git Leak Explorer
 
 <div align="center">
 
 **Advanced forensic analysis, recovery, and reporting tool for exposed `.git` repositories and other artifacts publicly accessible over HTTP — with a modern visual interface, built for serious reconnaissance.**
 
-<img width="1111" height="428" alt="_multi_menu" src="https://github.com/user-attachments/assets/b29aea0a-48e4-44fd-9ec6-99e8e541d73e" />
+<img width="1111" height="428" alt="_multi_menu" src="https://github.com/user-attachments/assets/2864a605-6659-481a-b38a-5755cda9394d" />
+
 
 [About](#about) | [Legal Notice](#️-legal-notice) | [Features](#-key-features) | [Screenshots](#screenshots) | [Installation](#-installation--setup) | [Usage](#-how-to-use) | [Thanks](#tophat-thanks-)
 
@@ -82,11 +83,11 @@ This tool was developed for ethical professional use, education, and authorized 
 
 ---
 
-## Screenshots
+## Screenshots (Outdated)
 
 <details>
   <summary>Multi-Scan Overview</summary>
-  <img width="1032" height="554" alt="image" src="https://github.com/user-attachments/assets/9aa6ce38-6806-4d6e-ab57-36d503daa005" />
+  <img width="1032" height="554" alt="image" src="https://github.com/user-attachments/assets/2864a605-6659-481a-b38a-5755cda9394d" />
 </details>
 
 <details>
