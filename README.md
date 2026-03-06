@@ -4,6 +4,7 @@
 
 **Advanced forensic analysis, recovery, and reporting tool for exposed `.git` repositories and other artifacts publicly accessible over HTTP — with a modern visual interface, built for serious reconnaissance.**
 
+
 <img width="1111" height="428" alt="_multi_menu" src="https://github.com/user-attachments/assets/2864a605-6659-481a-b38a-5755cda9394d" />
 
 
@@ -43,7 +44,7 @@
 
 **Git Leak Explorer** is an all-in-one tool designed for security researchers, penetration testers, and system administrators. It identifies, downloads, reconstructs, and analyzes artifacts from `.git` folders inadvertently exposed on web servers.
 
-The tool goes far beyond a simple downloader. It offers commit history reconstruction with file-level diffs and stash recovery, security exposure detection (hardening analysis), packfile support, secrets scanning with entropy-based filtering, infrastructure mapping, brute-force file discovery, and a modern interactive HTML interface with Dark Mode for all generated reports.
+The tool goes far beyond a simple downloader. It offers commit history reconstruction with file-level diffs and stash recovery, security exposure detection (hardening analysis), packfile support, secrets scanning with entropy-based filtering, **SAST static analysis via Semgrep** (with OWASP/CWE mapping), infrastructure mapping, brute-force file discovery, and a modern interactive HTML interface with Dark Mode for all generated reports.
 
 It also optionally detects leaks from SVN, Mercurial, `.env`, and `.DS_Store` artifacts. Mass scanning over a list of targets and brute-force recovery using custom wordlists are both supported.
 
@@ -70,6 +71,7 @@ This tool was developed for ethical professional use, education, and authorized 
 - **🛡️ Hardening Analysis** — Checks exposure of sensitive Git files (`config`, `HEAD`, `logs`, `packed-refs`, `index`, etc.) and generates a risk report with Critical/Warning severity levels.
 - **📦 Packfile Support** — Detects, downloads, and unpacks `.pack` files (compressed Git objects) automatically. Requires `git` to be installed for unpacking.
 - **🔐 Secrets Scanner** — Scans recovered source files using regex patterns and Shannon entropy analysis to detect credentials, API keys, tokens, and connection strings. Includes per-pattern validation to suppress false positives.
+- **🧪 SAST (Static Analysis)** — Runs [Semgrep](https://semgrep.dev/) on reconstructed source files to detect exploitable vulnerability patterns: SQL injection, XSS, command injection, path traversal, insecure deserialization, hardcoded credentials, weak cryptography, SSRF, and more. Each finding is enriched with its OWASP Top 10 category and CWE identifier. Supports custom rule files via `--sast-rules` for fully offline use.
 - **🌐 Infrastructure Mapping** — Extracts API endpoints, external hosts, and IP addresses from recovered source and config files, with an interactive network graph view.
 - **📊 Unified Reports** — Generates a complete interactive HTML dashboard (`report.html`) covering files, history, hardening, secrets, infrastructure, and more. All reports share a consistent navigation bar and dark theme.
 - **🎨 Modern Interface** — Every HTML report features a terminal-noir dark theme (with light mode toggle), real-time search, sorting, and pagination.
@@ -140,6 +142,9 @@ This tool was developed for ethical professional use, education, and authorized 
 > Git still needs to be installed on the system for packfile unpacking.
 
 **Requirements:** [Python 3.8+](https://www.python.org/downloads/) and [Git](https://desktop.github.com/download/) (required for unpacking `.pack` objects).
+
+> [!NOTE]
+> **SAST scanning** (`--sast-scan`) requires Semgrep as an additional optional dependency: `pip install semgrep`
 
 [![Python](https://img.shields.io/badge/Python-Download-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![GitHub Desktop](https://img.shields.io/badge/Git-Download-181717?logo=git&logoColor=white)](https://git-scm.com/downloads)
@@ -214,6 +219,8 @@ Core flags:
   --detect-hardening      Check exposure of sensitive Git files; generate hardening_report.json/.html
   --packfile [MODE]       Manage .pack files  (modes: list | download | download-unpack)
   --secrets               Run regex + Shannon entropy scanner to detect credentials and API keys
+  --sast-scan             Run SAST (Semgrep) on recovered source files to detect exploitable patterns
+  --sast-rules PATH       Path to a local Semgrep YAML rule file (optional; uses 'auto' if omitted)
   --extract-infra         Extract API endpoints, external hosts, and IPs from recovered source files
   --full-history          Analyze the full file tree of ALL commits (slow; use with --show-diff)
   --show-diff             Download and render side-by-side code diffs in history (can be VERY slow)
@@ -305,6 +312,50 @@ Scans recovered files for credentials, API keys, tokens, and connection strings 
 ```bash
 python git_leak.py http://example.com/.git --secrets
 ```
+
+---
+
+### SAST — Static Application Security Testing (`--sast-scan`)
+
+Runs [Semgrep](https://semgrep.dev/) on all reconstructed source files to detect exploitable vulnerability patterns in the recovered code. This turns the tool into a **source-code auditing platform** during a pentest — leaked code may contain bugs that are actively exploitable on the live target.
+
+> [!WARNING]
+> SAST scanning may take **several minutes** depending on the number of recovered files and the rule set used. A warning message is printed when the scan begins.
+
+**Detected vulnerability classes:**
+
+| Pattern | OWASP Category | CWE |
+|---|---|---|
+| SQL Injection | A03 — Injection | CWE-89 |
+| Cross-Site Scripting (XSS) | A03 — Injection | CWE-79 |
+| Command Injection / `eval` | A03 — Injection | CWE-78 / CWE-94 |
+| Path Traversal | A01 — Broken Access Control | CWE-22 |
+| Insecure Deserialization | A08 — Insecure Deserialization | CWE-502 |
+| Hardcoded Credentials | A07 — Identification Failures | CWE-798 |
+| Weak / Broken Cryptography | A02 — Cryptographic Failures | CWE-327 |
+| SSRF | A10 — SSRF | CWE-918 |
+| Open Redirect | A01 — Broken Access Control | CWE-601 |
+| XXE | A05 — Security Misconfiguration | CWE-611 |
+
+With the default **`auto`** ruleset (requires internet on first run to fetch rules):
+```bash
+python git_leak.py http://example.com/.git --sast-scan
+```
+
+With a **custom local rule file** (fully offline, ideal for air-gapped environments):
+```bash
+python git_leak.py http://example.com/.git --sast-scan --sast-rules ./my_rules.yaml
+```
+
+Combined with secrets scanning for a **full code audit**:
+```bash
+python git_leak.py http://example.com/.git --secrets --sast-scan --serve
+```
+
+Results are saved to `_files/sast.json` and rendered as `sast_report.html` — a searchable, paginated report showing severity (ERROR / WARNING / INFO), CWE and OWASP labels, the offending code line in context, and one-click copy buttons for the file path and rule ID. A summary card also appears on the main dashboard with a direct link to the full report.
+
+> [!NOTE]
+> Install Semgrep separately before using this flag: `pip install semgrep`
 
 ---
 
@@ -426,8 +477,9 @@ python git_leak.py example.com --no-random-agent --proxy http://127.0.0.1:8080 -
 
 ```bash
 # Scans every target in a text file with all features enabled:
-# full-scan, Tor proxy, 250 workers, secrets detection, brute-force,
-# full history reconstruction with diffs, packfile unpacking, served locally at the end.
+# full-scan, Tor proxy, 250 workers, secrets detection, SAST (Semgrep),
+# infrastructure mapping, brute-force, full history with diffs, packfile unpacking,
+# served locally at the end.
 python git_leak.py \
   --scan targets.txt \
   --full-scan \
@@ -435,6 +487,7 @@ python git_leak.py \
   --proxy socks5h://127.0.0.1:9150 \
   --workers 250 \
   --secrets \
+  --sast-scan \
   --extract-infra \
   --bruteforce \
   --full-history \
@@ -456,6 +509,7 @@ outdir/
 ├── history.html                ← Commit timeline with diffs and stash entries
 ├── users.html                  ← Identified authors (OSINT)
 ├── secrets.html                ← Detected credentials and API keys
+├── sast_report.html            ← SAST findings (Semgrep) with OWASP/CWE mapping
 ├── hardening_report.html       ← Exposure risk report
 ├── infrastructure_report.html  ← Network graph + endpoint table
 ├── bruteforce_report.html      ← Brute-force / traversal results
@@ -464,6 +518,7 @@ outdir/
     ├── dump.json               ← Parsed .git/index entries
     ├── history.json            ← Reconstructed commit chain
     ├── secrets.json            ← Raw secrets findings
+    ├── sast.json               ← Raw SAST findings (Semgrep output)
     ├── bruteforce.json         ← Brute-force results
     ├── hardening_report.json   ← Raw hardening data
     ├── users.json              ← Author list
